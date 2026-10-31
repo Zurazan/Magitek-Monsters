@@ -67,13 +67,12 @@ public sealed partial class MainWindow
         ImGui.BeginDisabled(busy);
         if (DrawAccentButton("Forfeit", new Vector2(-1, 34 * scale), PokemonRed)) ImGui.OpenPopup("Confirm online forfeit");
         ImGui.EndDisabled();
-        if (ImGui.BeginPopup("Confirm online forfeit"))
+        if (BeginConfirmationModal("Confirm online forfeit"))
         {
             ImGui.TextWrapped("Forfeit this match?");
             DrawOnlineForfeitNotice();
-            if (DrawAccentButton("Confirm forfeit", Vector2.Zero, PokemonRed)) { ImGui.CloseCurrentPopup(); Run(() => ChoosePvpBattle("forfeit"), "Forfeiting match..."); }
-            ImGui.SameLine(); if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-            ImGui.EndPopup();
+            if (DrawConfirmationActions("Confirm forfeit", PokemonRed, busy)) { ImGui.CloseCurrentPopup(); Run(() => ChoosePvpBattle("forfeit"), "Forfeiting match..."); }
+            EndConfirmationModal();
         }
         ImGui.PopStyleVar(2);
     }

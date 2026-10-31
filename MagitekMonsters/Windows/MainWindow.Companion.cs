@@ -434,19 +434,17 @@ public sealed partial class MainWindow
     private void DrawReleaseConfirmation()
     {
         if (requestRelease) { ImGui.OpenPopup("Release Pokémon?"); requestRelease = false; }
-        if (!BeginCenteredModal("Release Pokémon?", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (!BeginConfirmationModal("Release Pokémon?")) return;
         var pokemon = trainer?.Storage.FirstOrDefault(entry => entry.Id == releasePokemonId);
-        if (pokemon is null) { ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return; }
+        if (pokemon is null) { ImGui.CloseCurrentPopup(); EndConfirmationModal(); return; }
         ImGui.TextWrapped($"Release {pokemon.Nickname} permanently?");
         ImGui.TextWrapped("This cannot be undone. Its held item returns to your bag.");
-        ImGui.BeginDisabled(CollectionLocked || pokemon.Favorite || pokemon.FusionHostId.Length > 0 || pokemon.Fusion is not null);
-        if (DrawAccentButton("Confirm release", Vector2.Zero, PokemonRed))
+        if (DrawConfirmationActions("Confirm release", PokemonRed,
+            CollectionLocked || pokemon.Favorite || pokemon.FusionHostId.Length > 0 || pokemon.Fusion is not null, "Keep Pokémon"))
         {
             ImGui.CloseCurrentPopup();
             Run(() => ReleasePokemon(pokemon.Id, pokemon.Nickname), $"Releasing {pokemon.Nickname}...");
         }
-        ImGui.EndDisabled(); ImGui.SameLine();
-        if (ImGui.Button("Keep Pokémon")) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
+        EndConfirmationModal();
     }
 }

@@ -37,7 +37,7 @@ public sealed partial class MainWindow
                 ImGui.EndDisabled();
                 if (option.Mode != "automatic" && !option.Current && !option.Available && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                     ImGui.SetTooltip(option.Mode == "trial" ? "Complete the Battle Bond Trial in PvE > Special Trials first." : $"Buy {option.ItemName} from the Poké Mart first.");
-                if (ImGui.BeginPopup("Confirm form change"))
+                if (BeginConfirmationModal("Confirm form change"))
                 {
                     ImGui.TextColored(PokemonBlue, $"{pokemon.DisplaySpecies} -> {option.TargetSpecies}");
                     if (option.TargetAbility.Length > 0) ImGui.TextColored(PokemonOrange, $"Ability: {option.TargetAbility}");
@@ -59,14 +59,12 @@ public sealed partial class MainWindow
                                 ImGui.CloseCurrentPopup();
                             }
                     }
-                    else if (DrawAccentButton("Confirm change", Vector2.Zero, PokemonGreen))
+                    if (DrawConfirmationActions(option.NeedsForgetMove ? null : "Confirm change", PokemonGreen, CollectionLocked))
                     {
                         ChangeForm(pokemon, option, null);
                         ImGui.CloseCurrentPopup();
                     }
-                    ImGui.Spacing();
-                    if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-                    ImGui.EndPopup();
+                    EndConfirmationModal();
                 }
                 ImGui.PopID();
             }

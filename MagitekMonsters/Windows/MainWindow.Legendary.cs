@@ -112,21 +112,17 @@ public sealed partial class MainWindow
     private void DrawLegendaryPermitPopup()
     {
         if (pendingLegendaryPermit is not null && !ImGui.IsPopupOpen("Buy permanent permit?")) ImGui.OpenPopup("Buy permanent permit?");
-        if (!BeginCenteredModal("Buy permanent permit?", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (!BeginConfirmationModal("Buy permanent permit?")) return;
         if (pendingLegendaryPermit is { } boss)
         {
             ImGui.TextWrapped($"Spend {boss.Price:N0} RT to permanently unlock {SanctuarySpecies(boss.Species)}'s sanctuary? This does not give you a Pokémon. You must defeat the raid boss before every capture opportunity.");
-            ImGui.BeginDisabled(busy);
-            if (DrawAccentButton("Confirm purchase", new Vector2(180, 32), PokemonYellow))
+            if (DrawConfirmationActions("Confirm purchase", PokemonYellow, busy, onCancel: () => pendingLegendaryPermit = null))
             {
                 var request = legendaryRequests.GetOrAdd(boss.Id, _ => Guid.NewGuid().ToString());
                 Run(async () => { trainer = await InSession(plugin.Api.BuyLegendaryPermit(request, boss.Id)); legendaryRequests.TryRemove(boss.Id, out _); SetStatus("Permanent sanctuary permit unlocked."); }, "Purchasing the permanent permit...");
                 pendingLegendaryPermit = null; ImGui.CloseCurrentPopup();
             }
-            ImGui.SameLine();
-            if (ImGui.Button("Cancel", new Vector2(100, 32))) { pendingLegendaryPermit = null; ImGui.CloseCurrentPopup(); }
-            ImGui.EndDisabled();
         }
-        ImGui.EndPopup();
+        EndConfirmationModal();
     }
 }

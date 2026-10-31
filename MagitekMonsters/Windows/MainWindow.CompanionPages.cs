@@ -191,24 +191,22 @@ public sealed partial class MainWindow
     private void DrawPurchaseConfirmation()
     {
         if (requestPurchase) { ImGui.OpenPopup("Confirm purchase"); requestPurchase = false; }
-        if (!BeginCenteredModal("Confirm purchase", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (!BeginConfirmationModal("Confirm purchase")) return;
         var item = pendingPurchase;
-        if (item is null || trainer is null) { ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return; }
+        if (item is null || trainer is null) { ImGui.CloseCurrentPopup(); EndConfirmationModal(); return; }
         var price = (long)item.Price * pendingPurchaseQuantity;
         var rankTokens = item.Currency == "rank-tokens";
         var currency = rankTokens ? "RT" : "¥";
         var balance = rankTokens ? trainer.PvpProfile.RankTokens?.Balance ?? 0 : trainer.Currency;
         ImGui.TextWrapped($"Buy {pendingPurchaseQuantity} x {item.Name} for {currency} {price:N0}?");
         ImGui.TextDisabled($"Balance after purchase: {currency} {Math.Max(0, balance - price):N0}");
-        ImGui.BeginDisabled(busy || balance < price || item.MaxOwned.HasValue && InventoryCount(item.Id) + pendingPurchaseQuantity > item.MaxOwned.Value);
-        if (DrawAccentButton("Confirm purchase", Vector2.Zero, CompanionAccent))
+        if (DrawConfirmationActions("Confirm purchase", CompanionAccent,
+            busy || balance < price || item.MaxOwned.HasValue && InventoryCount(item.Id) + pendingPurchaseQuantity > item.MaxOwned.Value))
         {
             var quantity = pendingPurchaseQuantity;
             ImGui.CloseCurrentPopup();
             Run(() => BuyItem(item.Id, quantity), $"Buying {item.Name}...");
         }
-        ImGui.EndDisabled(); ImGui.SameLine();
-        if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
+        EndConfirmationModal();
     }
 }

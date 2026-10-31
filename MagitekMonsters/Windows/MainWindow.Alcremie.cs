@@ -56,17 +56,15 @@ public sealed partial class MainWindow
                 Run(() => EvolvePokemon(pokemon.Id, evolution.TargetSpecies), $"Evolving {pokemon.Nickname}...");
             else ImGui.OpenPopup($"Confirm Alcremie##{id}");
         }
-        if (!ImGui.BeginPopup($"Confirm Alcremie##{id}")) return;
+        if (!BeginConfirmationModal($"Confirm Alcremie##{id}")) return;
         DrawPokemonIcon(evolution.TargetAppearance, pokemon.Shiny, new Vector2(64, 64));
         ImGui.TextColored(PokemonBlue, evolution.TargetAppearance["Alcremie-".Length..].Replace('-', ' '));
         ImGui.TextWrapped("This consumes the held Sweet. Both cream and decoration are permanent.");
-        if (DrawAccentButton("Confirm evolution", Vector2.Zero, PokemonGreen))
+        if (DrawConfirmationActions("Confirm evolution", PokemonGreen, CollectionLocked))
         {
             Run(() => EvolvePokemon(pokemon.Id, evolution.TargetSpecies), $"Evolving {pokemon.Nickname}...");
             ImGui.CloseCurrentPopup();
         }
-        ImGui.SameLine();
-        if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
+        EndConfirmationModal();
     }
 }

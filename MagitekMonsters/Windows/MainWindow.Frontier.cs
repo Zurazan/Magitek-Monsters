@@ -179,12 +179,10 @@ public sealed partial class MainWindow
 
     private void DrawFrontierAbandonPopup()
     {
-        if (!BeginCenteredModal("End Frontier run?", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (!BeginConfirmationModal("End Frontier run?")) return;
         ImGui.TextWrapped("End this streak? Earned BP, achievements, personal bests and Ultra Beast unlocks remain saved. The next run starts at zero.");
-        ImGui.BeginDisabled(busy);
-        if (DrawAccentButton("End run", new Vector2(130, 32), PokemonOrange)) { ImGui.CloseCurrentPopup(); Run(EndFrontier, "Ending the Frontier run..."); }
-        ImGui.EndDisabled(); ImGui.SameLine(); if (ImGui.Button("Keep playing")) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
+        if (DrawConfirmationActions("End run", PokemonOrange, busy, "Keep playing")) { ImGui.CloseCurrentPopup(); Run(EndFrontier, "Ending the Frontier run..."); }
+        EndConfirmationModal();
     }
 
     private void DrawFrontierBeasts()

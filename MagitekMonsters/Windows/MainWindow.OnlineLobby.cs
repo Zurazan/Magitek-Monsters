@@ -35,6 +35,7 @@ public sealed partial class MainWindow
         DrawClippedText($"{end} / Ranked {profile.RankedWins}W {profile.RankedLosses}L / Casual {profile.CasualWins}W {profile.CasualLosses}L", width, CompanionMuted);
         var next = profile.NextRankAt;
         DrawProgressBar(next is int target ? Math.Clamp((profile.RankPoints - profile.CurrentRankStart) / (float)Math.Max(1, target - profile.CurrentRankStart), 0, 1) : 1, new Vector2(-1, 4 * CompanionScale), "", ExpBarBlue);
+        DrawCurrencyGuideShortcut();
         ImGui.SetNextWindowSize(new Vector2(520, 440) * CompanionScale, ImGuiCond.Appearing);
         if (ImGui.BeginPopup("Online season details")) { DrawCompanionOnlineHeader(profile); ImGui.EndPopup(); }
     }

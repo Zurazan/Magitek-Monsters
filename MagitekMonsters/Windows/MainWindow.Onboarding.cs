@@ -311,8 +311,7 @@ public sealed partial class MainWindow
     private void DrawStarterConfirmation(float scale)
     {
         if (starters.Count == 0 || !ImGui.IsPopupOpen("Your first partner##ConfirmStarter")) return;
-        ImGui.SetNextWindowSizeConstraints(new Vector2(360 * scale, 0), new Vector2(500 * scale, float.MaxValue));
-        if (!BeginCenteredModal("Your first partner##ConfirmStarter", ref confirmStarter, ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (!BeginConfirmationModal("Your first partner##ConfirmStarter")) return;
         var selected = starters[starterIndex];
         var preview = StarterPreviewCatalog.Get(selected.Species);
         ImGui.Text("Your first partner");
@@ -322,22 +321,13 @@ public sealed partial class MainWindow
         DrawStarterTypeBadges(preview?.Stages[0].Types ?? [selected.Type], 75 * scale, scale);
         ImGui.TextWrapped($"Ready to begin with {selected.Species}?");
         ImGui.TextWrapped("This is a permanent choice. The other starters remain obtainable.");
-        ImGui.Spacing();
-        ImGui.BeginDisabled(busy);
-        if (ImGui.Button("Keep looking", new Vector2(130 * scale, 36 * scale)))
-        {
-            confirmStarter = false;
-            ImGui.CloseCurrentPopup();
-        }
-        ImGui.SameLine();
-        if (DrawOnboardingPrimary("Begin adventure", new Vector2(150 * scale, 36 * scale)))
+        if (DrawConfirmationActions("Begin adventure", OnboardingBlue, busy, "Keep looking", () => confirmStarter = false))
         {
             Run(() => ChooseStarter(selected.Species), $"Choosing {selected.Species}...");
             confirmStarter = false;
             ImGui.CloseCurrentPopup();
         }
-        ImGui.EndDisabled();
-        ImGui.EndPopup();
+        EndConfirmationModal();
     }
 
     private void DrawStarterFooter(float height, float scale)

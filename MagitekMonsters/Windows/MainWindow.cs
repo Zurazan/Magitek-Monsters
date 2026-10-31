@@ -404,6 +404,7 @@ public sealed partial class MainWindow : Window, IDisposable
             ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
             ImGui.TextColored(CompanionMuted, "COLLECTION");
             DrawNavigationItem("Poké Mart", 5, 32 * scale);
+            DrawNavigationItem("Currencies", 15, 32 * scale);
             DrawNavigationItem("Bag", 11, 32 * scale);
             DrawNavigationItem("Pokédex", 6, 32 * scale);
             DrawNavigationItem("Collection goals", 7, 32 * scale);
@@ -440,6 +441,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 case 12: DrawRaids(); break;
                 case 13: DrawMysteryGifts(); break;
                 case 14: DrawTrainerCard(); break;
+                case 15: DrawCurrencies(); break;
                 default: mainSection = 0; DrawAdventure(); break;
             }
         }
@@ -677,8 +679,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (trainer is null)
             return;
         DrawSectionHeader("POKÉ MART", "Supplies, training items, and special Pokémon");
-        if (ImGui.CollapsingHeader("Currencies & exchanges"))
-            ImGui.TextWrapped("Earn ¥ from PvE, CP from collection objectives, BP from the Frontier and RT from ranked seasons. No FFXIV gil or real-money trading.");
+        DrawCurrencyGuideShortcut();
         ImGui.Spacing();
 
         if (!ImGui.BeginTabBar("MagitekMonstersShopTabs"))

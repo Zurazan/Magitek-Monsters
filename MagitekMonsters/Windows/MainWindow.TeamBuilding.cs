@@ -145,10 +145,10 @@ public sealed partial class MainWindow
         if (DrawAccentButton($"Change Tera Type##ChangeTera{pokemon.Id}", Vector2.Zero, TypeColor(selected)))
             ImGui.OpenPopup($"Confirm Tera change##{pokemon.Id}");
         ImGui.EndDisabled();
-        if (ImGui.BeginPopup($"Confirm Tera change##{pokemon.Id}"))
+        if (BeginConfirmationModal($"Confirm Tera change##{pokemon.Id}"))
         {
             ImGui.TextWrapped($"Change {pokemon.Nickname}'s Tera type from {current} to {selected}? This consumes one Tera Shard.");
-            if (DrawAccentButton("Confirm change", Vector2.Zero, PokemonGreen))
+            if (DrawConfirmationActions("Confirm change", PokemonGreen, CollectionLocked))
             {
                 var target = selected;
                 Run(async () =>
@@ -158,9 +158,7 @@ public sealed partial class MainWindow
                 }, "Changing Tera type...");
                 ImGui.CloseCurrentPopup();
             }
-            ImGui.SameLine();
-            if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-            ImGui.EndPopup();
+            EndConfirmationModal();
         }
         ImGui.TreePop();
     }
@@ -217,17 +215,15 @@ public sealed partial class MainWindow
             if (DrawAccentButton($"Reset all EVs##ResetEV{pokemon.Id}", Vector2.Zero, PokemonOrange))
                 ImGui.OpenPopup($"Confirm EV reset##{pokemon.Id}");
             ImGui.EndDisabled();
-            if (ImGui.BeginPopup($"Confirm EV reset##{pokemon.Id}"))
+            if (BeginConfirmationModal($"Confirm EV reset##{pokemon.Id}"))
             {
                 ImGui.TextWrapped($"Reset all {total} EVs on {pokemon.Nickname}? This uses one Fresh-Start Mochi.");
-                if (DrawAccentButton("Confirm reset", Vector2.Zero, PokemonRed))
+                if (DrawConfirmationActions("Confirm reset", PokemonRed, CollectionLocked))
                 {
                     Run(() => UseTrainingItem(pokemon.Id, "freshstartmochi", null), "Resetting EVs...");
                     ImGui.CloseCurrentPopup();
                 }
-                ImGui.SameLine();
-                if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-                ImGui.EndPopup();
+                EndConfirmationModal();
             }
         }
         ImGui.TreePop();

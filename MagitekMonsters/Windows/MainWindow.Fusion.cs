@@ -18,12 +18,12 @@ public sealed partial class MainWindow
             ImGui.TextColored(PokemonBlue, $"{pokemon.DisplaySpecies} | Partner: {active.PartnerName}");
             ImGui.TextDisabled($"{active.ItemName} is in use.");
             if (DrawAccentButton("Unfuse", Vector2.Zero, PokemonOrange)) ImGui.OpenPopup("Confirm unfusion");
-            if (ImGui.BeginPopup("Confirm unfusion"))
+            if (BeginConfirmationModal("Confirm unfusion"))
             {
                 ImGui.TextColored(PokemonBlue, $"Return to {active.TargetSpecies}");
                 ImGui.TextWrapped($"{active.PartnerName} will become usable in its reserved PC slot. Training gained by the host stays on the host.");
                 DrawFusionMovePreview(active);
-                if (DrawAccentButton("Confirm unfusion", Vector2.Zero, PokemonOrange))
+                if (DrawConfirmationActions("Confirm unfusion", PokemonOrange, CollectionLocked))
                 {
                     var requestId = Guid.NewGuid().ToString();
                     Run(async () =>
@@ -33,8 +33,7 @@ public sealed partial class MainWindow
                     }, "Unfusing Pokémon...");
                     ImGui.CloseCurrentPopup();
                 }
-                if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-                ImGui.EndPopup();
+                EndConfirmationModal();
             }
         }
         foreach (var option in options)
@@ -57,7 +56,7 @@ public sealed partial class MainWindow
                 if (DrawAccentButton($"Fuse with {partner.Nickname} | Lv. {partner.Level} | Box {partner.BoxNumber}, slot {partner.BoxSlot}", Vector2.Zero, PokemonBlue))
                     ImGui.OpenPopup("Confirm fusion");
                 ImGui.EndDisabled();
-                if (ImGui.BeginPopup("Confirm fusion"))
+                if (BeginConfirmationModal("Confirm fusion"))
                 {
                     ImGui.TextColored(PokemonBlue, $"{pokemon.DisplaySpecies} + {partner.DisplaySpecies} -> {option.TargetSpecies}");
                     ImGui.TextWrapped($"{partner.Nickname} will be unavailable until unfusion. Neither Pokémon is consumed. Their individual stats and history stay intact.");
@@ -72,13 +71,12 @@ public sealed partial class MainWindow
                                 ImGui.CloseCurrentPopup();
                             }
                     }
-                    else if (DrawAccentButton("Confirm fusion", Vector2.Zero, PokemonGreen))
+                    if (DrawConfirmationActions(option.NeedsForgetMove ? null : "Confirm fusion", PokemonGreen, CollectionLocked))
                     {
                         Fuse(pokemon, partner, option, null);
                         ImGui.CloseCurrentPopup();
                     }
-                    if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-                    ImGui.EndPopup();
+                    EndConfirmationModal();
                 }
                 ImGui.PopID();
             }

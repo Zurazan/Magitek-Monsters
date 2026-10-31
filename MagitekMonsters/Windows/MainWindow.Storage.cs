@@ -179,17 +179,15 @@ public sealed partial class MainWindow
     {
         if (requestStorageRelease) { ImGui.OpenPopup("Release selected Pokémon?"); requestStorageRelease = false; }
         var scale = CompanionScale;
-        var work = ImGui.GetMainViewport().WorkSize;
-        ImGui.SetNextWindowSize(new Vector2(Math.Min(520 * scale, work.X * 0.92f), Math.Min(490 * scale, work.Y * 0.85f)), ImGuiCond.Appearing);
-        if (!BeginCenteredModal("Release selected Pokémon?", ImGuiWindowFlags.None)) return;
+        if (!BeginConfirmationModal("Release selected Pokémon?")) return;
         var attempt = storageReleaseAttempt;
-        if (attempt is null || trainer?.User.Id != attempt.Owner) { ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return; }
+        if (attempt is null || trainer?.User.Id != attempt.Owner) { ImGui.CloseCurrentPopup(); EndConfirmationModal(); return; }
         var selected = trainer.Storage.Where(pokemon => attempt.Ids.Contains(pokemon.Id)).ToList();
         var valid = selected.Count == attempt.Ids.Length && selected.All(pokemon => !StorageBrowser.ReleaseProtected(pokemon));
         ImGui.TextColored(PokemonRed, $"Permanently release {attempt.Ids.Length} Pokémon?");
         ImGui.TextWrapped("This cannot be undone. Held items return to your bag. Pokédex registrations stay recorded.");
         if (selected.Any(pokemon => pokemon.Shiny)) ImGui.TextColored(PokemonYellow, $"Includes {selected.Count(pokemon => pokemon.Shiny)} shiny Pokémon.");
-        ImGui.BeginChild("StorageReleaseList", new Vector2(0, Math.Max(1, ImGui.GetContentRegionAvail().Y - 130 * scale)), true);
+        ImGui.BeginChild("StorageReleaseList", new Vector2(0, Math.Min(190 * scale, ImGui.GetWindowViewport().WorkSize.Y * 0.3f)), true);
         foreach (var pokemon in selected)
         {
             ImGui.PushStyleColor(ImGuiCol.Text, pokemon.Shiny ? PokemonYellow : CompanionMuted);
@@ -197,13 +195,14 @@ public sealed partial class MainWindow
             ImGui.PopStyleColor();
         }
         ImGui.EndChild();
-        ImGui.Checkbox("I understand this is permanent", ref confirmStorageRelease);
+        ImGui.BeginGroup();
+        ImGui.Checkbox("##ConfirmStorageRelease", ref confirmStorageRelease);
+        ImGui.SameLine(); ImGui.TextWrapped("I understand this is permanent");
+        ImGui.EndGroup();
         if (!valid) ImGui.TextWrapped("The selection changed or contains protected Pokémon. Close this window and review it.");
-        ImGui.BeginDisabled(CollectionLocked || !valid || !confirmStorageRelease || pendingStorageBatch is not null);
-        if (DrawAccentButton($"Release {attempt.Ids.Length} Pokémon", new Vector2(-1, 30 * scale), PokemonRed))
+        if (DrawConfirmationActions($"Release {attempt.Ids.Length} Pokémon", PokemonRed,
+            CollectionLocked || !valid || !confirmStorageRelease || pendingStorageBatch is not null, "Keep Pokémon"))
         { ImGui.CloseCurrentPopup(); Run(() => ExecuteStorageBatch(attempt), "Releasing selected Pokémon..."); }
-        ImGui.EndDisabled();
-        if (ImGui.Button("Keep Pokémon")) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
+        EndConfirmationModal();
     }
 }

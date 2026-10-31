@@ -159,12 +159,10 @@ public sealed partial class MainWindow
 
     private void DrawEvTrainingConfirmation(PokemonDto pokemon)
     {
-        var open = true;
-        ImGui.SetNextWindowSize(new Vector2(Math.Min(460 * CompanionScale, ImGui.GetMainViewport().WorkSize.X * 0.9f), 0), ImGuiCond.Appearing);
-        if (!BeginCenteredModal("Apply EV training?", ref open, ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (!BeginConfirmationModal("Apply EV training?")) return;
         var command = evTrainingConfirmation;
         if (command is null || command.Owner != trainer?.User.Id || command.PokemonId != pokemon.Id)
-        { ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return; }
+        { ImGui.CloseCurrentPopup(); EndConfirmationModal(); return; }
         ImGui.TextWrapped(string.Join(" / ", BuildStats.Where(stat => command.Target[stat.Id] > 0).Select(stat => $"{command.Target[stat.Id]} {stat.Label}")));
         ImGui.TextWrapped($"Use {command.Plan.Items.Sum(item => item.Quantity)} items from your Bag to train {pokemon.Nickname}?");
         ImGui.TextWrapped("This uses exactly the items shown in the preview.");
@@ -172,15 +170,12 @@ public sealed partial class MainWindow
         var locked = CollectionLocked || pokemon.FusionHostId.Length > 0;
         if (changed) ImGui.TextColored(PokemonOrange, "Trainer data changed. Go back and preview again.");
         if (locked) ImGui.TextWrapped("Finish your battle or run before applying training.");
-        ImGui.BeginDisabled(locked || changed);
-        if (DrawAccentSmallButton("Confirm training", PokemonGreen))
+        if (DrawConfirmationActions("Confirm training", PokemonGreen, locked || changed, "Go back", () => evTrainingConfirmation = null))
         {
             Run(() => ApplyEvTraining(command), "Applying EV training...");
             ImGui.CloseCurrentPopup();
         }
-        ImGui.EndDisabled(); ImGui.SameLine();
-        if (ImGui.Button("Go back")) { evTrainingConfirmation = null; ImGui.CloseCurrentPopup(); }
-        ImGui.EndPopup();
+        EndConfirmationModal();
     }
 
     private async Task ApplyEvTraining(EvTrainingConfirmation command)

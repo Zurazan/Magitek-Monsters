@@ -294,10 +294,9 @@ public sealed partial class MainWindow
     private void DrawBattleResultEvolutionPopup()
     {
         if (requestResultEvolution) { ImGui.OpenPopup("Evolve battle partner"); requestResultEvolution = false; }
-        ImGui.SetNextWindowSize(new Vector2(450, 0) * CompanionScale, ImGuiCond.Appearing);
-        if (!BeginCenteredModal("Evolve battle partner", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (!BeginConfirmationModal("Evolve battle partner")) return;
         var pokemon = trainer?.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == resultEvolutionPokemon);
-        if (pokemon is null) { ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return; }
+        if (pokemon is null) { ImGui.CloseCurrentPopup(); EndConfirmationModal(); return; }
         var routes = trainer!.EvolutionOptions.Where(option => option.PokemonId == pokemon.Id && option.Ready).ToArray();
         var route = routes.FirstOrDefault(option => option.TargetSpecies == resultEvolutionTarget) ?? routes.FirstOrDefault();
         ImGui.TextColored(PokemonYellow, $"Evolve {pokemon.Nickname}?");
@@ -318,11 +317,8 @@ public sealed partial class MainWindow
             ImGui.TextWrapped(route.Requirement);
         }
         else ImGui.TextWrapped("This evolution is no longer available. Check its requirements in your Pokémon’s menu.");
-        ImGui.Separator(); ImGui.BeginDisabled(CollectionLocked || route is null);
-        if (DrawAccentButton("Evolve", new Vector2(130, 31) * CompanionScale, PokemonYellow) && route is not null)
+        if (DrawConfirmationActions("Evolve", PokemonYellow, CollectionLocked || route is null, "Not now") && route is not null)
         { var target = route.TargetSpecies; ImGui.CloseCurrentPopup(); Run(() => EvolvePokemon(pokemon.Id, target), $"Evolving {pokemon.Nickname}..."); }
-        ImGui.EndDisabled(); ImGui.SameLine();
-        if (ImGui.Button("Not now")) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
+        EndConfirmationModal();
     }
 }

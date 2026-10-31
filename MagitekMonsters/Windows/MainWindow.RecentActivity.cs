@@ -153,14 +153,10 @@ public sealed partial class MainWindow
 
     private void DrawRecentActivityConfirmation()
     {
-        var open = true;
-        ImGui.SetNextWindowSize(new Vector2(Math.Min(430 * CompanionScale, ImGui.GetMainViewport().WorkSize.X * 0.9f), 0), ImGuiCond.Appearing);
-        if (!BeginCenteredModal("Clear recent activity?", ref open, ImGuiWindowFlags.AlwaysAutoResize)) return;
-        if (trainer?.User.Id != activityClearOwner) { ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return; }
+        if (!BeginConfirmationModal("Clear recent activity?")) return;
+        if (trainer?.User.Id != activityClearOwner) { ImGui.CloseCurrentPopup(); EndConfirmationModal(); return; }
         ImGui.TextWrapped("Remove this trainer's local activity history? Your Pokémon, progress and rewards are kept.");
-        if (DrawAccentSmallButton("Clear history", PokemonRed)) { ClearRecentActivity(activityClearOwner); ImGui.CloseCurrentPopup(); }
-        ImGui.SameLine();
-        if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
+        if (DrawConfirmationActions("Clear history", PokemonRed)) { ClearRecentActivity(activityClearOwner); ImGui.CloseCurrentPopup(); }
+        EndConfirmationModal();
     }
 }

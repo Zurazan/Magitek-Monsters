@@ -153,13 +153,11 @@ public sealed partial class MainWindow
         ImGui.EndDisabled();
         if (ImGui.GetContentRegionAvail().X >= ImGui.CalcTextSize("Abandon run").X + 240 * scale) ImGui.SameLine();
         if (DrawAccentSmallButton("Abandon run", PokemonOrange)) ImGui.OpenPopup("Abandon League run?");
-        if (BeginCenteredModal("Abandon League run?", ImGuiWindowFlags.AlwaysAutoResize))
+        if (BeginConfirmationModal("Abandon League run?"))
         {
             ImGui.TextWrapped("End this run? Cleared-fight rewards stay saved. Used supplies are not refunded. Your next run starts from Elite Four I.");
-            ImGui.BeginDisabled(busy);
-            if (DrawAccentButton("Abandon", new Vector2(130, 32), PokemonRed)) { ImGui.CloseCurrentPopup(); Run(AbandonLeague, "Abandoning the League run..."); }
-            ImGui.EndDisabled(); ImGui.SameLine(); if (ImGui.Button("Keep playing")) ImGui.CloseCurrentPopup();
-            ImGui.EndPopup();
+            if (DrawConfirmationActions("Abandon", PokemonRed, busy, "Keep playing")) { ImGui.CloseCurrentPopup(); Run(AbandonLeague, "Abandoning the League run..."); }
+            EndConfirmationModal();
         }
         return true;
     }
@@ -227,13 +225,11 @@ public sealed partial class MainWindow
     private void DrawTrainerForfeit()
     {
         if (DrawAccentSmallButton(battle?.FrontierId is not null ? "Forfeit Frontier run" : battle?.LeagueId is null ? "Forfeit battle" : "Forfeit League run", PokemonOrange)) ImGui.OpenPopup("Forfeit trainer battle?");
-        if (!BeginCenteredModal("Forfeit trainer battle?", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (!BeginConfirmationModal("Forfeit trainer battle?")) return;
         ImGui.TextWrapped("This counts as a defeat. Used supplies are not refunded. League and Frontier forfeits end the entire run. Previously earned rewards and permanent unlocks stay saved.");
         if (battle is { DefeatPenaltyCap: > 0 }) DrawPveDefeatNotice(battle.DefeatPenaltyCap);
-        ImGui.BeginDisabled(busy);
-        if (DrawAccentButton("Forfeit", new Vector2(130, 32), PokemonRed)) { ImGui.CloseCurrentPopup(); Run(() => ChooseBattle("forfeit"), "Forfeiting the battle..."); }
-        ImGui.EndDisabled(); ImGui.SameLine(); if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
+        if (DrawConfirmationActions("Forfeit", PokemonRed, busy)) { ImGui.CloseCurrentPopup(); Run(() => ChooseBattle("forfeit"), "Forfeiting the battle..."); }
+        EndConfirmationModal();
     }
     private async Task StartLeague(string[] ids)
     {
