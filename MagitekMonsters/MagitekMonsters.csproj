@@ -3,13 +3,13 @@
   <PropertyGroup>
 
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Author>Magitek Monsters Team</Author>
+    <Author>Zura</Author>
     <Name>Magitek Monsters</Name>
     <AssemblyName>MagitekMonsters</AssemblyName>
     <RootNamespace>MagitekMonsters</RootNamespace>
-    <Punchline>A server-backed monster-catching companion game inside FFXIV.</Punchline>
-    <Description>Catch, train, store, and battle Pokémon through an ImGui companion window. Valuable game state and Pokémon Showdown battles are authoritative on your Magitek Monsters server.</Description>
-    <Tags>pokemon;companion;battle;minigame</Tags>
+    <Punchline>Pokemon</Punchline>
+    <Description>Pokemon</Description>
+    <Tags>pokemon</Tags>
   </PropertyGroup>
 
   <ItemGroup>
