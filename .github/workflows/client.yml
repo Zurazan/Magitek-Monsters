@@ -1,0 +1,118 @@
+name: Client
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: client-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
+
+defaults:
+  run:
+    shell: pwsh
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      release: ${{ steps.plan.outputs.release }}
+      artifact: ${{ steps.package.outputs.artifact }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Plan release
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/get-release-plan.ps1 -Repository $env:GITHUB_REPOSITORY
+
+      - name: Download Dalamud
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'dalamud.zip'
+          $destination = Join-Path $env:APPDATA 'XIVLauncher/addon/Hooks/dev'
+          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination -Force
+          "DALAMUD_HOME=$destination" >> $env:GITHUB_ENV
+
+      - name: Restore locked dependencies
+        run: dotnet restore MagitekMonsters.slnx --locked-mode -m:1 -nodeReuse:false
+
+      - name: Build client
+        run: ./scripts/build-client.ps1 -NoRestore
+
+      - name: Package client
+        id: package
+        run: |
+          $epoch = git show -s --format=%ct $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read the source commit timestamp.' }
+          $env:SOURCE_DATE_EPOCH = $epoch
+          ./scripts/package-client.ps1 -Repository $env:GITHUB_REPOSITORY -SourceCommit $env:GITHUB_SHA
+          "artifact=client-$env:GITHUB_SHA-$env:GITHUB_RUN_ATTEMPT" >> $env:GITHUB_OUTPUT
+
+      - name: Store checked package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.package.outputs.artifact }}
+          path: |
+            .artifacts/client/Magitek Monsters v*.zip
+            .artifacts/client/icon.png
+            .artifacts/client/repo.json
+            .artifacts/client/upload-manifest.json
+          if-no-files-found: error
+          retention-days: 7
+          include-hidden-files: true
+          compression-level: 0
+
+  release:
+    needs: build
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'Zurazan/Magitek-Monsters' &&
+      needs.build.outputs.release == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check out built commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download checked package
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          path: .artifacts/client
+
+      - name: Publish release and installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/publish-client.ps1 -UpdateRepository

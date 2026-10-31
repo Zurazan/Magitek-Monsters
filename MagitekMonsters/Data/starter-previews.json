@@ -1,0 +1,723 @@
+{
+  "source": "Pokemon Showdown 0.11.11",
+  "starters": [
+    {
+      "species": "Bulbasaur",
+      "ability": "Overgrow",
+      "stages": [
+        {
+          "species": "Bulbasaur",
+          "types": [
+            "Grass",
+            "Poison"
+          ]
+        },
+        {
+          "species": "Ivysaur",
+          "types": [
+            "Grass",
+            "Poison"
+          ]
+        },
+        {
+          "species": "Venusaur",
+          "types": [
+            "Grass",
+            "Poison"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Charmander",
+      "ability": "Blaze",
+      "stages": [
+        {
+          "species": "Charmander",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Charmeleon",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Charizard",
+          "types": [
+            "Fire",
+            "Flying"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Squirtle",
+      "ability": "Torrent",
+      "stages": [
+        {
+          "species": "Squirtle",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Wartortle",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Blastoise",
+          "types": [
+            "Water"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Chikorita",
+      "ability": "Overgrow",
+      "stages": [
+        {
+          "species": "Chikorita",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Bayleef",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Meganium",
+          "types": [
+            "Grass"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Cyndaquil",
+      "ability": "Blaze",
+      "stages": [
+        {
+          "species": "Cyndaquil",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Quilava",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Typhlosion",
+          "types": [
+            "Fire"
+          ]
+        }
+      ],
+      "regionalFinal": {
+        "species": "Typhlosion-Hisui",
+        "types": [
+          "Fire",
+          "Ghost"
+        ]
+      }
+    },
+    {
+      "species": "Totodile",
+      "ability": "Torrent",
+      "stages": [
+        {
+          "species": "Totodile",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Croconaw",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Feraligatr",
+          "types": [
+            "Water"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Treecko",
+      "ability": "Overgrow",
+      "stages": [
+        {
+          "species": "Treecko",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Grovyle",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Sceptile",
+          "types": [
+            "Grass"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Torchic",
+      "ability": "Blaze",
+      "stages": [
+        {
+          "species": "Torchic",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Combusken",
+          "types": [
+            "Fire",
+            "Fighting"
+          ]
+        },
+        {
+          "species": "Blaziken",
+          "types": [
+            "Fire",
+            "Fighting"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Mudkip",
+      "ability": "Torrent",
+      "stages": [
+        {
+          "species": "Mudkip",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Marshtomp",
+          "types": [
+            "Water",
+            "Ground"
+          ]
+        },
+        {
+          "species": "Swampert",
+          "types": [
+            "Water",
+            "Ground"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Turtwig",
+      "ability": "Overgrow",
+      "stages": [
+        {
+          "species": "Turtwig",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Grotle",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Torterra",
+          "types": [
+            "Grass",
+            "Ground"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Chimchar",
+      "ability": "Blaze",
+      "stages": [
+        {
+          "species": "Chimchar",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Monferno",
+          "types": [
+            "Fire",
+            "Fighting"
+          ]
+        },
+        {
+          "species": "Infernape",
+          "types": [
+            "Fire",
+            "Fighting"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Piplup",
+      "ability": "Torrent",
+      "stages": [
+        {
+          "species": "Piplup",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Prinplup",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Empoleon",
+          "types": [
+            "Water",
+            "Steel"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Snivy",
+      "ability": "Overgrow",
+      "stages": [
+        {
+          "species": "Snivy",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Servine",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Serperior",
+          "types": [
+            "Grass"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Tepig",
+      "ability": "Blaze",
+      "stages": [
+        {
+          "species": "Tepig",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Pignite",
+          "types": [
+            "Fire",
+            "Fighting"
+          ]
+        },
+        {
+          "species": "Emboar",
+          "types": [
+            "Fire",
+            "Fighting"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Oshawott",
+      "ability": "Torrent",
+      "stages": [
+        {
+          "species": "Oshawott",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Dewott",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Samurott",
+          "types": [
+            "Water"
+          ]
+        }
+      ],
+      "regionalFinal": {
+        "species": "Samurott-Hisui",
+        "types": [
+          "Water",
+          "Dark"
+        ]
+      }
+    },
+    {
+      "species": "Chespin",
+      "ability": "Overgrow",
+      "stages": [
+        {
+          "species": "Chespin",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Quilladin",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Chesnaught",
+          "types": [
+            "Grass",
+            "Fighting"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Fennekin",
+      "ability": "Blaze",
+      "stages": [
+        {
+          "species": "Fennekin",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Braixen",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Delphox",
+          "types": [
+            "Fire",
+            "Psychic"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Froakie",
+      "ability": "Torrent",
+      "stages": [
+        {
+          "species": "Froakie",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Frogadier",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Greninja",
+          "types": [
+            "Water",
+            "Dark"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Rowlet",
+      "ability": "Overgrow",
+      "stages": [
+        {
+          "species": "Rowlet",
+          "types": [
+            "Grass",
+            "Flying"
+          ]
+        },
+        {
+          "species": "Dartrix",
+          "types": [
+            "Grass",
+            "Flying"
+          ]
+        },
+        {
+          "species": "Decidueye",
+          "types": [
+            "Grass",
+            "Ghost"
+          ]
+        }
+      ],
+      "regionalFinal": {
+        "species": "Decidueye-Hisui",
+        "types": [
+          "Grass",
+          "Fighting"
+        ]
+      }
+    },
+    {
+      "species": "Litten",
+      "ability": "Blaze",
+      "stages": [
+        {
+          "species": "Litten",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Torracat",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Incineroar",
+          "types": [
+            "Fire",
+            "Dark"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Popplio",
+      "ability": "Torrent",
+      "stages": [
+        {
+          "species": "Popplio",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Brionne",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Primarina",
+          "types": [
+            "Water",
+            "Fairy"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Grookey",
+      "ability": "Overgrow",
+      "stages": [
+        {
+          "species": "Grookey",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Thwackey",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Rillaboom",
+          "types": [
+            "Grass"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Scorbunny",
+      "ability": "Blaze",
+      "stages": [
+        {
+          "species": "Scorbunny",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Raboot",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Cinderace",
+          "types": [
+            "Fire"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Sobble",
+      "ability": "Torrent",
+      "stages": [
+        {
+          "species": "Sobble",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Drizzile",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Inteleon",
+          "types": [
+            "Water"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Sprigatito",
+      "ability": "Overgrow",
+      "stages": [
+        {
+          "species": "Sprigatito",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Floragato",
+          "types": [
+            "Grass"
+          ]
+        },
+        {
+          "species": "Meowscarada",
+          "types": [
+            "Grass",
+            "Dark"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Fuecoco",
+      "ability": "Blaze",
+      "stages": [
+        {
+          "species": "Fuecoco",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Crocalor",
+          "types": [
+            "Fire"
+          ]
+        },
+        {
+          "species": "Skeledirge",
+          "types": [
+            "Fire",
+            "Ghost"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    },
+    {
+      "species": "Quaxly",
+      "ability": "Torrent",
+      "stages": [
+        {
+          "species": "Quaxly",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Quaxwell",
+          "types": [
+            "Water"
+          ]
+        },
+        {
+          "species": "Quaquaval",
+          "types": [
+            "Water",
+            "Fighting"
+          ]
+        }
+      ],
+      "regionalFinal": null
+    }
+  ]
+}

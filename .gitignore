@@ -1,0 +1,15 @@
+.vs/
+.idea/
+**/bin/
+**/obj/
+.artifacts/
+*.user
+*.suo
+*.pdb
+*.dll
+*.exe
+*.zip
+*.log
+*.tmp
+imgui.ini
+**/.env*

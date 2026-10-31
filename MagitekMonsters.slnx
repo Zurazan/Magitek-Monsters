@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="MagitekMonsters/MagitekMonsters.csproj"><Platform Project="x64" /></Project>
+  <Project Path="Contracts/MagitekMonsters.Contracts.csproj" />
+</Solution>
