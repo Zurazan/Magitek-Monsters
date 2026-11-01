@@ -12,22 +12,22 @@ public static class PvePresentation
     public static readonly (string Label, string Id)[] Circuits =
     [
         ("All", "all"), ("Rookie", "rookie"), ("Bronze", "bronze"), ("Silver", "silver"),
-        ("Gold", "gold"), ("Ace", "ace"), ("Master", "master"), ("Gyms", "gym"),
-        ("Elite Four", "elite"), ("Champion", "champion")
+        ("Gold", "gold"), ("Ace", "ace"), ("Master", "master")
     ];
 
     public static bool IndividualUnlocked(OpponentDto opponent, ISet<string> defeated) =>
         defeated.Contains(opponent.Id) || opponent.RematchOf is not null || opponent.Tier is not ("elite" or "champion");
 
     public static OpponentDto[] LeagueStages(IReadOnlyList<OpponentDto> opponents, bool rematch) =>
-        opponents.Where(entry => entry.Tier is "elite" or "champion" && (entry.RematchOf is not null) == rematch).ToArray();
+        opponents.Where(entry => entry.RegionId is null && (entry.Tier is "elite" or "champion") && (entry.RematchOf is not null) == rematch).ToArray();
 
-    public static string? LockReason(OpponentDto opponent, ISet<string> defeated, IReadOnlyList<OpponentDto> opponents)
+    public static string? LockReason(OpponentDto opponent, ISet<string> defeated, IReadOnlyList<OpponentDto> opponents, bool individual = true)
     {
-        var missing = opponent.RequiredOpponentIds.Where(id => !defeated.Contains(id)).ToArray();
+        var missing = opponent.RequiredOpponentIds.Where(id => !defeated.Contains(id)
+            && !(id == "champion-eidolon" && MagitekMonsters.Contracts.RegionalLeagueProgress.HasChampion(defeated))).ToArray();
         if (missing.Length > 0)
             return "Defeat " + string.Join(", ", missing.Select(id => opponents.FirstOrDefault(entry => entry.Id == id)?.Name ?? id)) + " first.";
-        return IndividualUnlocked(opponent, defeated) ? null : "Earn the first victory in a League run to unlock individual rematches.";
+        return !individual || IndividualUnlocked(opponent, defeated) ? null : "Earn the first victory in a League run to unlock individual rematches.";
     }
 
     public static string? TeamError(IReadOnlyList<PokemonDto> team, string challenge, int level) =>

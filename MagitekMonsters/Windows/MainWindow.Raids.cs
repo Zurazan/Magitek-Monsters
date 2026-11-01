@@ -261,13 +261,14 @@ public sealed partial class MainWindow
             foreach (var move in own.Moves)
             {
                 ImGui.TableNextColumn(); ImGui.BeginDisabled(move.Disabled || move.Pp == 0 || move.LegalTargets.Count == 0);
-                var label = $"{move.Move}\n{move.Type} / {(move.Pp.HasValue ? $"PP {move.Pp}/{move.Maxpp}" : "Continue move")}##RaidMove{move.Index}";
+                var label = $"{BattleLayout.MoveLabel(move.Move).ButtonText}\n{move.Type} / {(move.Pp.HasValue ? $"PP {move.Pp}/{move.Maxpp}" : "Continue move")}##RaidMove{move.Index}";
                 if (DrawAccentButton(label, new Vector2(-1, (compact ? 38 : 44) * scale), PokemonBlue))
                 {
                     if (move.LegalTargets.Count == 1) SubmitRaidMove(move, move.LegalTargets[0]);
                     else { raidTargetMove = move; raidTargetOpen = true; }
                 }
                 ImGui.EndDisabled();
+                DrawBattleMoveTooltip(move.Move);
             }
             ImGui.EndTable();
         }

@@ -4,6 +4,10 @@ namespace MagitekMonsters.Models;
 
 public sealed class LeagueRunDto
 {
+    public string? RegionId { get; set; }
+    public string? CircuitId { get; set; }
+    public string? RegionName { get; set; }
+    public string? CircuitName { get; set; }
     public bool Rematch { get; set; }
     public string Id { get; set; } = string.Empty;
     public int Revision { get; set; }

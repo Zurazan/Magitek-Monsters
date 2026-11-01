@@ -20,14 +20,15 @@ public sealed partial class MainWindow
     private static readonly string[] ChallengeTypes = ["Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy"];
     private string? pveSetupOpponentId;
     private bool openPveSetup;
-    private bool pveRematches;
+    private string? pveSetupCircuitId;
     private int pveChallengeIndex;
     private int pveTypeIndex;
     private readonly HashSet<string> pveTeamIds = [];
 
-    private void OpenPveChallenge(string opponentId)
+    private void OpenPveChallenge(string opponentId, string? circuitId = null)
     {
         pveSetupOpponentId = opponentId;
+        pveSetupCircuitId = circuitId;
         pveChallengeIndex = 0;
         pveTeamIds.Clear();
         foreach (var pokemon in trainer?.Party ?? []) pveTeamIds.Add(pokemon.Id);
@@ -53,7 +54,7 @@ public sealed partial class MainWindow
         ImGui.TextColored(ExpBarBlue, $"¥ {opponent.RewardCurrency:N0} / {opponent.RewardExperience * multiplier:N0} party EXP{(multiplier > 1 ? " (x2)" : "")}");
         DrawPveTypedTeam("ChallengeOpponentTeam", opponent.TeamSpecies.ToArray());
         ImGui.Separator();
-        var cleared = trainer.PveProgress.DefeatedOpponentIds.Contains(opponent.Id);
+        var cleared = RegionalLeaguePresentation.Clears(trainer).Contains(opponent.Id);
         if (!cleared) pveChallengeIndex = 0;
         if (ImGui.BeginCombo("Mode", PveChallenges[pveChallengeIndex].Label))
         {
@@ -90,7 +91,7 @@ public sealed partial class MainWindow
             ImGui.TextColored(PokemonYellow, "MEDAL ALREADY EARNED. You can still challenge again.");
         ImGui.EndChild();
         ImGui.Separator();
-        var access = PvePresentation.LockReason(opponent, trainer.PveProgress.DefeatedOpponentIds.ToHashSet(), opponents);
+        var access = RegionalPreparationLock(opponent);
         ImGui.BeginDisabled(busy || CollectionLocked || invalid is not null || access is not null);
         if (DrawAccentButton("Start battle", new Vector2(190, 34) * scale, PokemonRed))
         {
@@ -98,8 +99,9 @@ public sealed partial class MainWindow
             var mode = challenge.Id;
             var type = mode == "monotype" ? ChallengeTypes[pveTypeIndex] : null;
             var ids = chosen.Select(pokemon => pokemon.Id).ToArray();
+            var circuitId = pveSetupCircuitId;
             ImGui.CloseCurrentPopup();
-            Run(() => StartBattle(id, mode, type, ids), $"Challenging {opponent.Name}...");
+            Run(() => StartPreparedBattle(id, mode, type, ids, circuitId), $"Challenging {opponent.Name}...");
         }
         ImGui.EndDisabled();
         ImGui.SameLine();

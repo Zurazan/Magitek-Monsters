@@ -108,7 +108,7 @@ public sealed partial class MainWindow
         if (ImGui.BeginTabBar("PveLeagueSections", ImGuiTabBarFlags.FittingPolicyResizeDown))
         {
             if (ImGui.BeginTabItem("Trainer circuit")) { DrawPveTrainerBoard(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("League run")) { DrawLeagueEntry(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("Regional Leagues")) { DrawRegionalLeagues(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Special trials")) { DrawSpecialTrials(); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
         }

@@ -155,11 +155,18 @@ public sealed partial class MainWindow
 
     private void DrawBattleMoveTooltip(string name)
     {
-        if (!ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled) || !battleMoveHelp.TryGetValue(name, out var move)) return;
+        if (!ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) return;
+        var label = BattleLayout.MoveLabel(name);
+        if (!battleMoveHelp.TryGetValue(label.Name, out var move)) return;
         ImGui.BeginTooltip();
         ImGui.PushTextWrapPos(ImGui.GetFontSize() * 28);
         ImGui.TextColored(PokemonBlue, $"{move.Name} | {move.Type} | {move.Category}");
-        ImGui.Text($"Power: {(move.Power > 0 ? move.Power.ToString() : "N/A")} | Accuracy: {move.Accuracy?.ToString() ?? "Always"} | Base PP: {move.Pp}");
+        var power = label.Power ?? move.Power;
+        ImGui.Text($"Power: {(power > 0 ? power.ToString() : "N/A")} | Accuracy: {move.Accuracy?.ToString() ?? "Always"} | Base PP: {move.Pp}");
+        if (label.Power is not null)
+            ImGui.TextWrapped(label.Name == "Return"
+                ? "Power rises with friendship, up to 102. EV-reset berries also raise friendship."
+                : "Power falls as friendship rises, from a maximum of 102.");
         ImGui.TextWrapped(move.Description);
         ImGui.PopTextWrapPos();
         ImGui.EndTooltip();

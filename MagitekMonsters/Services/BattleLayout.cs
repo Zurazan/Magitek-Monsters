@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using MagitekMonsters.Models;
 
@@ -7,9 +8,27 @@ namespace MagitekMonsters.Services;
 public readonly record struct BattleConsoleLayout(float MainWidth, float LogWidth, float HeaderHeight, float FieldHeight, float LatestHeight, float ActionHeight, float Gap);
 public readonly record struct BattleTypeLayout(float BadgeWidth, float Width, float Height, bool Stacked);
 public enum BattleMenu { Fight, Switch, Bag, Catch }
+public readonly record struct BattleMoveLabel(string Name, int? Power)
+{
+    public string ButtonText => Power is int power ? $"{Name} ({power} power)" : Name;
+}
 
 public static class BattleLayout
 {
+    public static BattleMoveLabel MoveLabel(string name)
+    {
+        var split = name.LastIndexOf(' ');
+        if (split > 0)
+        {
+            var stem = name[..split];
+            var canonical = stem.Equals("Return", StringComparison.OrdinalIgnoreCase) ? "Return"
+                : stem.Equals("Frustration", StringComparison.OrdinalIgnoreCase) ? "Frustration" : null;
+            if (canonical is not null && int.TryParse(name.AsSpan(split + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var power) && power is >= 1 and <= 102)
+                return new(canonical, power);
+        }
+        return new(name, null);
+    }
+
     public static BattleMenu NextMenu(BattleMenu selected, bool newBattle, bool newTurn, bool forced, bool wild)
     {
         if (forced) return BattleMenu.Switch;

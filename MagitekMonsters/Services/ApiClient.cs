@@ -289,9 +289,13 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
         return Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/moves/relearn", body, true, cancellationToken);
     }
 
-    public Task<BattleSnapshotDto> StartBattle(string opponentId, string challenge, string? monotype, string[] pokemonIds, CancellationToken cancellationToken = default) =>
-        Send<BattleSnapshotDto>(HttpMethod.Post, "/api/battles/pve",
-            monotype is null ? (object)new { opponentId, challenge, pokemonIds } : new { opponentId, challenge, monotype, pokemonIds }, true, cancellationToken);
+    public Task<BattleSnapshotDto> StartBattle(string opponentId, string challenge, string? monotype, string[] pokemonIds, CancellationToken cancellationToken = default, string? circuitId = null)
+    {
+        var body = new Dictionary<string, object> { ["opponentId"] = opponentId, ["challenge"] = challenge, ["pokemonIds"] = pokemonIds };
+        if (monotype is not null) body["monotype"] = monotype;
+        if (circuitId is not null) body["circuitId"] = circuitId;
+        return Send<BattleSnapshotDto>(HttpMethod.Post, "/api/battles/pve", body, true, cancellationToken);
+    }
 
     public Task<BattleSnapshotDto> ChooseBattleAction(string battleId, string choice, int? revision = null, CancellationToken cancellationToken = default) =>
         Send<BattleSnapshotDto>(HttpMethod.Post, $"/api/battles/{battleId}/choose",
@@ -300,8 +304,8 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     public Task<BattleSnapshotDto> GetBattle(string battleId, CancellationToken cancellationToken = default) =>
         Send<BattleSnapshotDto>(HttpMethod.Get, $"/api/battles/{battleId}", null, true, cancellationToken);
 
-    public Task<BattleSnapshotDto> StartLeague(string[] pokemonIds, bool rematch = false, CancellationToken cancellationToken = default) =>
-        Send<BattleSnapshotDto>(HttpMethod.Post, "/api/league/start", new { pokemonIds, rematch }, true, cancellationToken);
+    public Task<BattleSnapshotDto> StartLeague(string[] pokemonIds, bool rematch = false, CancellationToken cancellationToken = default, string? circuitId = null) =>
+        Send<BattleSnapshotDto>(HttpMethod.Post, "/api/league/start", circuitId is null ? (object)new { pokemonIds, rematch } : new { pokemonIds, rematch, circuitId }, true, cancellationToken);
     public Task<BattleSnapshotDto> NextLeague(string runId, int revision, CancellationToken cancellationToken = default) =>
         Send<BattleSnapshotDto>(HttpMethod.Post, "/api/league/next", new { runId, revision }, true, cancellationToken);
     public Task<LeagueRunDto> HealLeague(string runId, int revision, string itemId, string pokemonId, string? moveId, CancellationToken cancellationToken = default) =>

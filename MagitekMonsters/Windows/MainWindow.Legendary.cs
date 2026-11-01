@@ -36,10 +36,14 @@ public sealed partial class MainWindow
         }
         ImGui.TextWrapped("Buy a permit once with ranked RT. Defeat the raid boss for one normal wild capture encounter. Catching, fleeing, losing or expiry consumes that opportunity. Boss victories grant no ¥ or EXP. Use normal balls or a guaranteed Master Ball from the Mart's RT Exchange. Raid buffs never carry over to captured Pokémon.");
         ImGui.TextColored(progress.MewAvailable ? PokemonGreen : PokemonOrange, progress.MewAvailable ? "MEW SANCTUARY AVAILABLE" : "MEW: COMPLETE EVERY CURRENTLY REQUIRED BOSS");
-        ImGui.TextWrapped("Mew has no permit fee. Special Trials also count toward completion. New required bosses lock Mew again, including uncaught encounters. Your caught Pokémon and permanent permits stay yours.");
+        ImGui.TextWrapped("Mew has no permit fee. Complete any regional League, the required Sanctuaries and Special Trials. You do not need every region's badges or Champions. Your caught Pokémon and permanent permits stay yours.");
         if (ImGui.CollapsingHeader("Remaining Mew requirements"))
-            foreach (var id in progress.MissingBossIds)
+        {
+            var legacyLeague = opponents.Where(entry => entry.Legacy && entry.RematchOf is null).Select(entry => entry.Id).ToHashSet();
+            if (progress.MissingBossIds.Any(legacyLeague.Contains)) ImGui.TextDisabled("Complete any regional League");
+            foreach (var id in progress.MissingBossIds.Where(id => !legacyLeague.Contains(id)))
                 ImGui.TextDisabled(SanctuarySpecies(legendaryBosses.FirstOrDefault(entry => entry.Id == id)?.Species ?? specialTrials.FirstOrDefault(entry => entry.Id == id)?.Name ?? opponents.FirstOrDefault(entry => entry.Id == id)?.Name ?? id));
+        }
         if (trainer.ActiveEncounter is { Status: "active" } encounter && encounter.HabitatId.StartsWith("legendary-", StringComparison.Ordinal))
         {
             ImGui.Separator();
@@ -91,7 +95,7 @@ public sealed partial class MainWindow
                 }
                 else
                 {
-                    ImGui.BeginDisabled(busy || !unlocked || CollectionLocked || !trainer.PveProgress.DefeatedOpponentIds.Contains("champion-eidolon"));
+                    ImGui.BeginDisabled(busy || !unlocked || CollectionLocked || !MagitekMonsters.Contracts.RegionalLeagueProgress.HasChampion(trainer.PveProgress.DefeatedOpponentIds));
                     DrawPveDefeatNotice(trainer.Party);
                     if (DrawAccentButton("Challenge raid boss", new Vector2(230, 32), PokemonRed))
                     {
@@ -105,7 +109,7 @@ public sealed partial class MainWindow
             }
             ImGui.Separator(); ImGui.PopID();
         }
-        if (!trainer.PveProgress.DefeatedOpponentIds.Contains("champion-eidolon")) ImGui.TextColored(PokemonOrange, "Sanctuary challenges require a League Champion victory.");
+        if (!MagitekMonsters.Contracts.RegionalLeagueProgress.HasChampion(trainer.PveProgress.DefeatedOpponentIds)) ImGui.TextColored(PokemonOrange, "Sanctuary challenges require a League Champion victory.");
         DrawLegendaryPermitPopup();
     }
 

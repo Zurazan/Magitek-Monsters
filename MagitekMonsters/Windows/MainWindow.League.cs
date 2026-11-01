@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
 using MagitekMonsters.Services;
+using MagitekMonsters.Contracts;
 
 namespace MagitekMonsters.Windows;
 
@@ -15,6 +16,7 @@ public sealed partial class MainWindow
     private string leagueItemId = "potion";
     private string leagueMoveId = string.Empty;
     private bool leagueRematch;
+    private string? leagueEntryCircuitId;
 
     private void RestoreTrainerBattle()
     {
@@ -28,22 +30,30 @@ public sealed partial class MainWindow
         if (trainer is null) return;
         var scale = CompanionScale;
         ImGui.Spacing();
-        var champion = trainer.PveProgress.DefeatedOpponentIds.Contains("champion-eidolon");
-        ImGui.BeginDisabled(busy || LeagueBusy);
-        if (DrawCompanionSegment("Original League", !leagueRematch, 145 * scale)) leagueRematch = false;
-        ImGui.EndDisabled();
-        if (ImGui.GetContentRegionAvail().X >= 315 * scale + ImGui.GetStyle().ItemSpacing.X) ImGui.SameLine();
-        ImGui.BeginDisabled(busy || !champion || LeagueBusy);
-        if (DrawCompanionSegment("Level-100 rematch", leagueRematch, 170 * scale)) leagueRematch = true;
-        ImGui.EndDisabled();
+        var circuit = SelectedRegionalCircuit;
+        var region = regionalLeagues.FirstOrDefault(region => region.Id == circuit?.RegionId);
+        var clears = RegionalLeaguePresentation.Clears(trainer);
+        var champion = RegionalLeagueProgress.HasChampion(clears, region?.Id);
+        if (circuit is null)
+        {
+            ImGui.BeginDisabled(busy || LeagueBusy);
+            if (DrawCompanionSegment("Original League", !leagueRematch, 145 * scale)) leagueRematch = false;
+            ImGui.EndDisabled();
+            if (ImGui.GetContentRegionAvail().X >= 315 * scale + ImGui.GetStyle().ItemSpacing.X) ImGui.SameLine();
+            ImGui.BeginDisabled(busy || !champion || LeagueBusy);
+            if (DrawCompanionSegment("Level-100 rematch", leagueRematch, 170 * scale)) leagueRematch = true;
+            ImGui.EndDisabled();
+        }
         if (!champion) { leagueRematch = false; ImGui.TextDisabled("Rematch League unlocks after defeating the Champion."); }
+        var stages = circuit is null ? PvePresentation.LeagueStages(opponents, leagueRematch)
+            : RegionalLeaguePresentation.Stages(opponents, circuit, leagueRematch);
         ImGui.Spacing();
-        ImGui.TextColored(CompanionAccent, "Five fights. One committed team.");
-        ImGui.TextWrapped("Four Elite Four fights and the Champion. HP, status and PP carry over. No free healing. Your team and builds stay locked until the run ends.");
+        if (region is not null) ImGui.TextColored(PokemonBlue, $"{region.Name} / {circuit!.Name}");
+        ImGui.TextColored(CompanionAccent, $"{stages.Length} fights. One committed team.");
+        ImGui.TextWrapped("Defeat the listed lineup to complete this League. HP, status and PP carry over. No free healing. Your team and builds stay locked until the run ends.");
         ImGui.TextWrapped("Each fight has three medicine actions, shared with its following checkpoint. Rewards are saved after each victory. Disconnecting pauses the run.");
         if (trainer.LeagueRun is { } last && !LeagueBusy)
-            ImGui.TextColored(last.Status == "completed" ? PokemonGreen : PokemonOrange, $"Last run: {last.Status.ToUpperInvariant()} | {last.Stage}/{last.OpponentIds.Count} cleared");
-        var stages = PvePresentation.LeagueStages(opponents, leagueRematch);
+            ImGui.TextWrapped($"Last run: {last.RegionName ?? "Previous League"} / {last.Status.ToUpperInvariant()} / {last.Stage}/{last.OpponentIds.Count} cleared");
         DrawLeagueStages(stages.Select(entry => entry.Id).ToArray(), -1);
         ImGui.Spacing();
         ImGui.BeginChild("LeagueEntryOpponents", new Vector2(0, Math.Max(150 * scale, ImGui.GetContentRegionAvail().Y - 112 * scale)), false);
@@ -57,14 +67,18 @@ public sealed partial class MainWindow
             ImGui.Separator(); ImGui.Spacing(); ImGui.PopID();
         }
         ImGui.EndChild();
-        var first = opponents.FirstOrDefault(entry => entry.Tier == "elite" && (entry.RematchOf is not null) == leagueRematch);
-        var eligible = first is not null && first.RequiredOpponentIds.All(trainer.PveProgress.DefeatedOpponentIds.Contains);
-        if (!eligible) ImGui.TextWrapped(first is null ? "League catalog is unavailable." : "Defeat " + string.Join(", ", first.RequiredOpponentIds.Where(id => !trainer.PveProgress.DefeatedOpponentIds.Contains(id)).Select(id => opponents.FirstOrDefault(entry => entry.Id == id)?.Name ?? id)) + " first.");
+        var first = stages.FirstOrDefault();
+        var reason = region is not null && circuit is not null
+            ? RegionalLeaguePresentation.LeagueLock(region, circuit, clears, leagueRematch, regionalLeagues, opponents)
+            : first is null ? "League catalog is unavailable." : PvePresentation.LockReason(first, clears, opponents, false);
+        var eligible = first is not null && reason is null;
+        if (reason is not null) ImGui.TextWrapped(reason);
         ImGui.BeginDisabled(busy || !eligible || CollectionLocked || trainer.Party.Count == 0);
         if (DrawAccentButton("Prepare League run", new Vector2(210, 34) * scale, CompanionAccent))
         {
             pveTeamIds.Clear();
             foreach (var pokemon in trainer.Party) pveTeamIds.Add(pokemon.Id);
+            leagueEntryCircuitId = circuit?.Id;
             ImGui.OpenPopup("League preparation");
         }
         ImGui.EndDisabled();
@@ -98,7 +112,7 @@ public sealed partial class MainWindow
         var run = trainer?.LeagueRun;
         if (run?.Status != "between" || battle?.Status == "active") return false;
         var scale = CompanionScale;
-        DrawSectionHeader("League checkpoint", $"{(run.Rematch ? "Level-100 rematch" : "Original League")} / {run.Stage}/{run.OpponentIds.Count} victories saved");
+        DrawSectionHeader("League checkpoint", $"{run.RegionName ?? "Previous League"} / {(run.Rematch ? "Level-100 rematch" : run.CircuitName ?? "League run")} / {run.Stage}/{run.OpponentIds.Count} victories saved");
         DrawLeagueStages(run.OpponentIds.ToArray(), run.Stage);
         ImGui.BeginChild("LeagueCheckpointBody", new Vector2(0, Math.Max(180 * scale, ImGui.GetContentRegionAvail().Y - 58 * scale)), false);
         var next = opponents.FirstOrDefault(entry => entry.Id == run.OpponentIds.ElementAtOrDefault(run.Stage));
@@ -234,7 +248,7 @@ public sealed partial class MainWindow
     private async Task StartLeague(string[] ids)
     {
         var refresh = true;
-        try { battle = await InSession(plugin.Api.StartLeague(ids, leagueRematch)); }
+        try { battle = await InSession(plugin.Api.StartLeague(ids, leagueRematch, circuitId: leagueEntryCircuitId)); }
         catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
         finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
         SetStatus("League run saved. Choose your action.");

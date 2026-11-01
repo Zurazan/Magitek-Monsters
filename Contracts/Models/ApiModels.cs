@@ -58,6 +58,7 @@ public sealed class SearchCooldownDto
 
 public sealed class PveProgressDto
 {
+    public List<string> LegacyLeagueCredits { get; set; } = [];
     public int TotalAttempts { get; set; }
     public int TotalLosses { get; set; }
     public List<PveMedalDto> Medals { get; set; } = [];
@@ -436,11 +437,18 @@ public sealed class PrizePokemonDto
 
 public sealed class OpponentCatalogDto
 {
+    public List<RegionalLeagueDto> Regions { get; set; } = [];
     public List<OpponentDto> Opponents { get; set; } = [];
 }
 
 public sealed class OpponentDto
 {
+    public string? RegionId { get; set; }
+    public string? MilestoneId { get; set; }
+    public string? RegionalRole { get; set; }
+    public string Specialty { get; set; } = string.Empty;
+    public string Ace { get; set; } = string.Empty;
+    public bool Legacy { get; set; }
     public string? RematchOf { get; set; }
     public string TacticalHint { get; set; } = string.Empty;
     public int? BagLimit { get; set; }

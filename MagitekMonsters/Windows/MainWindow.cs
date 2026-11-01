@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window, IDisposable
         get => trainerState;
         set
         {
-            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); }
+            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); }
             ObserveTrainerActivity(trainerState, value);
             trainerState = value;
             if (value is not null) trainerProfiles.Invalidate(value.User.TrainerId);
@@ -1066,7 +1066,10 @@ public sealed partial class MainWindow : Window, IDisposable
             failures.Add($"Prize Exchange: {TaskFailure(prizeTask)}");
 
         if (opponentTask.IsCompletedSuccessfully)
-            opponents = (await InSession(opponentTask)).Opponents;
+        {
+            var catalog = await InSession(opponentTask);
+            opponents = catalog.Opponents; regionalLeagues = catalog.Regions;
+        }
         else
             failures.Add($"PvE: {TaskFailure(opponentTask)}");
         if (friendlyTask.IsCompletedSuccessfully) { friendlyFormats.Clear(); friendlyFormats.AddRange((await InSession(friendlyTask)).Formats); }
@@ -1299,9 +1302,12 @@ public sealed partial class MainWindow : Window, IDisposable
         SetStatus(forgetMove is null ? $"Relearned {move}." : $"Forgot {forgetMove} and relearned {move}.");
     }
 
-    private async Task StartBattle(string opponentId, string challenge, string? monotype, string[] pokemonIds)
+    private Task StartBattle(string opponentId, string challenge, string? monotype, string[] pokemonIds) =>
+        StartPreparedBattle(opponentId, challenge, monotype, pokemonIds, null);
+
+    private async Task StartPreparedBattle(string opponentId, string challenge, string? monotype, string[] pokemonIds, string? circuitId)
     {
-        var current = await InSession(plugin.Api.StartBattle(opponentId, challenge, monotype, pokemonIds));
+        var current = await InSession(plugin.Api.StartBattle(opponentId, challenge, monotype, pokemonIds, circuitId: circuitId));
         ApplyBattleResponse(current);
         megaEvolveSelected = false;
         nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1);

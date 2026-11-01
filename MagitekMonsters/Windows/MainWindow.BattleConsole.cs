@@ -280,7 +280,7 @@ public sealed partial class MainWindow
             {
                 var suffix = pvp ? PvpModifierSuffix(active, index) : megaEvolveSelected ? " mega" : "";
                 var command = $"move {index + 1}{suffix}";
-                Run(() => pvp ? ChoosePvpBattle(command) : ChooseBattle(command), $"Using {zMove?.Move ?? move.Move}...");
+                Run(() => pvp ? ChoosePvpBattle(command) : ChooseBattle(command), $"Using {BattleLayout.MoveLabel(zMove?.Move ?? move.Move).Name}...");
             }
             ImGui.EndDisabled();
         }
@@ -289,7 +289,8 @@ public sealed partial class MainWindow
 
     private bool DrawConsoleMoveButton(string id, string name, BattleMoveDto move, float height, bool selected)
     {
-        battleMoveHelp.TryGetValue(name, out var details);
+        var label = BattleLayout.MoveLabel(name);
+        battleMoveHelp.TryGetValue(label.Name, out var details);
         var accent = details is null ? CompanionAccent : TypeColor(details.Type);
         PushAccentButtonStyle(selected ? PokemonGreen : accent);
         var clicked = ImGui.Button($"##{id}", new Vector2(-1, height));
@@ -298,15 +299,15 @@ public sealed partial class MainWindow
         var draw = ImGui.GetWindowDrawList();
         draw.PushClipRect(min + new Vector2(6, 0), max - new Vector2(6, 0), true);
         var disabled = !BattleLayout.HasUsablePp(move) || move.Disabled && name == move.Move;
-        draw.AddText(min + new Vector2(9, 4) * CompanionScale, ImGui.GetColorU32(disabled ? CompanionMuted : selected ? PokemonGreen : Vector4.One), name);
+        draw.AddText(min + new Vector2(9, 4) * CompanionScale, ImGui.GetColorU32(disabled ? CompanionMuted : selected ? PokemonGreen : Vector4.One), label.ButtonText);
         if (height >= 2 * ImGui.GetTextLineHeight() + 8 * CompanionScale)
             draw.AddText(min + new Vector2(9 * CompanionScale, height - ImGui.GetTextLineHeight() - 4 * CompanionScale), ImGui.GetColorU32(disabled ? CompanionMuted : accent), $"{details?.Type ?? "Move"} / {BattleLayout.MovePpLabel(move)}");
         draw.PopClipRect();
         DrawBattleMoveTooltip(name);
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
         {
-            if (move.Pp is null && move.Maxpp is null) ImGui.SetTooltip($"{name}\n{BattleLayout.MovePpLabel(move)}. This action does not spend additional PP.");
-            else if (details is null) ImGui.SetTooltip($"{name}\n{BattleLayout.MovePpLabel(move)}");
+            if (move.Pp is null && move.Maxpp is null) ImGui.SetTooltip($"{label.ButtonText}\n{BattleLayout.MovePpLabel(move)}. This action does not spend additional PP.");
+            else if (details is null) ImGui.SetTooltip($"{label.ButtonText}\n{BattleLayout.MovePpLabel(move)}");
         }
         return clicked;
     }

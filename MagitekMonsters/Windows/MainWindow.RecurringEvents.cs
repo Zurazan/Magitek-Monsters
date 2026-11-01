@@ -64,7 +64,7 @@ public sealed partial class MainWindow
                     ImGui.TextColored(caught ? PokemonGreen : PokemonBlue, species); ImGui.SameLine(); ImGui.TextDisabled(caught ? "REGISTERED" : "UNDISCOVERED");
                     ImGui.TextDisabled(active.ShinyLockedSpecies.Contains(species) ? "Normal variant only / Shiny locked" : "Normal shiny odds / Shiny Charm applies");
                     var sanctuary = active.Mode == "sanctuary";
-                    var eligible = !sanctuary || trainer.Legendary.Permits.Contains(active.BossId) && trainer.PveProgress.DefeatedOpponentIds.Contains("champion-eidolon");
+                    var eligible = !sanctuary || trainer.Legendary.Permits.Contains(active.BossId) && MagitekMonsters.Contracts.RegionalLeagueProgress.HasChampion(trainer.PveProgress.DefeatedOpponentIds);
                     if (!eligible) ImGui.TextColored(PokemonOrange, "Requires Champion clear and your permanent Zarude permit.");
                     ImGui.BeginDisabled(busy || CollectionLocked || trainer.Party.Count == 0 || !eligible || (!sanctuary && cooling));
                     if (DrawAccentButton(sanctuary ? "Challenge Zarude for Dada capture" : "Battle and catch", new Vector2(sanctuary ? 285 : 190, 32), sanctuary ? PokemonRed : PokemonBlue))

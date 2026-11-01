@@ -18,9 +18,6 @@ public sealed partial class MainWindow
         var circuits = PvePresentation.Circuits;
         pveTierIndex = Math.Clamp(pveTierIndex, 0, circuits.Length - 1);
         var defeated = trainer.PveProgress.DefeatedOpponentIds.ToHashSet();
-        var champion = defeated.Contains("champion-eidolon");
-        if (!champion) pveRematches = false;
-        var wide = ImGui.GetContentRegionAvail().X >= 690 * scale;
         ImGui.SetNextItemWidth(150 * scale);
         if (ImGui.BeginCombo("Circuit", circuits[pveTierIndex].Label))
         {
@@ -28,19 +25,7 @@ public sealed partial class MainWindow
                 if (ImGui.Selectable(circuits[index].Label, pveTierIndex == index)) { pveTierIndex = index; pveOpponentPage = 0; }
             ImGui.EndCombo();
         }
-        if (wide) ImGui.SameLine();
-        if (DrawCompanionSegment("Original teams", !pveRematches, 130 * scale)) { pveRematches = false; pveOpponentPage = 0; }
-        if (ImGui.GetContentRegionAvail().X >= 304 * scale + ImGui.GetStyle().ItemSpacing.X) ImGui.SameLine();
-        ImGui.BeginDisabled(!champion);
-        if (DrawCompanionSegment("Champion rematches", pveRematches, 174 * scale))
-        {
-            pveRematches = true; pveOpponentPage = 0;
-            if (circuits[pveTierIndex].Id is not ("all" or "gym" or "elite" or "champion")) pveTierIndex = 7;
-        }
-        ImGui.EndDisabled();
-        if (pveRematches) ImGui.TextColored(CompanionMuted, "Level 100 / Separate teams / Normal rewards");
-        else if (!champion) ImGui.TextColored(CompanionMuted, "Champion rematches unlock after clearing the original League.");
-        var visible = opponents.Where(entry => (entry.RematchOf is not null) == pveRematches
+        var visible = opponents.Where(entry => entry.RegionId is null && !entry.Legacy && entry.RematchOf is null
             && (circuits[pveTierIndex].Id == "all" || entry.Tier == circuits[pveTierIndex].Id)).ToArray();
         ImGui.Spacing();
         ImGui.TextColored(CompanionMuted, $"{circuits[pveTierIndex].Label} circuit / {visible.Count(entry => defeated.Contains(entry.Id))} of {visible.Length} cleared");
@@ -53,7 +38,7 @@ public sealed partial class MainWindow
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         if (ImGui.BeginChild("PveTrainerGrid", new Vector2(0, layout.GridHeight), false))
         {
-            if (page.Length == 0) ImGui.TextWrapped("No trainers in this circuit. Rematches cover Gyms, the Elite Four and the Champion.");
+            if (page.Length == 0) ImGui.TextWrapped("No trainers in this circuit.");
             ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(4, 4) * scale);
             if (ImGui.BeginTable("TrainerBoard", layout.Columns, ImGuiTableFlags.SizingStretchSame))
             {
