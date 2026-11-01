@@ -38,7 +38,7 @@ function Add-PackageFile([string]$source, [string]$name) {
     if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or (Get-Item -LiteralPath $source).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Missing or linked package file: $name" }
     $files.Add($name, [IO.Path]::GetFullPath($source))
 }
-foreach ($name in @('MagitekMonsters.dll', 'MagitekMonsters.Contracts.dll', 'StbImageSharp.dll', 'System.Security.Cryptography.ProtectedData.dll', 'MagitekMonsters.deps.json', 'images/icon.png', 'runtimes/win/lib/netstandard2.0/System.Security.Cryptography.ProtectedData.dll')) { Add-PackageFile (Join-Path $release $name) $name }
+foreach ($name in @('MagitekMonsters.dll', 'MagitekMonsters.Contracts.dll', 'SixLabors.ImageSharp.dll', 'System.Security.Cryptography.ProtectedData.dll', 'MagitekMonsters.deps.json', 'images/icon.png', 'runtimes/win/lib/netstandard2.0/System.Security.Cryptography.ProtectedData.dll')) { Add-PackageFile (Join-Path $release $name) $name }
 Add-PackageFile (Join-Path $root 'LICENSE') 'LICENSE'
 Add-PackageFile (Join-Path $release 'Graphics/asset-manifest.json') 'Graphics/asset-manifest.json'
 $assets = Get-Content -LiteralPath $files['Graphics/asset-manifest.json'] -Raw | ConvertFrom-Json
@@ -49,15 +49,25 @@ foreach ($asset in $assets.files) {
     if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $asset.sha256) { throw "Asset hash mismatch: $name" }
     Add-PackageFile $source $name
 }
-Add-PackageFile (Join-Path $root 'MagitekMonsters/licenses/StbImageSharp-LICENSE.txt') 'licenses/StbImageSharp-LICENSE.txt'
+Add-PackageFile (Join-Path $root 'MagitekMonsters/licenses/ImageSharp-LICENSE.txt') 'licenses/ImageSharp-LICENSE.txt'
 $restore = Get-Content -LiteralPath (Join-Path $root 'MagitekMonsters/obj/project.assets.json') -Raw | ConvertFrom-Json
 $packages = $restore.packageFolders.PSObject.Properties.Name | Select-Object -First 1
+if (-not $restore.libraries.'SixLabors.ImageSharp/4.1.3' -or @($restore.libraries.PSObject.Properties.Name | Where-Object { $_ -match '^StbImage(?:Write)?Sharp/' }).Count -gt 0) { throw 'Unexpected sprite decoder dependency.' }
+Add-PackageFile (Join-Path $packages 'system.io.hashing/8.0.0/LICENSE.TXT') 'licenses/System.IO.Hashing-LICENSE.txt'
+Add-PackageFile (Join-Path $packages 'system.io.hashing/8.0.0/THIRD-PARTY-NOTICES.TXT') 'licenses/System.IO.Hashing-NOTICES.txt'
+Add-PackageFile (Join-Path $root 'MagitekMonsters/licenses/AspNetCore-LICENSE.txt') 'licenses/AspNetCore-LICENSE.txt'
 Add-PackageFile (Join-Path $packages 'system.security.cryptography.protecteddata/4.4.0/LICENSE.TXT') 'licenses/ProtectedData-LICENSE.txt'
 Add-PackageFile (Join-Path $packages 'system.security.cryptography.protecteddata/4.4.0/THIRD-PARTY-NOTICES.TXT') 'licenses/ProtectedData-NOTICES.txt'
 $dependencies = Get-Content -LiteralPath $files['MagitekMonsters.deps.json'] -Raw | ConvertFrom-Json -AsHashtable
 foreach ($target in $dependencies.targets.Values) {
     foreach ($library in $target.Values) {
-        if ($library.runtime) { foreach ($path in $library.runtime.Keys) { if (-not $files.ContainsKey([IO.Path]::GetFileName($path))) { throw 'Missing runtime dependency.' } } }
+        if ($library.runtime) {
+            foreach ($path in $library.runtime.Keys) {
+                $name = [IO.Path]::GetFileName($path)
+                if ($name -notmatch '^[A-Za-z0-9_.-]+\.dll$') { throw 'Unexpected runtime dependency.' }
+                if (-not $files.ContainsKey($name)) { Add-PackageFile (Join-Path $release $name) $name }
+            }
+        }
     }
 }
 New-Item -ItemType Directory -Force -Path $output | Out-Null

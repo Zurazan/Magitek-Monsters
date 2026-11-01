@@ -14,6 +14,8 @@ public sealed class UserDto
 {
     public string Id { get; set; } = string.Empty;
     public string TrainerId { get; set; } = string.Empty;
+    public string? VanityCode { get; set; }
+    public bool CanChooseTrainerUid { get; set; }
     public string Provider { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public string? CharacterName { get; set; }
@@ -144,6 +146,8 @@ public sealed class PvpSeasonDto
 
 public sealed class PvpFormatDto
 {
+    public int DefaultLevel { get; set; }
+    public bool TeamPreview { get; set; }
     public string GameType { get; set; } = "singles";
     public bool OpenTeamSheets { get; set; }
     public string Id { get; set; } = string.Empty;

@@ -184,7 +184,7 @@ public sealed partial class MainWindow
         }
         else
         {
-            ImGui.SetNextItemWidth(-1); ImGui.InputTextWithHint("##ChallengeTrainer", "Trainer ID: MM-00000000", ref challengeTrainerId, 40);
+            ImGui.SetNextItemWidth(-1); ImGui.InputTextWithHint("##ChallengeTrainer", "Trainer UID or vanity code", ref challengeTrainerId, 40);
             if (!friendlyFormats.Any(option => option.Id == friendlyFormatId)) friendlyFormatId = friendlyFormats[0].Id;
             format = DrawOnlineFormatCombo(friendlyFormats, ref friendlyFormatId, "FriendlyFormat");
         }

@@ -63,6 +63,8 @@ jobs:
         run: dotnet restore MagitekMonsters.slnx --locked-mode -m:1 -nodeReuse:false
 
       - name: Build client
+        env:
+          SIXLABORS_LICENSE_KEY: ${{ secrets.SIXLABORS_LICENSE_KEY }}
         run: ./scripts/build-client.ps1 -NoRestore
 
       - name: Package client

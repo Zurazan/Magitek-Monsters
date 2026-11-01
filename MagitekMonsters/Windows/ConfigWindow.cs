@@ -9,7 +9,7 @@ public sealed class ConfigWindow : Window, IDisposable
 {
     private readonly Configuration configuration;
 
-    public ConfigWindow(Plugin plugin) : base("Magitek Monsters Connection###MagitekMonstersSettings")
+    public ConfigWindow(Plugin plugin) : base("Magitek Monsters Settings###MagitekMonstersSettings")
     {
         SizeConstraints = new WindowSizeConstraints
         {
@@ -29,6 +29,10 @@ public sealed class ConfigWindow : Window, IDisposable
         ImGui.Text("Official Magitek Monsters service");
         ImGui.TextColored(new Vector4(0.65f, 0.76f, 1f, 1f), Configuration.OfficialServerUrl);
         ImGui.TextWrapped("Pokémon, inventory, currency, captures, and battle rewards are stored securely by the Magitek Monsters service.");
+        ImGui.Spacing();
+        var notifications = configuration.NotificationsEnabled;
+        if (ImGui.Checkbox("Dalamud notifications", ref notifications)) { configuration.NotificationsEnabled = notifications; configuration.Save(); }
+        ImGui.TextWrapped("Invitations, gifts, raids and connection alerts. No notification sounds.");
         ImGui.Spacing();
         if (ImGui.Button("Forget login on this computer"))
         {

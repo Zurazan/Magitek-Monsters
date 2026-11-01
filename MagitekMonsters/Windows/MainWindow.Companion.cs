@@ -38,76 +38,6 @@ public sealed partial class MainWindow
         if (ImGui.IsItemHovered() && ImGui.CalcTextSize(text).X > width) ImGui.SetTooltip(text);
     }
 
-    private void DrawCompanionHeader()
-    {
-        if (trainer is null) return;
-        var scale = CompanionScale;
-        var money = $"¥ {trainer.Currency:N0}   CP {trainer.CollectionPoints.Balance:N0}   BP {trainer.Frontier.Balance:N0}   RT {trainer.PvpProfile.RankTokens?.Balance ?? 0:N0}";
-        var identityWidth = ImGui.CalcTextSize(trainer.User.DisplayName).X + ImGui.CalcTextSize(trainer.User.TrainerId).X + 24 * scale;
-        var compact = ImGui.GetContentRegionAvail().X < identityWidth + ImGui.CalcTextSize(money).X + 28 * scale;
-        var height = ImGui.GetTextLineHeight() * (compact ? 2 : 1) + 20 * scale;
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12, 8) * scale);
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, CompanionSurface);
-        ImGui.BeginChild("CompanionIdentity", new Vector2(0, height), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
-        if (compact)
-        {
-            DrawCompanionIdentity();
-            ImGui.TextColored(CompanionMuted, money);
-        }
-        else if (ImGui.BeginTable("CompanionIdentityLayout", 2, ImGuiTableFlags.SizingStretchProp))
-        {
-            ImGui.TableSetupColumn("Trainer", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Wallet", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize(money).X);
-            ImGui.TableNextColumn(); DrawCompanionIdentity();
-            ImGui.TableNextColumn(); ImGui.TextColored(CompanionMuted, money);
-            ImGui.EndTable();
-        }
-        ImGui.EndChild();
-        ImGui.PopStyleColor();
-        ImGui.PopStyleVar();
-    }
-
-    private void DrawCompanionIdentity()
-    {
-        var idWidth = ImGui.CalcTextSize(trainer!.User.TrainerId).X + 10;
-        var nameWidth = Math.Min(ImGui.CalcTextSize(trainer.User.DisplayName).X, Math.Max(1, ImGui.GetContentRegionAvail().X - idWidth - 12 * CompanionScale));
-        DrawClippedText(trainer.User.DisplayName, nameWidth, ImGui.GetStyle().Colors[(int)ImGuiCol.Text]);
-        ImGui.SameLine(0, 12 * CompanionScale);
-        DrawCopyableTrainerId(trainer.User.TrainerId);
-    }
-
-    private void DrawCompanionFooter(float height)
-    {
-        var scale = CompanionScale;
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10, 6) * scale);
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, CompanionSurface);
-        ImGui.BeginChild("CompanionFooter", new Vector2(0, height), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
-        var connection = plugin.Connection.State switch
-        {
-            ServerConnectionState.Connected when onlineTrainers >= 0 => $"Connected / {onlineTrainers:N0} online",
-            ServerConnectionState.Reconnecting => "Reconnecting live updates...",
-            ServerConnectionState.Syncing => "Syncing...",
-            _ => plugin.Connection.State.ToString()
-        };
-        var actionWidth = ImGui.CalcTextSize("Disconnect").X + 16 * scale;
-        if (ImGui.BeginTable("CompanionFooterLayout", 3, ImGuiTableFlags.SizingStretchProp))
-        {
-            ImGui.TableSetupColumn("Connection", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize(connection).X);
-            ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Session", ImGuiTableColumnFlags.WidthFixed, actionWidth);
-            ImGui.TableNextColumn(); ImGui.TextColored(ConnectionColor(plugin.Connection.State), connection);
-            ImGui.TableNextColumn();
-            DrawClippedText(status, ImGui.GetContentRegionAvail().X, statusIsError ? PokemonRed : busy ? PokemonYellow : CompanionMuted);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(status);
-            ImGui.TableNextColumn();
-            if (ImGui.SmallButton("Disconnect")) Disconnect();
-            ImGui.EndTable();
-        }
-        ImGui.EndChild();
-        ImGui.PopStyleColor();
-        ImGui.PopStyleVar();
-    }
-
     private void DrawCompanionParty()
     {
         if (trainer is null) return;
@@ -419,6 +349,11 @@ public sealed partial class MainWindow
     {
         var options = trainer!.EvolutionOptions.Where(entry => entry.PokemonId == pokemon.Id).ToArray();
         ImGui.TextColored(CompanionAccent, "Evolution routes");
+        if (pokemon.HeldItem.Equals("everstone", StringComparison.OrdinalIgnoreCase))
+        {
+            ImGui.TextWrapped("Evolution is blocked by Everstone. Remove it from Held item when you want this Pokémon to evolve.");
+            return;
+        }
         if (options.Length == 0) ImGui.TextWrapped("No further evolution routes are available for this Pokémon.");
         if (options.Any(entry => entry.ReadyWithoutEnvironment.HasValue)) ImGui.TextWrapped(evolutionEnvironmentLabel);
         foreach (var option in options)

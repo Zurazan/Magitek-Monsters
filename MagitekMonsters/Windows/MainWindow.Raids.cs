@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
 using MagitekMonsters.Services;
+using MagitekMonsters.Contracts;
 
 namespace MagitekMonsters.Windows;
 
@@ -25,7 +26,7 @@ public sealed partial class MainWindow
     private string raidModifier = "";
     private RaidMoveDto? raidTargetMove;
     private bool raidTargetOpen;
-    private object? pendingRaidChoice;
+    private RaidChooseRequest? pendingRaidChoice;
     private string pendingRaidRound = "";
     private string? raidCaptureRequest;
     private string? raidCaptureBall;
@@ -57,7 +58,7 @@ public sealed partial class MainWindow
         var id = raidRoom?.Id ?? raidBoard.ActiveRoomId;
         if (id is not null) ApplyRaid(await InSession(plugin.Api.GetRaid(id, disposeCancellation.Token)));
         nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(5);
-        SetStatus(raidRoom is null ? "Raid dens ready." : "Raid loaded.");
+        SetStatus(raidRoom is null ? "Raid dens ready." : "Raid loaded.", quiet: true);
     }
     private void BackgroundRaids()
     {
@@ -76,12 +77,12 @@ public sealed partial class MainWindow
             {
                 if (board is not null) raidBoard = board;
                 if (room is not null) ApplyRaid(room);
-                nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(room?.Status is "lobby" or "active" || room?.RewardsPending == true ? 2 : 10);
-                if (status == "Loading raid dens...") SetStatus(raidRoom is null ? "Raid dens ready." : "Raid loaded.");
+                nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(plugin.Connection.CanInvoke ? 10 : room?.Status is "lobby" or "active" || room?.RewardsPending == true ? 2 : 10);
+                if (status == "Loading raid dens...") SetStatus(raidRoom is null ? "Raid dens ready." : "Raid loaded.", quiet: true);
             };
         }, () => raidRefreshRequested = true);
     }
-    private async Task RaidAction(string action, object body, bool lobby = false)
+    private async Task RaidAction(string action, IClientRequest body, bool lobby = false)
     {
         var result = await InSession(plugin.Api.RaidAction(lobby ? null : raidRoom!.Id, action, body, disposeCancellation.Token));
         if (action == "leave") { raidRoom = null; raidBoard = null; }
@@ -116,7 +117,7 @@ public sealed partial class MainWindow
             ImGui.SameLine(); ImGui.SetNextItemWidth(125 * CompanionScale);
             ImGui.InputTextWithHint("##RaidCode", "Lobby code", ref raidJoinCode, 8);
             ImGui.SameLine(); ImGui.BeginDisabled(CollectionLocked || !hasPokemon || raidJoinCode.Trim().Length != 8);
-            if (DrawAccentSmallButton("Join code", PokemonBlue)) Run(() => RaidAction("join", new { code = raidJoinCode.Trim().ToUpperInvariant(), pokemonId = raidPokemonId }, true), "Joining raid...");
+            if (DrawAccentSmallButton("Join code", PokemonBlue)) Run(() => RaidAction("join", new RaidJoinRequest(raidPokemonId, Code: raidJoinCode.Trim().ToUpperInvariant()), true), "Joining raid...");
             ImGui.EndDisabled();
             ImGui.TextWrapped("No entry cost or loss penalty. Loot and one catch per den per rotation. Replays help friends without repeat rewards.");
             DrawPager("RaidDens", ref raidDenPage, raidBoard.Dens.Count, 4);
@@ -156,11 +157,11 @@ public sealed partial class MainWindow
         if (den.LockReason.Length > 0) ImGui.TextWrapped(den.LockReason);
         var rooms = raidBoard!.Rooms.Where(entry => entry.DenKey == den.Key).ToList();
         ImGui.BeginDisabled(CollectionLocked || !hasPokemon || den.LockReason.Length > 0);
-        if (DrawAccentButton("Host raid", new Vector2(-1, 28 * CompanionScale), PokemonBlue)) Run(() => RaidAction("create", new { denKey = den.Key, pokemonId = raidPokemonId, @private = raidPrivate }, true), "Opening raid lobby...");
+        if (DrawAccentButton("Host raid", new Vector2(-1, 28 * CompanionScale), PokemonBlue)) Run(() => RaidAction("create", new RaidCreateRequest(den.Key, raidPokemonId, raidPrivate), true), "Opening raid lobby...");
         if (rooms.Count > 0 && ImGui.BeginCombo("Join public lobby", $"{rooms.Count} waiting"))
         {
             foreach (var listing in rooms)
-                if (ImGui.Selectable($"{listing.HostName} / {listing.Players}/4##{listing.Id}")) Run(() => RaidAction("join", new { roomId = listing.Id, pokemonId = raidPokemonId }, true), "Joining raid...");
+                if (ImGui.Selectable($"{listing.HostName} / {listing.Players}/4##{listing.Id}")) Run(() => RaidAction("join", new RaidJoinRequest(raidPokemonId, RoomId: listing.Id), true), "Joining raid...");
             ImGui.EndCombo();
         }
         ImGui.EndDisabled(); ImGui.EndChild(); ImGui.PopID();
@@ -196,7 +197,7 @@ public sealed partial class MainWindow
             {
                 raidPokemonId = pokemon.Id; ImGui.CloseCurrentPopup();
                 SetStatus($"{pokemon.Nickname} selected for raids.");
-                if (raidRoom?.Status == "lobby") Run(() => RaidAction("ready", new { ready = false, pokemonId = raidPokemonId }), "Changing raid Pokémon...");
+                if (raidRoom?.Status == "lobby") Run(() => RaidAction("ready", new RaidReadyRequest(false, raidPokemonId)), "Changing raid Pokémon...");
             }
             ImGui.EndDisabled();
         }
@@ -223,11 +224,11 @@ public sealed partial class MainWindow
         }
         raidPokemonId = room.SelectedPokemon.Id; DrawRaidPokemonChoice();
         ImGui.BeginDisabled(busy);
-        if (DrawAccentButton(room.Ready ? "Cancel ready" : "Ready", new Vector2(-1, 34 * CompanionScale), room.Ready ? PokemonOrange : PokemonGreen)) Run(() => RaidAction("ready", new { ready = !room.Ready }), "Updating readiness...");
+        if (DrawAccentButton(room.Ready ? "Cancel ready" : "Ready", new Vector2(-1, 34 * CompanionScale), room.Ready ? PokemonOrange : PokemonGreen)) Run(() => RaidAction("ready", new RaidReadyRequest(!room.Ready)), "Updating readiness...");
         if (room.Host)
         {
             ImGui.BeginDisabled(!room.Players.All(player => player.Ready));
-            if (DrawAccentButton("Start raid with NPC fill", new Vector2(-1, 34 * CompanionScale), PokemonRed)) Run(() => RaidAction("start", new { }), "Entering the den...");
+            if (DrawAccentButton("Start raid with NPC fill", new Vector2(-1, 34 * CompanionScale), PokemonRed)) Run(() => RaidAction("start", EmptyRequest.Instance), "Entering the den...");
             ImGui.EndDisabled();
         }
         if (DrawAccentSmallButton("Leave lobby", PokemonOrange)) ImGui.OpenPopup("Leave raid?");
@@ -278,7 +279,7 @@ public sealed partial class MainWindow
             foreach (var (kind, label, color) in new[] { ("heal", "Heal + cure", PokemonGreen), ("attack", "Attack up", PokemonRed), ("defense", "Defense up", PokemonBlue) })
             {
                 ImGui.TableNextColumn();
-                if (DrawAccentButton($"{label} ({own.Cheers})", new Vector2(-1, 28 * scale), color)) SubmitRaidChoice(new { cheer = kind });
+                if (DrawAccentButton($"{label} ({own.Cheers})", new Vector2(-1, 28 * scale), color)) SubmitRaidChoice(new RaidTurnChoice(Cheer: kind));
             }
             ImGui.EndTable();
         }
@@ -313,14 +314,13 @@ public sealed partial class MainWindow
     }
     private void SubmitRaidMove(RaidMoveDto move, int target)
     {
-        if (raidModifier.Length > 0) SubmitRaidChoice(new { move = move.Index, target, modifier = raidModifier });
-        else SubmitRaidChoice(new { move = move.Index, target });
+        SubmitRaidChoice(new RaidTurnChoice(Move: move.Index, Target: target, Modifier: raidModifier.Length > 0 ? raidModifier : null));
     }
-    private void SubmitRaidChoice(object choice)
+    private void SubmitRaidChoice(RaidTurnChoice choice)
     {
         if (raidRoom is null) return;
         pendingRaidRound = raidRoom.RoundId;
-        pendingRaidChoice = new { roundId = pendingRaidRound, requestId = Guid.NewGuid().ToString(), choice };
+        pendingRaidChoice = new RaidChooseRequest(pendingRaidRound, Guid.NewGuid().ToString(), choice);
         Run(() => RaidAction("choose", pendingRaidChoice), "Sending raid action...");
     }
     private void DrawRaidResult(RaidRoomDto room)
@@ -342,7 +342,7 @@ public sealed partial class MainWindow
             ImGui.BeginDisabled(busy);
             if (raidCaptureRequest is not null)
             {
-                if (DrawAccentButton("Retry capture decision", new Vector2(-1, 32), PokemonGreen)) Run(() => RaidAction(raidSkipRequested ? "skip" : "catch", raidSkipRequested ? new { requestId = raidCaptureRequest } : (object)new { requestId = raidCaptureRequest, ballId = raidCaptureBall }), "Saving capture...");
+                if (DrawAccentButton("Retry capture decision", new Vector2(-1, 32), PokemonGreen)) Run(() => RaidAction(raidSkipRequested ? "skip" : "catch", raidSkipRequested ? new RequestReceipt(raidCaptureRequest!) : (IClientRequest)new RaidCatchRequest(raidCaptureRequest!, raidCaptureBall)), "Saving capture...");
             }
             else
             {
@@ -352,7 +352,7 @@ public sealed partial class MainWindow
                         raidCaptureRequest = Guid.NewGuid().ToString(); raidCaptureBall = ball.Id; raidSkipRequested = false;
                         Run(async () =>
                         {
-                            try { await InSession(RaidAction("catch", new { requestId = raidCaptureRequest, ballId = raidCaptureBall })); }
+                            try { await InSession(RaidAction("catch", new RaidCatchRequest(raidCaptureRequest!, raidCaptureBall))); }
                             catch (Services.ApiException exception) when (exception.StatusCode < 500) { raidCaptureRequest = null; throw; }
                         }, "Catching raid Pokémon...");
                     }
@@ -371,7 +371,7 @@ public sealed partial class MainWindow
         if (BeginConfirmationModal("Leave raid?"))
         {
             ImGui.TextWrapped("Leaving an active raid hands your slot to an NPC and forfeits your rewards. Disconnecting alone keeps your slot and eligibility.");
-            if (DrawConfirmationActions("Leave", PokemonOrange, busy, "Stay")) { ImGui.CloseCurrentPopup(); Run(() => RaidAction("leave", new { confirmed = true }), "Leaving raid..."); }
+            if (DrawConfirmationActions("Leave", PokemonOrange, busy, "Stay")) { ImGui.CloseCurrentPopup(); Run(() => RaidAction("leave", new ConfirmationRequest(true)), "Leaving raid..."); }
             EndConfirmationModal();
         }
         if (BeginConfirmationModal("Skip raid catch?"))
@@ -380,7 +380,7 @@ public sealed partial class MainWindow
             if (DrawConfirmationActions("Skip catch", PokemonOrange, busy))
             {
                 raidCaptureRequest = Guid.NewGuid().ToString(); raidSkipRequested = true; ImGui.CloseCurrentPopup();
-                Run(() => RaidAction("skip", new { requestId = raidCaptureRequest }), "Skipping catch...");
+                Run(() => RaidAction("skip", new RequestReceipt(raidCaptureRequest!)), "Skipping catch...");
             }
             EndConfirmationModal();
         }

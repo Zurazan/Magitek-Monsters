@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window, IDisposable
         get => trainerState;
         set
         {
-            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); }
+            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); }
             ObserveTrainerActivity(trainerState, value);
             trainerState = value;
             if (value is not null) trainerProfiles.Invalidate(value.User.TrainerId);
@@ -99,6 +99,7 @@ public sealed partial class MainWindow : Window, IDisposable
         Size = new Vector2(980, 720);
         SizeCondition = ImGuiCond.FirstUseEver;
         plugin.Connection.EventReceived += OnServerEvent;
+        plugin.Connection.StateReceived += OnLiveState;
         Plugin.Framework.Update += TrackEvolutionTravel;
     }
 
@@ -277,6 +278,7 @@ public sealed partial class MainWindow : Window, IDisposable
         ResetBattleLog();
         foregroundGeneration++;
         plugin.Connection.EventReceived -= OnServerEvent;
+        plugin.Connection.StateReceived -= OnLiveState;
         Plugin.Framework.Update -= TrackEvolutionTravel;
         CancelBackgroundRefresh();
         disposeCancellation.Cancel();
@@ -287,9 +289,10 @@ public sealed partial class MainWindow : Window, IDisposable
 
     public override void PostDraw() => PopPokemonTheme();
 
-    public override void Draw()
+    internal void UpdateBackground()
     {
         while (backgroundResults.TryDequeue(out var result)) result();
+        ApplyLiveUpdates();
         if (battle?.Status == "active") ObserveRecentBattle(battle);
         if (pvpStatus?.Battle?.Status == "active") ObserveRecentBattle(pvpStatus.Battle, true);
         FlushRecentActivity();
@@ -297,16 +300,11 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             CancelBackgroundRefresh();
             if (plugin.Connection.State != ServerConnectionState.Disconnected) plugin.Connection.Stop();
-            ImGui.Spacing();
-            ImGui.TextColored(PokemonOrange, "CLIENT UPDATE REQUIRED");
-            ImGui.TextWrapped(plugin.Api.Update.Message);
-            ImGui.Spacing();
-            ImGui.TextDisabled($"Installed version: {ClientBuildVersion.Current}");
-            if (DrawAccentButton("Open Plugin Installer", new Vector2(220, 36) * CompanionScale, PokemonBlue))
-                Plugin.CommandManager.ProcessCommand("/xlplugins");
+            UpdateNotifications();
             return;
         }
-        if (DateTimeOffset.UtcNow >= nextEnvironmentReadAt)
+        if (!initialized && !IsOpen) { UpdateNotifications(); return; }
+        if (IsOpen && DateTimeOffset.UtcNow >= nextEnvironmentReadAt)
         {
             nextEnvironmentReadAt = DateTimeOffset.UtcNow.AddSeconds(1);
             (evolutionEnvironment, evolutionEnvironmentLabel) = EvolutionEnvironment.Read(CurrentEvolutionTheme);
@@ -317,8 +315,6 @@ public sealed partial class MainWindow : Window, IDisposable
                                && (option.EnvironmentAlternatives.Count > 0
                                    ? option.EnvironmentAlternatives.Any(route => evolutionEnvironment?.Matches(route.RequiredTime, route.RequiredWeather, route.EnvironmentChecks) == true)
                                    : evolutionEnvironment?.Matches(option.RequiredTime, option.RequiredWeather, option.EnvironmentChecks) == true);
-        var clipboard = Interlocked.Exchange(ref pendingClipboard, null);
-        if (clipboard is not null) ImGui.SetClipboardText(clipboard);
         if (!initialized)
         {
             initialized = true;
@@ -334,16 +330,16 @@ public sealed partial class MainWindow : Window, IDisposable
             if (connectionSyncGeneration != 0 && plugin.Connection.State == ServerConnectionState.Syncing
                 && plugin.Connection.Generation == connectionSyncGeneration)
                 BackgroundConnectionSync();
-            else if ((raidRefreshRequested || DateTimeOffset.UtcNow >= nextRaidPollAt) && (mainSection == 12 || trainer.ActiveRaidId is not null || raidRoom?.Status is "lobby" or "active"))
+            else if ((raidRefreshRequested || DateTimeOffset.UtcNow >= nextRaidPollAt) && (IsOpen && mainSection == 12 || trainer.ActiveRaidId is not null || raidRoom?.Status is "lobby" or "active"))
             {
                 raidRefreshRequested = false; BackgroundRaids();
             }
             else if (battle is { Status: "active" } current && (refreshState.TakeBattle(current.Id)
-                || (current.Request is null || current.Request.Wait == true) && DateTimeOffset.UtcNow >= nextBattlePollAt))
+                || (plugin.Connection.CanInvoke || current.Request is null || current.Request.Wait == true) && DateTimeOffset.UtcNow >= nextBattlePollAt))
                 BackgroundBattle();
             else if (serverPvpRefreshRequested || pvpStatus is not null
                 && (pvpStatus.State == "queued" || pvpStatus.Challenges.Count > 0
-                    || pvpStatus.Battle is { Status: "active" } match && (match.Request is null || match.Request.Wait == true))
+                    || pvpStatus.Battle is { Status: "active" } match && (plugin.Connection.CanInvoke || match.Request is null || match.Request.Wait == true))
                 && DateTimeOffset.UtcNow >= nextPvpPollAt)
             {
                 serverPvpRefreshRequested = false;
@@ -357,6 +353,24 @@ public sealed partial class MainWindow : Window, IDisposable
                 BackgroundGifts();
         }
 
+        UpdateNotifications();
+    }
+
+    public override void Draw()
+    {
+        if (plugin.Api.Update.Required)
+        {
+            ImGui.Spacing();
+            ImGui.TextColored(PokemonOrange, "CLIENT UPDATE REQUIRED");
+            ImGui.TextWrapped(plugin.Api.Update.Message);
+            ImGui.Spacing();
+            ImGui.TextDisabled($"Installed version: {ClientBuildVersion.Current}");
+            if (DrawAccentButton("Open Plugin Installer", new Vector2(220, 36) * CompanionScale, PokemonBlue))
+                Plugin.CommandManager.ProcessCommand("/xlplugins");
+            return;
+        }
+        var clipboard = Interlocked.Exchange(ref pendingClipboard, null);
+        if (clipboard is not null) ImGui.SetClipboardText(clipboard);
         RestoreTrainerBattle();
         ImGui.BeginChild("MagitekMonstersContent", Vector2.Zero, false, trainer is not null
             ? ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse : ImGuiWindowFlags.None);
@@ -372,12 +386,12 @@ public sealed partial class MainWindow : Window, IDisposable
     private void DrawGameShell()
     {
         if (trainer is null) return;
-        DrawCompanionHeader();
+        if (DrawCompanionHeader()) { Disconnect(); return; }
+        DrawCompanionError();
         DrawGiftNotice();
         var scale = CompanionScale;
-        var footerHeight = ImGui.GetFrameHeight() + 12 * scale;
         var available = ImGui.GetContentRegionAvail();
-        var bodyHeight = Math.Max(1, available.Y - footerHeight - ImGui.GetStyle().ItemSpacing.Y);
+        var bodyHeight = Math.Max(1, available.Y);
         var navigationWidth = Math.Min(160 * scale, available.X * 0.25f);
         var gap = 8 * scale;
         var partyIds = trainer.Party.Select(entry => entry.Id).ToHashSet();
@@ -447,7 +461,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         ImGui.EndChild();
         ImGui.PopStyleVar();
-        DrawCompanionFooter(footerHeight);
+        DrawUidChoicePrompt();
     }
 
     private void DrawNavigationItem(string label, int section, float height)
@@ -476,7 +490,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private static string NavigationAlert(int count) => count > 0 ? $"  [{count}]" : string.Empty;
 
-    private void DrawCopyableTrainerId(string trainerId)
+    private void DrawCopyableTrainerId(string trainerId, float? availableWidth = null)
     {
         if (string.IsNullOrWhiteSpace(trainerId))
         {
@@ -485,8 +499,8 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         var copied = DateTimeOffset.UtcNow < trainerIdCopiedUntil;
-        var size = ImGui.CalcTextSize(trainerId) + new Vector2(10, 0);
-        ImGui.PushStyleColor(ImGuiCol.Text, copied ? PokemonGreen : new Vector4(0.62f, 0.66f, 0.74f, 1f));
+        var size = new Vector2(availableWidth ?? ImGui.CalcTextSize(trainerId).X + 10, ImGui.GetTextLineHeight());
+        ImGui.PushStyleColor(ImGuiCol.Text, copied ? PokemonGreen : CompanionAccent);
         ImGui.PushStyleColor(ImGuiCol.Header, Vector4.Zero);
         ImGui.PushStyleColor(ImGuiCol.HeaderHovered, PokemonBlue with { W = 0.22f });
         ImGui.PushStyleColor(ImGuiCol.HeaderActive, PokemonBlue with { W = 0.34f });
@@ -504,7 +518,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         ImGui.SetClipboardText(trainerId);
         trainerIdCopiedUntil = DateTimeOffset.UtcNow.AddSeconds(2);
-        SetStatus($"Trainer ID {trainerId} copied to clipboard.");
+        SetStatus($"Trainer ID {trainerId} copied to clipboard.", quiet: true);
     }
 
 
@@ -997,7 +1011,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         if (catalogError is null)
-            SetStatus(trainer is null ? "Log in to begin." : "Trainer data loaded.");
+            SetStatus(trainer is null ? "Log in to begin." : "Trainer data loaded.", quiet: true);
         else
             SetStatus("Connected. Retrying unavailable game data automatically.", true);
     }
@@ -1083,7 +1097,7 @@ public sealed partial class MainWindow : Window, IDisposable
         catalogError = failures.Count == 0 ? null : string.Join("  ", failures);
         nextCatalogRetryAt = catalogError is null ? DateTimeOffset.MaxValue : DateTimeOffset.UtcNow.AddSeconds(5);
         if (catalogError is null)
-            SetStatus("Game data loaded.");
+            SetStatus("Game data loaded.", quiet: true);
         else
             Plugin.Log.Warning("Magitek Monsters catalog loading was incomplete: {CatalogError}", catalogError);
     }
@@ -1351,7 +1365,7 @@ public sealed partial class MainWindow : Window, IDisposable
         else if (pvpStatus.State == "queued")
             SetStatus("Searching for another Trainer...");
         else
-            SetStatus("PvP status synchronized.");
+            SetStatus("PvP status synchronized.", quiet: true);
     }
 
     private async Task JoinPvpQueue()
@@ -1385,7 +1399,12 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         if (pvpStatus?.Battle is null)
             return;
-        pvpStatus.Battle = await InSession(plugin.Api.ChoosePvpBattleAction(pvpStatus.Battle.Id, choice));
+        try { pvpStatus.Battle = await InSession(plugin.Api.ChoosePvpBattleAction(pvpStatus.Battle.Id, choice, revision: pvpStatus.Battle.Revision)); }
+        catch (ApiException error) when (error.Code == "stale_battle_choice")
+        {
+            pvpStatus.Battle = await InSession(plugin.Api.GetPvpBattle(pvpStatus.Battle.Id));
+            SetStatus("The battle changed. Choose from the current actions."); return;
+        }
         ObserveRecentBattle(pvpStatus.Battle, true, true);
         megaEvolveSelected = false;
         nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(1);
@@ -1427,7 +1446,7 @@ public sealed partial class MainWindow : Window, IDisposable
         AcknowledgeBattleResultTrainer();
         if (trainer.Pokedex.Caught != previousCaught)
             await InSession(LoadPokedexCatalog());
-        SetStatus("Trainer data refreshed.");
+        SetStatus("Trainer data refreshed.", quiet: true);
     }
 
     private void Run(Func<Task> action, string progress)
@@ -1435,6 +1454,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (busy)
             return;
         CancelBackgroundRefresh();
+        headerFeedback.Clear();
         busy = true;
         foregroundGeneration++;
         status = progress;
@@ -1480,10 +1500,11 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void SetStatus(string message, bool isError = false)
+    private void SetStatus(string message, bool isError = false, bool quiet = false)
     {
         status = message;
         statusIsError = isError;
+        headerFeedback.Observe(message, isError, quiet);
     }
 
     private void Disconnect(bool leavePvp = true)

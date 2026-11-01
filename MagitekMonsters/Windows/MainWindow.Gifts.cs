@@ -84,7 +84,7 @@ public sealed partial class MainWindow
         var owner = trainer.User.Id;
         nextGiftRefreshAt = DateTimeOffset.UtcNow.AddSeconds(60);
         var inbox = await InSession(plugin.Api.GetGifts(disposeCancellation.Token));
-        if (trainer?.User.Id == owner) { trainer.Gifts = inbox; SetStatus("Mystery Gifts refreshed."); }
+        if (trainer?.User.Id == owner) { trainer.Gifts = inbox; SetStatus("Mystery Gifts refreshed.", quiet: true); }
     }
     private void BackgroundGifts()
     {

@@ -13,3 +13,4 @@
 *.tmp
 imgui.ini
 **/.env*
+**/sixlabors.lic

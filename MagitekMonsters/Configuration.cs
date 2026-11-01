@@ -11,6 +11,7 @@ public sealed class Configuration : IPluginConfiguration
     public const string OfficialServerUrl = "https://magitekmonsters.lightless.media";
 
     public int Version { get; set; } = 1;
+    public bool NotificationsEnabled { get; set; } = true;
 
     // Stored with Windows DPAPI.
     public string ProtectedAccessToken { get; set; } = string.Empty;

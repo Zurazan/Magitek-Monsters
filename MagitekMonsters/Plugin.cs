@@ -21,6 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
     [PluginService] internal static IObjectTable ObjectTable { get; private set; } = null!;
+    [PluginService] internal static INotificationManager NotificationManager { get; private set; } = null!;
 
     private static readonly string[] Commands = ["/magimon", "/mm", "/magitekmonsters"];
 
@@ -29,6 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     public AssetCatalog Assets { get; }
     public AnimatedPokemonSprites AnimatedSprites { get; }
     public ServerConnection Connection { get; }
+    public DalamudNotifications Notifications { get; }
 
     public readonly WindowSystem WindowSystem = new("MagitekMonsters");
     private ConfigWindow ConfigWindow { get; }
@@ -45,11 +47,13 @@ public sealed class Plugin : IDalamudPlugin
         Api = new ApiClient(Configuration, tokenStore);
         Connection = new ServerConnection(tokenStore.Read, Api.Update, new Uri(Configuration.OfficialServerUrl + "/api/events"),
             exception => Log.Warning(exception, "Magitek Monsters server event connection was interrupted."));
+        Api.Live = Connection;
         Assets = new AssetCatalog(assemblyDirectory);
         AnimatedSprites = new AnimatedPokemonSprites(Path.Combine(PluginInterface.GetPluginConfigDirectory(), "AnimatedSprites"), Assets);
 
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this);
+        Notifications = new DalamudNotifications(NotificationManager, MainWindow.OpenNotification, () => MainWindow.NotificationScope);
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
 
@@ -61,7 +65,7 @@ public sealed class Plugin : IDalamudPlugin
             });
         }
 
-        PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
+        PluginInterface.UiBuilder.Draw += DrawUi;
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
 
@@ -70,11 +74,12 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
-        PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
+        PluginInterface.UiBuilder.Draw -= DrawUi;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
 
         WindowSystem.RemoveAllWindows();
+        Notifications.Dispose();
         ConfigWindow.Dispose();
         MainWindow.Dispose();
         AnimatedSprites.Dispose();
@@ -85,6 +90,7 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     private void OnCommand(string command, string args) => MainWindow.Toggle();
+    private void DrawUi() { MainWindow.UpdateBackground(); WindowSystem.Draw(); }
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();
     public void ToggleMainUi() => MainWindow.Toggle();

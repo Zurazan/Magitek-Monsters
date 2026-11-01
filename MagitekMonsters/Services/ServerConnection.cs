@@ -21,7 +21,7 @@ public enum ServerConnectionState
     Incompatible
 }
 
-public sealed class ServerConnection : IDisposable
+public sealed partial class ServerConnection : IDisposable
 {
     private readonly Func<string?> readToken;
     private readonly ClientUpdateState update;
@@ -36,7 +36,7 @@ public sealed class ServerConnection : IDisposable
     private bool disposed;
 
     public ServerConnection(Func<string?> readToken, ClientUpdateState update, Uri eventsUri, Action<Exception>? interrupted = null)
-        : this(readToken, update, eventsUri, new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, TimeProvider.System, interrupted) { }
+        : this(readToken, update, eventsUri, new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, TimeProvider.System, interrupted) { liveEnabled = true; }
 
     internal ServerConnection(Func<string?> readToken, ClientUpdateState update, Uri eventsUri, HttpClient http, TimeProvider time,
         Action<Exception>? interrupted = null)
@@ -151,6 +151,7 @@ public sealed class ServerConnection : IDisposable
 
     private async Task<bool> Connect(CancellationTokenSource owner, Action healthy)
     {
+        if (liveEnabled) return await ConnectLive(owner, healthy).ConfigureAwait(false);
         if (update.Required) { SetState(owner, ServerConnectionState.Incompatible); return false; }
         var token = readToken();
         if (string.IsNullOrWhiteSpace(token)) { SetState(owner, ServerConnectionState.Unauthorized); return false; }

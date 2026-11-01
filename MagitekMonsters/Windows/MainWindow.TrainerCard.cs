@@ -59,6 +59,11 @@ public sealed partial class MainWindow
             ImGui.EndDisabled();
             ImGui.EndTabItem();
         }
+        if (ImGui.BeginTabItem("Identity"))
+        {
+            DrawTrainerIdentity();
+            ImGui.EndTabItem();
+        }
         var flags = openTrainerProfileTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
         if (ImGui.BeginTabItem("Other trainers", flags))
         {
@@ -117,7 +122,7 @@ public sealed partial class MainWindow
                 ImGui.Dummy(nameSize);
                 if (ImGui.IsItemHovered() && ImGui.CalcTextSize(card.DisplayName).X * 1.35f > nameSize.X) ImGui.SetTooltip(card.DisplayName);
                 DrawClippedText(card.Title, ImGui.GetContentRegionAvail().X, accent);
-                DrawClippedText(card.TrainerId, ImGui.GetContentRegionAvail().X, CompanionMuted);
+                DrawClippedText(card.VanityCode is null ? card.TrainerId : $"{card.VanityCode} / {card.TrainerId}", ImGui.GetContentRegionAvail().X, CompanionMuted);
                 DrawClippedText(partner is null ? "No partner selected" : TrainerCard.PartnerLabel(partner), ImGui.GetContentRegionAvail().X, CompanionMuted);
                 ImGui.TableNextColumn();
                 if (partner is not null) DrawPokemonIcon(partner.Appearance, partner.Shiny, new Vector2(96 * scale));

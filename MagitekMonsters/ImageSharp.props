@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <SixLaborsLicenseKey Condition="'$(SixLaborsLicenseKey)' == '' and '$(SIXLABORS_LICENSE_KEY)' != ''">$(SIXLABORS_LICENSE_KEY)</SixLaborsLicenseKey>
+    <SixLaborsLicenseFile Condition="'$(SixLaborsLicenseFile)' == '' and '$(SixLaborsLicenseKey)' == '' and Exists('$(UserProfile)/Licenses/SixLabors/sixlabors.lic')">$(UserProfile)/Licenses/SixLabors/sixlabors.lic</SixLaborsLicenseFile>
+  </PropertyGroup>
+</Project>

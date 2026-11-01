@@ -33,7 +33,7 @@ public static class TrainerCard
 
     public static TrainerProfileDto Profile(TrainerSnapshotDto trainer, TrainerCardView card)
     {
-        return new() { TrainerId = trainer.User.TrainerId, DisplayName = trainer.User.DisplayName,
+        return new() { TrainerId = trainer.User.TrainerId, VanityCode = trainer.User.VanityCode, DisplayName = trainer.User.DisplayName,
             Title = card.Title.Name, Color = card.Color, Badges = card.Badges.ToList(),
             Partner = card.Partner is null ? null : new() { Species = card.Partner.Species, Form = card.Partner.Form,
                 Nickname = card.Partner.Nickname, Level = card.Partner.Level, Shiny = card.Partner.Shiny },

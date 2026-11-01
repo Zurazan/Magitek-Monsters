@@ -37,6 +37,9 @@ public static class BattleResultPresentation
 
     public static string Outcome(string status) => status switch
     {
-        "won" => "Victory", "caught" => "Pokémon caught!", "lost" => "Defeat", "draw" => "Draw", "fled" => "Encounter ended", "error" => "Battle interrupted", _ => "Battle finished"
+        "won" => "Victory", "caught" => "Pokémon caught!", "lost" => "Defeat", "draw" => "Draw", "fled" => "Escaped safely!", "error" => "Battle interrupted", _ => "Battle finished"
     };
+
+    public static string LogLine(string line, string status) => status is "fled" or "caught" && (line == "|tie" || line.StartsWith("|tie|", StringComparison.Ordinal))
+        ? string.Empty : line;
 }

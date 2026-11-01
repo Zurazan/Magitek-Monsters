@@ -14,25 +14,26 @@ public sealed partial class MainWindow
     private IReadOnlyList<string>? battleLogSource;
     private (string Text, Vector4 Color)[] battleLogLines = [];
     private int battleLogSourceCount;
+    private string battleLogOutcome = string.Empty;
     private int pveOpponentPage;
 
 
     private void DrawCompanionBattleLog(BattleSnapshotDto current, float height)
-        => DrawPermanentBattleLog(current.Id, current.Log, height);
+        => DrawPermanentBattleLog(current.Id, current.Log, height, current.Status);
 
     private void ResetBattleLog()
     {
-        battleLogFollow = null; battleLogSource = null; battleLogLines = []; battleLogSourceCount = 0;
+        battleLogFollow = null; battleLogSource = null; battleLogLines = []; battleLogSourceCount = 0; battleLogOutcome = string.Empty;
     }
 
-    private void DrawPermanentBattleLog(string id, IReadOnlyList<string> lines, float height)
+    private void DrawPermanentBattleLog(string id, IReadOnlyList<string> lines, float height, string outcome = "active")
     {
         battleLogFollow ??= new();
         var newBattle = battleLogFollow.Begin(trainer?.User.Id + ":" + id);
-        if (newBattle || !ReferenceEquals(battleLogSource, lines) || battleLogSourceCount != lines.Count)
+        if (newBattle || !ReferenceEquals(battleLogSource, lines) || battleLogSourceCount != lines.Count || battleLogOutcome != outcome)
         {
-            battleLogSource = lines; battleLogSourceCount = lines.Count;
-            battleLogLines = lines.Select(line => (Text: FormatBattleLine(line), Color: BattleLogColor(line)))
+            battleLogSource = lines; battleLogSourceCount = lines.Count; battleLogOutcome = outcome;
+            battleLogLines = lines.Select(line => (Text: FormatBattleLine(BattleResultPresentation.LogLine(line, outcome)), Color: BattleLogColor(line)))
                 .Where(line => !string.IsNullOrWhiteSpace(line.Text)).ToArray();
         }
         var start = ImGui.GetCursorPosY();

@@ -10,6 +10,7 @@ namespace MagitekMonsters.Services;
 
 public sealed record EvolutionEnvironment(int EorzeaMinute, string Weather, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? TerritoryTheme, long EorzeaDay)
 {
+    public Contracts.EvolutionConditionsRequest ToRequest() => new(EorzeaMinute, Weather, TerritoryTheme, EorzeaDay);
     public static unsafe (EvolutionEnvironment? Environment, string Label) Read(string? territoryTheme = null)
     {
         if (!Plugin.ClientState.IsLoggedIn) return (null, "Log into FFXIV to read evolution conditions.");

@@ -5,7 +5,8 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Textures.TextureWraps;
 using MagitekMonsters.Services;
-using StbImageSharp;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace MagitekMonsters.Windows;
 
@@ -29,8 +30,10 @@ public sealed partial class MainWindow
             region = new SpriteRegion(0, 0, texture.Width, texture.Height);
             try
             {
-                var image = ImageResult.FromMemory(File.ReadAllBytes(path), ColorComponents.RedGreenBlueAlpha);
-                region = SpriteRegion.Find(image.Data, image.Width, image.Height);
+                using var image = Image.Load<Rgba32>(path);
+                var pixels = new byte[checked(image.Width * image.Height * 4)];
+                image.CopyPixelDataTo(pixels);
+                region = SpriteRegion.Find(pixels, image.Width, image.Height);
             }
             catch (Exception exception) { Plugin.Log.Warning(exception, "Could not measure sprite {Species}.", species); }
             spriteRegions[path] = region;

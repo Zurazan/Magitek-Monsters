@@ -141,9 +141,9 @@ public sealed partial class MainWindow
             var next = await plugin.Api.GetBattle(id, token);
             return () =>
             {
-                if (battle?.Id != id || next.Revision < battle.Revision) return;
+                if (battle?.Id != id || LiveStateOrder.IsOlder(next, battle)) return;
                 ApplyBattleResponse(next);
-                nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1);
+                nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(plugin.Connection.CanInvoke ? 10 : 1);
             };
         }, () => { if (battle?.Id == id && battle.Revision == revision) refreshState.Battle(id, null); });
     }
@@ -155,16 +155,18 @@ public sealed partial class MainWindow
             var next = await plugin.Api.GetPvpStatus(token);
             return () =>
             {
+                if (next.Battle is { } match && LiveStateOrder.IsOlder(match, pvpStatus?.Battle)) next.Battle = pvpStatus!.Battle;
                 pvpStatus = next;
                 ObserveRecentBattle(next.Battle, true);
                 if (trainer is not null) trainer.PvpProfile = next.Profile;
-                nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(next.State == "queued" ? 2 : 1);
+                nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(plugin.Connection.CanInvoke ? 10 : next.State == "queued" ? 2 : 1);
             };
         }, () => serverPvpRefreshRequested = true);
     }
 
     private void ApplyBattleResponse(BattleSnapshotDto next, string? choice = null)
     {
+        if (LiveStateOrder.IsOlder(next, battle)) return;
         ObserveRecentBattle(next, action: choice is not null);
         battle = next;
         refreshState.Acknowledge(next.Id, next.Revision, choice is not null);

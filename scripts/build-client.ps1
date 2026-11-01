@@ -1,6 +1,9 @@
 param([switch]$NoRestore)
 
 $ErrorActionPreference = 'Stop'
+if ($env:GITHUB_ACTIONS -eq 'true' -and -not $env:SIXLABORS_LICENSE_KEY) {
+    throw 'Configure the SIXLABORS_LICENSE_KEY repository secret before building.'
+}
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $root
 try {

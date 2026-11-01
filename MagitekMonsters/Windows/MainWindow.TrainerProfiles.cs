@@ -19,6 +19,8 @@ public sealed partial class MainWindow
 
     private void ResetTrainerProfiles()
     {
+        identityDraftOwner = uidPromptOwner = string.Empty;
+        requestUidPrompt = false;
         trainerProfiles.Clear();
         trainerCardOwner = string.Empty;
         trainerCardDraft = null;
@@ -93,10 +95,10 @@ public sealed partial class MainWindow
 
     private void DrawTrainerProfileLookup()
     {
-        ImGui.TextWrapped("Enter a Trainer ID to view a shared card.");
+        ImGui.TextWrapped("Enter a Trainer UID or vanity code to view a shared card.");
         ImGui.BeginDisabled(busy);
         ImGui.SetNextItemWidth(-1);
-        var enter = ImGui.InputTextWithHint("##TrainerProfileId", "MM-00000001", ref trainerProfileId, 24, ImGuiInputTextFlags.EnterReturnsTrue);
+        var enter = ImGui.InputTextWithHint("##TrainerProfileId", "ABCDEFGH23", ref trainerProfileId, 24, ImGuiInputTextFlags.EnterReturnsTrue);
         ImGui.BeginDisabled(string.IsNullOrWhiteSpace(trainerProfileId));
         if (DrawAccentSmallButton("Open card", CompanionAccent) || enter) Run(LoadTrainerProfile, "Loading trainer card...");
         ImGui.SameLine();
