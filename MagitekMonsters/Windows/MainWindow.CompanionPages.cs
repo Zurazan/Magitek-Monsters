@@ -116,8 +116,12 @@ public sealed partial class MainWindow
         {
             ImGui.TextDisabled("Competitive rewards are in Battle Frontier > BP Exchange.");
             if (DrawAccentSmallButton("Open BP Exchange", CompanionAccent)) { openBpExchange = true; mainSection = 8; }
-            ImGui.Spacing();
+            ImGui.SameLine();
         }
+        ImGui.BeginDisabled(busy);
+        if (DrawAccentSmallButton("Refresh shop", CompanionAccent)) Run(RefreshShop, "Refreshing shop...");
+        ImGui.EndDisabled();
+        ImGui.Spacing();
         var categories = new (string Label, string Id)[]
         {
             ("Poké Balls", "ball"), ("Medicine", "healing"), ("Evolution", "evolution"), ("Training", "training"),

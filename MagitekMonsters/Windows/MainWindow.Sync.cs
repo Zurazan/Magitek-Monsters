@@ -63,7 +63,11 @@ public sealed partial class MainWindow
         if (recovered.Pokedex is { } dex) pokedexCatalog = dex.Pokemon;
         AcknowledgeBattleResultTrainer();
         nextPvpPollAt = nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(2);
-        if (plugin.Connection.CompleteSync(generation)) connectionSyncGeneration = 0;
+        if (plugin.Connection.CompleteSync(generation))
+        {
+            connectionSyncGeneration = 0;
+            shopRefreshRequested = true;
+        }
     }
 
     private void CancelBackgroundRefresh()

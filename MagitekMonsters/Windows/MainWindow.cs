@@ -315,6 +315,7 @@ public sealed partial class MainWindow : Window, IDisposable
                                && (option.EnvironmentAlternatives.Count > 0
                                    ? option.EnvironmentAlternatives.Any(route => evolutionEnvironment?.Matches(route.RequiredTime, route.RequiredWeather, route.EnvironmentChecks) == true)
                                    : evolutionEnvironment?.Matches(option.RequiredTime, option.RequiredWeather, option.EnvironmentChecks) == true);
+        ObserveShopVisibility();
         if (!initialized)
         {
             initialized = true;
@@ -349,6 +350,8 @@ public sealed partial class MainWindow : Window, IDisposable
             {
                 BackgroundTrainer();
             }
+            else if (IsOpen && mainSection == 5 && shopRefreshRequested)
+                Run(RefreshShop, "Refreshing shop...");
             else if (DateTimeOffset.UtcNow >= nextGiftRefreshAt && battle?.Status != "active" && pvpStatus?.Battle?.Status != "active" && raidRoom?.Status != "active")
                 BackgroundGifts();
         }
@@ -1055,10 +1058,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         if (shopTask.IsCompletedSuccessfully)
         {
-            var catalog = await InSession(shopTask);
-            shop = catalog.Items;
-            itemCatalog = catalog.InventoryItems.Count > 0 ? catalog.InventoryItems : shop;
-            trainingItems = catalog.TrainingItems.Count > 0 ? catalog.TrainingItems : shop.Where(item => item.TrainingEffect is not null).ToList();
+            ApplyShopCatalog(await InSession(shopTask));
         }
         else
             failures.Add($"Shop: {TaskFailure(shopTask)}");
