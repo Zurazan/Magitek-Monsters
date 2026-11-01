@@ -26,6 +26,7 @@ public sealed class RegionalCircuitDto
     public string Name { get; set; } = string.Empty;
     public string RegionId { get; set; } = string.Empty;
     public string? RequiredChampionRegionId { get; set; }
+    public string? RequiredCircuitId { get; set; }
     public List<string> MilestoneIds { get; set; } = [];
     public List<string> PreferredLeaderIds { get; set; } = [];
     public List<string> OpponentIds { get; set; } = [];

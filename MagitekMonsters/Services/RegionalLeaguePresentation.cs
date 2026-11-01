@@ -33,6 +33,12 @@ public static class RegionalLeaguePresentation
     {
         var missing = region.RequiredOpponentIds.Where(id => !clears.Contains(id)).ToArray();
         if (missing.Length > 0) return "Defeat " + string.Join(", ", missing.Select(id => opponents.FirstOrDefault(entry => entry.Id == id)?.Name ?? id)) + " first.";
+        if (circuit.RequiredCircuitId is { Length: > 0 } requiredCircuitId)
+        {
+            var requiredCircuit = regions.SelectMany(region => region.Circuits).FirstOrDefault(required => required.Id == requiredCircuitId);
+            if (requiredCircuit is null) return "The regional catalog is still synchronizing.";
+            if (!clears.Contains(requiredCircuit.OpponentIds.LastOrDefault() ?? "")) return "Complete " + requiredCircuit.Name + " first.";
+        }
         if (circuit.RequiredChampionRegionId is { Length: > 0 } required && !RegionalLeagueProgress.HasChampion(clears, required))
             return "Complete the " + (regions.FirstOrDefault(region => region.Id == required)?.Name ?? required) + " League first.";
         return null;
