@@ -8,6 +8,18 @@ namespace MagitekMonsters.Services;
 
 public static class RegionalLeaguePresentation
 {
+    public static bool ResultReady(BattleSnapshotDto battle, LeagueRunDto? run)
+    {
+        if (battle.LeagueId is null) return true;
+        if (run is null || run.Id != battle.LeagueId || run.BattleId != battle.Id) return false;
+        var index = run.OpponentIds.IndexOf(battle.OpponentId);
+        if (index < 0 || run.Stage != index + (battle.Status == "won" ? 1 : 0)) return false;
+        if (battle.Status == "won" && run.Status is not ("between" or "completed" or "abandoned")) return false;
+        if (battle.Status is "lost" or "draw" && run.Status != "failed") return false;
+        return battle.Status != "active" && (run.Status != "between"
+            || run.CheckpointActions >= battle.BagActionsUsed && run.CheckpointActions <= 3);
+    }
+
     public static HashSet<string> Clears(TrainerSnapshotDto trainer) =>
         trainer.PveProgress.DefeatedOpponentIds.Concat(trainer.PveProgress.LegacyLeagueCredits).ToHashSet(StringComparer.Ordinal);
 

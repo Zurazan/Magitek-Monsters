@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
 using MagitekMonsters.Services;
@@ -252,11 +253,7 @@ public sealed partial class MainWindow
         var scale = CompanionScale;
         ImGui.BeginDisabled(busy);
         var width = ImGui.GetContentRegionAvail().X;
-        if (DrawAccentButton(label, new Vector2(Math.Min(width, 190 * scale), 31 * scale), CompanionAccent)) Run(async () =>
-        {
-            await InSession(RefreshTrainer());
-            battle = null;
-        }, "Returning from battle...");
+        if (DrawAccentButton(label, new Vector2(Math.Min(width, 190 * scale), 31 * scale), CompanionAccent)) Run(ReturnFromBattle, "Returning from battle...");
         ImGui.EndDisabled();
         if (width >= 290 * scale + ImGui.GetStyle().ItemSpacing.X) ImGui.SameLine();
         ImGui.BeginDisabled(resultTrainerBattle != current.Id || CollectionLocked || trainer?.Party.Any(NeedsRest) != true);
@@ -264,6 +261,19 @@ public sealed partial class MainWindow
         ImGui.EndDisabled();
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Pokémon Center: free healing, revival and PP recovery outside battles, capture opportunities, runs and matchmaking.");
         DrawClippedText(current.FrontierId is not null ? "Frontier health is separate from your party." : current.LeagueId is not null && LeagueBusy ? "League HP, PP and status carry over." : "Heal here or visit the Pokémon Center in Party. Healing is free.", ImGui.GetContentRegionAvail().X, CompanionMuted);
+    }
+
+    private async Task ReturnFromBattle()
+    {
+        var current = battle;
+        await InSession(RefreshTrainer());
+        if (current is not null && !RegionalLeaguePresentation.ResultReady(current, trainer?.LeagueRun))
+        {
+            refreshState.Trainer();
+            SetStatus("Your League checkpoint is still updating. Try Return to League again in a moment.");
+            return;
+        }
+        battle = null;
     }
 
     private void DrawBattleResultMovePopup()
