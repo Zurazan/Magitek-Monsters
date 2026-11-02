@@ -22,6 +22,7 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     private readonly ConditionalWeakTable<TrainerSnapshotDto, SnapshotChange> snapshotChanges = new();
     private sealed record SnapshotChange(string Id);
     public ClientUpdateState Update { get; } = new();
+    public CatalogVersions Catalogs { get; } = new();
     public ServerConnection? Live { get; set; }
 
     public ApiClient(Configuration configuration, ProtectedTokenStore tokenStore)
@@ -174,7 +175,7 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     public Task<BattleHelpDto> GetBattleHelp(CancellationToken cancellationToken = default) =>
         Send<BattleHelpDto>(HttpMethod.Get, "/api/catalog/battle-help", null, true, cancellationToken);
 
-    public Task<PvpFormatCatalogDto> GetFriendlyFormats() => Send<PvpFormatCatalogDto>(HttpMethod.Get, "/api/catalog/pvp-formats", null, false, default);
+    public Task<PvpFormatCatalogDto> GetFriendlyFormats(CancellationToken cancellationToken = default) => Send<PvpFormatCatalogDto>(HttpMethod.Get, "/api/catalog/pvp-formats", null, false, cancellationToken);
     public Task<PvpStatusDto> ChallengeTrainer(string trainerId, IEnumerable<string> pokemonIds, string formatId) =>
         Send<PvpStatusDto>(HttpMethod.Post, "/api/pvp/challenges", new ChallengeRequest(trainerId, pokemonIds.ToArray(), formatId), true, default);
 
@@ -184,14 +185,14 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     public Task<PvpStatusDto> ResolveChallenge(string id, string action) =>
         Send<PvpStatusDto>(HttpMethod.Post, $"/api/pvp/challenges/{id}/{action}", EmptyRequest.Instance, true, default);
 
-    public Task<FrontierCatalogDto> GetFrontierCatalog() =>
-        Send<FrontierCatalogDto>(HttpMethod.Get, "/api/catalog/frontier", null, false, default);
+    public Task<FrontierCatalogDto> GetFrontierCatalog(CancellationToken cancellationToken = default) =>
+        Send<FrontierCatalogDto>(HttpMethod.Get, "/api/catalog/frontier", null, false, cancellationToken);
 
-    public Task<SpecialTrialCatalogDto> GetSpecialTrials() =>
-        Send<SpecialTrialCatalogDto>(HttpMethod.Get, "/api/catalog/special-trials", null, false, default);
+    public Task<SpecialTrialCatalogDto> GetSpecialTrials(CancellationToken cancellationToken = default) =>
+        Send<SpecialTrialCatalogDto>(HttpMethod.Get, "/api/catalog/special-trials", null, false, cancellationToken);
 
-    public Task<LegendaryCatalogDto> GetLegendaryCatalog() =>
-        Send<LegendaryCatalogDto>(HttpMethod.Get, "/api/catalog/legendary-bosses", null, false, default);
+    public Task<LegendaryCatalogDto> GetLegendaryCatalog(CancellationToken cancellationToken = default) =>
+        Send<LegendaryCatalogDto>(HttpMethod.Get, "/api/catalog/legendary-bosses", null, false, cancellationToken);
 
     public Task<TrainerSnapshotDto> BuyLegendaryPermit(string requestId, string bossId) =>
         Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/legendary/redeem", new LegendaryPermitRequest(requestId, bossId), true, default);
@@ -341,7 +342,7 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     public Task<TrainerSnapshotDto> RestParty(CancellationToken cancellationToken = default) =>
         Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/trainer/rest", EmptyRequest.Instance, true, cancellationToken);
 
-    public void Logout() => tokenStore.Clear();
+    public void Logout() { tokenStore.Clear(); Catalogs.Reset(); }
 
     public void Dispose() => http.Dispose();
 
@@ -353,6 +354,7 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         var serverTiming = "unavailable";
         var dispatched = false;
+        var catalogRequest = Catalogs.BeginRequest();
         try
         {
             if (authenticated && Live is { CanInvoke: true } live && ServerConnection.Command(method, path, body) is { } command)
@@ -382,6 +384,8 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
             if (response.Headers.TryGetValues("Server-Timing", out var timings)) serverTiming = string.Join(",", timings);
             if (await Update.Observe(response, cancellationToken).ConfigureAwait(false))
                 throw new ApiException(426, Update.Message, "client_update_required");
+            var catalogVersion = response.Headers.TryGetValues(ProtocolInfo.CatalogHeader, out var versions) ? string.Join(",", versions) : null;
+            Catalogs.Observe(catalogVersion, catalogRequest);
             if (!response.IsSuccessStatusCode)
             {
                 ApiErrorDto? payload = null;
@@ -400,6 +404,12 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
             var parseStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             var result = await response.Content.ReadFromJsonAsync<T>(json, cancellationToken).ConfigureAwait(false)
                 ?? throw new ApiException((int)response.StatusCode, "The server returned an empty response.");
+            if (result is ServerMetadataDto metadata && catalogVersion is null)
+            {
+                catalogVersion = metadata.CatalogVersion;
+                Catalogs.Observe(catalogVersion, catalogRequest);
+            }
+            if (!typeof(T).IsValueType) Catalogs.Record(result, catalogVersion, catalogRequest);
             var parseMs = System.Diagnostics.Stopwatch.GetElapsedTime(parseStarted).TotalMilliseconds;
             if (result is TrainerSnapshotDto snapshot)
             {

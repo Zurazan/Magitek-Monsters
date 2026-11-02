@@ -18,8 +18,11 @@ public sealed partial class MainWindow
     private async Task RefreshRecurringEvents()
     {
         var schedule = await InSession(plugin.Api.GetRecurringEvents());
-        if (recurringSchedule?.Active?.OccurrenceId != schedule.Active?.OccurrenceId) eventPage = 0;
-        recurringSchedule = schedule; eventLoadedAt = DateTimeOffset.UtcNow; nextEventRefresh = eventLoadedAt.AddMinutes(1);
+        if (!plugin.Api.Catalogs.TryApply([schedule], () =>
+        {
+            if (recurringSchedule?.Active?.OccurrenceId != schedule.Active?.OccurrenceId) eventPage = 0;
+            recurringSchedule = schedule; eventLoadedAt = DateTimeOffset.UtcNow; nextEventRefresh = eventLoadedAt.AddMinutes(1);
+        })) { RetryCatalogs(); nextEventRefresh = DateTimeOffset.UtcNow.AddSeconds(5); }
     }
     private void DrawRecurringEvents()
     {

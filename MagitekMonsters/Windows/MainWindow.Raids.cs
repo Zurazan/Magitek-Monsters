@@ -54,8 +54,9 @@ public sealed partial class MainWindow
     }
     private async Task RefreshRaids()
     {
-        raidBoard = await InSession(plugin.Api.GetRaids(disposeCancellation.Token));
-        var id = raidRoom?.Id ?? raidBoard.ActiveRoomId;
+        var board = await InSession(plugin.Api.GetRaids(disposeCancellation.Token));
+        if (!plugin.Api.Catalogs.TryApply([board], () => raidBoard = board)) { RetryCatalogs(); return; }
+        var id = raidRoom?.Id ?? board.ActiveRoomId;
         if (id is not null) ApplyRaid(await InSession(plugin.Api.GetRaid(id, disposeCancellation.Token)));
         nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(5);
         SetStatus(raidRoom is null ? "Raid dens ready." : "Raid loaded.", quiet: true);
@@ -75,7 +76,7 @@ public sealed partial class MainWindow
             }
             return () =>
             {
-                if (board is not null) raidBoard = board;
+                if (board is not null && !plugin.Api.Catalogs.TryApply([board], () => raidBoard = board)) RetryCatalogs();
                 if (room is not null) ApplyRaid(room);
                 nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(plugin.Connection.CanInvoke ? 10 : room?.Status is "lobby" or "active" || room?.RewardsPending == true ? 2 : 10);
                 if (status == "Loading raid dens...") SetStatus(raidRoom is null ? "Raid dens ready." : "Raid loaded.", quiet: true);

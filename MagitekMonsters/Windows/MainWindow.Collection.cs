@@ -148,9 +148,17 @@ public sealed partial class MainWindow
     private async Task LoadBattleHelp()
     {
         if (battleHelp is not null) return;
-        battleHelp = await InSession(plugin.Api.GetBattleHelp(disposeCancellation.Token));
-        battleMoveHelp.Clear();
-        foreach (var move in battleHelp.Moves) battleMoveHelp[move.Name] = move;
+        ApplyBattleHelp(await InSession(plugin.Api.GetBattleHelp(disposeCancellation.Token)));
+    }
+
+    private void ApplyBattleHelp(BattleHelpDto next)
+    {
+        if (!plugin.Api.Catalogs.TryApply([next], () =>
+        {
+            battleHelp = next;
+            battleMoveHelp.Clear();
+            foreach (var move in next.Moves) battleMoveHelp[move.Name] = move;
+        })) RetryCatalogs();
     }
 
     private void DrawBattleMoveTooltip(string name)

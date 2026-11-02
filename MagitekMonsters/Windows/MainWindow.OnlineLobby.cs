@@ -164,7 +164,7 @@ public sealed partial class MainWindow
         selected = OnlineInvitation;
         if (friendlyFormats.Count == 0)
         {
-            if (DrawAccentButton("Reload formats", Vector2.Zero, CompanionAccent)) Run(async () => { friendlyFormats.AddRange((await InSession(plugin.Api.GetFriendlyFormats())).Formats); }, "Loading friendly formats...");
+            if (DrawAccentButton("Reload formats", Vector2.Zero, CompanionAccent)) Run(RefreshFriendlyFormats, "Loading friendly formats...");
             return null;
         }
         PvpFormatDto? format;

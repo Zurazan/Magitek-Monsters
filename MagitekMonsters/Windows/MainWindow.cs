@@ -316,12 +316,14 @@ public sealed partial class MainWindow : Window, IDisposable
                                    ? option.EnvironmentAlternatives.Any(route => evolutionEnvironment?.Matches(route.RequiredTime, route.RequiredWeather, route.EnvironmentChecks) == true)
                                    : evolutionEnvironment?.Matches(option.RequiredTime, option.RequiredWeather, option.EnvironmentChecks) == true);
         ObserveShopVisibility();
+        ObserveCatalogVersion();
         if (!initialized)
         {
             initialized = true;
             Run(Initialize, "Connecting to Magitek Monsters...");
         }
-        else if (catalogError is not null && !busy && DateTimeOffset.UtcNow >= nextCatalogRetryAt && battle?.Status != "active" && pvpStatus?.Battle?.Status != "active")
+        else if (trainer is null && !busy && (catalogError is not null || catalogRefreshRequested || loadedCatalogGeneration != plugin.Api.Catalogs.Generation)
+            && DateTimeOffset.UtcNow >= nextCatalogRetryAt)
         {
             nextCatalogRetryAt = DateTimeOffset.UtcNow.AddSeconds(5);
             Run(() => LoadCatalogs(), "Loading Magitek Monsters game data...");
@@ -331,6 +333,9 @@ public sealed partial class MainWindow : Window, IDisposable
             if (connectionSyncGeneration != 0 && plugin.Connection.State == ServerConnectionState.Syncing
                 && plugin.Connection.Generation == connectionSyncGeneration)
                 BackgroundConnectionSync();
+            else if ((catalogRefreshRequested || catalogError is not null || loadedCatalogGeneration != plugin.Api.Catalogs.Generation)
+                && DateTimeOffset.UtcNow >= nextCatalogRetryAt && battle?.Status != "active" && pvpStatus?.Battle?.Status != "active" && raidRoom?.Status != "active")
+                BackgroundCatalogs();
             else if ((raidRefreshRequested || DateTimeOffset.UtcNow >= nextRaidPollAt) && (IsOpen && mainSection == 12 || trainer.ActiveRaidId is not null || raidRoom?.Status is "lobby" or "active"))
             {
                 raidRefreshRequested = false; BackgroundRaids();
@@ -1021,100 +1026,31 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task LoadCatalogs(bool includePokedex = true)
     {
-        var starterTask = plugin.Api.GetStarters();
-        var shopTask = plugin.Api.GetShop();
-        var collectionRewardTask = plugin.Api.GetCollectionRewards();
-        var frontierTask = plugin.Api.GetFrontierCatalog();
-        var legendaryTask = plugin.Api.GetLegendaryCatalog();
-        var specialTrialTask = plugin.Api.GetSpecialTrials();
-        var prizeTask = plugin.Api.GetPrizePokemon();
-        var opponentTask = plugin.Api.GetOpponents();
-        var friendlyTask = plugin.Api.GetFriendlyFormats();
-        var pokedexTask = includePokedex && plugin.Api.HasSession ? plugin.Api.GetPokedexCatalog() : null;
-        var catalogTasks = new List<Task> { starterTask, shopTask, prizeTask, opponentTask, collectionRewardTask, frontierTask, legendaryTask, specialTrialTask, friendlyTask };
-        if (pokedexTask is not null)
-            catalogTasks.Add(pokedexTask);
         try
         {
-            await InSession(Task.WhenAll(catalogTasks));
+            var apply = await InSession(FetchCatalogs(includePokedex, false, disposeCancellation.Token));
+            apply();
         }
         catch (StaleSessionException) { throw; }
-        catch
+        catch (ApiException exception) when (exception.StatusCode is 401 or 426) { throw; }
+        catch (Exception exception)
         {
-            // Collect individual catalog failures below.
+            catalogError = exception.Message;
+            RetryCatalogs();
+            Plugin.Log.Warning(exception, "Magitek Monsters catalog loading was incomplete");
         }
-
-        var failures = new List<string>();
-        if (starterTask.IsCompletedSuccessfully)
-        {
-            starters = (await InSession(starterTask)).Starters;
-            if (starters.Count == 0)
-                failures.Add("The server returned an empty starter catalog.");
-        }
-        else
-        {
-            failures.Add($"Starters: {TaskFailure(starterTask)}");
-        }
-
-        if (shopTask.IsCompletedSuccessfully)
-        {
-            ApplyShopCatalog(await InSession(shopTask));
-        }
-        else
-            failures.Add($"Shop: {TaskFailure(shopTask)}");
-
-        if (collectionRewardTask.IsCompletedSuccessfully)
-            collectionRewards = (await InSession(collectionRewardTask)).Rewards;
-        else
-            failures.Add($"Collection Exchange: {TaskFailure(collectionRewardTask)}");
-        if (frontierTask.IsCompletedSuccessfully) frontierRentals = (await InSession(frontierTask)).Rentals;
-        else failures.Add($"Frontier: {TaskFailure(frontierTask)}");
-        if (legendaryTask.IsCompletedSuccessfully) legendaryBosses = (await InSession(legendaryTask)).Bosses;
-        else failures.Add($"Sanctuaries: {TaskFailure(legendaryTask)}");
-        if (specialTrialTask.IsCompletedSuccessfully) specialTrials = (await InSession(specialTrialTask)).Trials;
-        else failures.Add($"Special Trials: {TaskFailure(specialTrialTask)}");
-
-        if (prizeTask.IsCompletedSuccessfully)
-            prizePokemon = (await InSession(prizeTask)).Pokemon;
-        else
-            failures.Add($"Prize Exchange: {TaskFailure(prizeTask)}");
-
-        if (opponentTask.IsCompletedSuccessfully)
-        {
-            var catalog = await InSession(opponentTask);
-            opponents = catalog.Opponents; regionalLeagues = catalog.Regions;
-        }
-        else
-            failures.Add($"PvE: {TaskFailure(opponentTask)}");
-        if (friendlyTask.IsCompletedSuccessfully) { friendlyFormats.Clear(); friendlyFormats.AddRange((await InSession(friendlyTask)).Formats); }
-        else failures.Add($"Friendly formats: {TaskFailure(friendlyTask)}");
-
-        if (pokedexTask?.IsCompletedSuccessfully == true)
-            pokedexCatalog = (await InSession(pokedexTask)).Pokemon;
-        else if (pokedexTask is not null)
-            failures.Add($"Pokédex: {TaskFailure(pokedexTask)}");
-
-        catalogError = failures.Count == 0 ? null : string.Join("  ", failures);
-        nextCatalogRetryAt = catalogError is null ? DateTimeOffset.MaxValue : DateTimeOffset.UtcNow.AddSeconds(5);
-        if (catalogError is null)
-            SetStatus("Game data loaded.", quiet: true);
-        else
-            Plugin.Log.Warning("Magitek Monsters catalog loading was incomplete: {CatalogError}", catalogError);
     }
 
     private async Task LoadPokedexCatalog()
     {
         await InSession(LoadBattleHelp());
-        pokedexCatalog = (await InSession(plugin.Api.GetPokedexCatalog(disposeCancellation.Token))).Pokemon;
+        var catalog = await InSession(plugin.Api.GetPokedexCatalog(disposeCancellation.Token));
+        if (!plugin.Api.Catalogs.TryApply([catalog], () => pokedexCatalog = catalog.Pokemon)) { RetryCatalogs(); return; }
         if (selectedPokedexSpecies is not null
             && !pokedexCatalog.Any(entry => entry.Registered
                 && entry.Species.Equals(selectedPokedexSpecies, StringComparison.OrdinalIgnoreCase)))
             selectedPokedexSpecies = null;
     }
-
-    private static string TaskFailure(Task task) =>
-        task.Exception?.GetBaseException().Message
-        ?? (task.IsCanceled ? "Request cancelled." : "Request did not complete.");
 
     private static TerritoryContextInfo CurrentTerritoryContext(uint territoryId)
     {
@@ -1209,12 +1145,15 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task LoadHabitat(uint territoryId, TerritoryContextInfo context)
     {
-        habitat = await InSession(plugin.Api.GetHabitat(
+        var next = await InSession(plugin.Api.GetHabitat(
             territoryId, context.LocalizedName, context.EnglishName, context.RegionName, context.ZoneName));
-        pokedexCatalog = (await InSession(plugin.Api.GetPokedexCatalog())).Pokemon;
-        loadedTerritory = territoryId;
-        targetIndex = 0;
-        SetStatus($"Surveyed {habitat.Name}.");
+        var dex = await InSession(plugin.Api.GetPokedexCatalog());
+        if (!plugin.Api.Catalogs.TryApply([next, dex], () =>
+        {
+            ApplyHabitat(territoryId, next);
+            pokedexCatalog = dex.Pokemon;
+            SetStatus($"Surveyed {next.Name}.");
+        })) RetryCatalogs();
     }
 
     private async Task Search(uint territoryId, TerritoryContextInfo context, string? target)
@@ -1731,7 +1670,16 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void OnServerEvent(string eventName, string data)
     {
-        if (eventName == "hello") QueueConnectionSync();
+        if (eventName == "hello")
+        {
+            try
+            {
+                using var hello = JsonDocument.Parse(data);
+                plugin.Api.Catalogs.Greeting(hello.RootElement.TryGetProperty("catalogVersion", out var version) && version.ValueKind == JsonValueKind.String ? version.GetString() : null);
+            }
+            catch (JsonException) { }
+            QueueConnectionSync();
+        }
         if (eventName == "raid.updated") raidRefreshRequested = true;
         if (eventName is "trainer.updated" or "encounter.updated" or "battle.updated")
         {

@@ -72,12 +72,14 @@ public sealed partial class MainWindow
         try
         {
             var result = await InSession(plugin.Api.GetHabitat(territory, context.LocalizedName, context.EnglishName, context.RegionName, context.ZoneName, disposeCancellation.Token));
-            habitat = result;
-            loadedTerritory = territory;
+            backgroundResults.Enqueue(() =>
+            {
+                if (sessionResponses.IsCurrent(session)) ApplyHabitat(territory, result);
+            });
         }
         catch (StaleSessionException) { }
         catch (Exception exception) { Plugin.Log.Debug(exception, "Evolution territory lookup failed."); }
-        finally { if (sessionResponses.IsCurrent(session)) evolutionHabitatBusy = false; }
+        finally { backgroundResults.Enqueue(() => { if (sessionResponses.IsCurrent(session)) evolutionHabitatBusy = false; }); }
     }
 
     private async Task ReportEvolutionTravel(TravelBatch batch)

@@ -24,6 +24,7 @@ public sealed partial class MainWindow
         {
             if (plugin.Connection.Generation != generation || plugin.Connection.State != ServerConnectionState.Syncing) return;
             connectionSyncGeneration = generation;
+            if (plugin.Api.Catalogs.Revision is null) catalogRefreshRequested = true;
             CancelBackgroundRefresh();
             backgroundRetryAfter = DateTimeOffset.MinValue;
         });
@@ -60,7 +61,7 @@ public sealed partial class MainWindow
             pendingRaidChoice = null; raidTargetMove = null; raidModifier = "";
             raidCaptureRequest = null; raidCaptureBall = null;
         }
-        if (recovered.Pokedex is { } dex) pokedexCatalog = dex.Pokemon;
+        if (recovered.Pokedex is { } dex) ApplyPokedex(dex);
         AcknowledgeBattleResultTrainer();
         nextPvpPollAt = nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(2);
         if (plugin.Connection.CompleteSync(generation))
@@ -129,7 +130,7 @@ public sealed partial class MainWindow
             {
                 trainer = next;
                 AcknowledgeBattleResultTrainer();
-                if (dex is not null) pokedexCatalog = dex.Pokemon;
+                if (dex is not null) ApplyPokedex(dex);
                 if (battle is { } current) refreshState.Acknowledge(current.Id, current.Revision, true);
             };
         }, () => refreshState.Trainer());

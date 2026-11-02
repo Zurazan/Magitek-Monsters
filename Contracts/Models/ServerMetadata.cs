@@ -7,6 +7,7 @@ public sealed class ServerMetadataDto
     public int ProtocolVersion { get; set; }
     public string MinimumClientVersion { get; set; } = "";
     public string RealtimeTransport { get; set; } = "";
+    public string? CatalogVersion { get; set; }
     public int OnlineTrainers { get; set; } = -1;
     public ServerCapabilitiesDto Capabilities { get; set; } = new();
     public ServerFeaturesDto Features { get; set; } = new();
