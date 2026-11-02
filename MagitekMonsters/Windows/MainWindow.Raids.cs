@@ -263,14 +263,14 @@ public sealed partial class MainWindow
             foreach (var move in own.Moves)
             {
                 ImGui.TableNextColumn(); ImGui.BeginDisabled(move.Disabled || move.Pp == 0 || move.LegalTargets.Count == 0);
-                var label = $"{BattleLayout.MoveLabel(move.Move).ButtonText}\n{move.Type} / {(move.Pp.HasValue ? $"PP {move.Pp}/{move.Maxpp}" : "Continue move")}##RaidMove{move.Index}";
-                if (DrawAccentButton(label, new Vector2(-1, (compact ? 38 : 44) * scale), PokemonBlue))
+                var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(move.TypeHints, raidModifier, move.LegalTargets.Count == 1 ? move.LegalTargets[0] : 0) : null;
+                var buttonMove = new BattleMoveDto { Id = BattleLayout.MoveLabel(move.Move).Name, Move = move.Move, Pp = move.Pp, Maxpp = move.Maxpp, Disabled = move.Disabled };
+                if (DrawTypedMoveButton($"RaidMove{move.Index}", move.Move, buttonMove, (compact ? 38 : 44) * scale, false, preview))
                 {
                     if (move.LegalTargets.Count == 1) SubmitRaidMove(move, move.LegalTargets[0]);
                     else { raidTargetMove = move; raidTargetOpen = true; }
                 }
                 ImGui.EndDisabled();
-                DrawBattleMoveTooltip(move.Move);
             }
             ImGui.EndTable();
         }
@@ -392,7 +392,9 @@ public sealed partial class MainWindow
             foreach (var target in move.LegalTargets)
             {
                 var label = target == 1 ? current.Boss.Species : target < 0 ? $"Ally {-target}: {current.Allies[-target - 1].Species}" : "Field";
-                if (ImGui.Selectable(label)) { ImGui.CloseCurrentPopup(); SubmitRaidMove(move, target); }
+                var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(move.TypeHints, raidModifier, target) : null;
+                if (ImGui.Selectable(label + (preview is null ? "" : $" / {preview.Badge}"))) { ImGui.CloseCurrentPopup(); SubmitRaidMove(move, target); }
+                if (preview is not null && ImGui.IsItemHovered()) ImGui.SetTooltip(preview.Description);
             }
             ImGui.EndPopup();
         }

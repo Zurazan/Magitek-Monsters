@@ -55,6 +55,7 @@ public sealed class RaidPlayerDto
 }
 public sealed class RaidMoveDto
 {
+    public MoveTypeHintsDto? TypeHints { get; set; }
     public string Move { get; set; } = "";
     public string Type { get; set; } = "";
     public int Index { get; set; }

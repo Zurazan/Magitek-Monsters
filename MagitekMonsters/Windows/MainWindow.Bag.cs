@@ -145,8 +145,14 @@ public sealed partial class MainWindow
             else
             {
                 requestedShopTab = item.Currency == "rank-tokens" ? "Rank Token Exchange" : "Items";
-                shopCategoryIndex = Math.Clamp(Array.FindIndex(BagInventory.Pockets, pocket => pocket.Id == BagInventory.Pocket(item)) - 1, 0, 7);
-                shopSearch = item.Name; shopPage = 0; mainSection = 5;
+                if (item.Currency == "rank-tokens")
+                { tokenShopSearch = item.Name; tokenShopPage = 0; selectedTokenShopItem = item.Id; tokenShopQuantity = 1; }
+                else
+                {
+                    shopCategoryIndex = Math.Clamp(Array.FindIndex(BagInventory.Pockets, pocket => pocket.Id == BagInventory.Pocket(item)) - 1, 0, 7);
+                    shopSearch = item.Name; shopPage = 0; selectedShopItem = item.Id; shopBuyQuantity = 1;
+                }
+                mainSection = 5;
             }
         }
     }

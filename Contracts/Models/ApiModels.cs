@@ -488,8 +488,19 @@ public sealed class AuthorizationPollDto
     public SessionDto? Session { get; set; }
 }
 
+public sealed class BallEffectDto
+{
+    public string ItemId { get; set; } = string.Empty;
+    public double Multiplier { get; set; } = 1;
+    public int CatchRateAdjustment { get; set; }
+    public bool BonusActive { get; set; }
+    public string Detail { get; set; } = string.Empty;
+    public bool Guaranteed { get; set; }
+}
+
 public sealed class BattleSnapshotDto
 {
+    public List<BallEffectDto> BallOptions { get; set; } = [];
     public BattleResultDto? Result { get; set; }
     public int DefeatPenaltyCap { get; set; }
     public int CurrencyLost { get; set; }
@@ -560,6 +571,7 @@ public sealed class BattleActiveDto
 
 public sealed class BattleZMoveDto
 {
+    public MoveTypeHintsDto? TypeHints { get; set; }
     public List<int> LegalTargets { get; set; } = [];
     public string Move { get; set; } = string.Empty;
     public string Target { get; set; } = string.Empty;
@@ -567,6 +579,7 @@ public sealed class BattleZMoveDto
 
 public sealed class BattleMoveDto
 {
+    public MoveTypeHintsDto? TypeHints { get; set; }
     public string Target { get; set; } = string.Empty;
     public List<int> LegalTargets { get; set; } = [];
     public string Move { get; set; } = string.Empty;

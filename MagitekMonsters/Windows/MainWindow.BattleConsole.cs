@@ -276,7 +276,9 @@ public sealed partial class MainWindow
             var zSelected = pvp && pvpModifier == "zmove";
             var zMove = zSelected ? active.CanZMove?.ElementAtOrDefault(index) : null;
             ImGui.BeginDisabled(!BattleLayout.CanMove(move, zSelected, zMove));
-            if (DrawConsoleMoveButton($"SingleMove{index}", zMove?.Move ?? move.Move, move, cardHeight, false))
+            var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(zSelected ? zMove?.TypeHints : move.TypeHints,
+                zSelected ? "" : pvp ? pvpModifier : megaEvolveSelected ? "mega" : "", 1) : null;
+            if (DrawTypedMoveButton($"SingleMove{index}", zMove?.Move ?? move.Move, move, cardHeight, false, preview))
             {
                 var suffix = pvp ? PvpModifierSuffix(active, index) : megaEvolveSelected ? " mega" : "";
                 var command = $"move {index + 1}{suffix}";
@@ -288,10 +290,13 @@ public sealed partial class MainWindow
     }
 
     private bool DrawConsoleMoveButton(string id, string name, BattleMoveDto move, float height, bool selected)
+        => DrawTypedMoveButton(id, name, move, height, selected, null);
+
+    private bool DrawTypedMoveButton(string id, string name, BattleMoveDto move, float height, bool selected, BattleTypePreview? preview)
     {
         var label = BattleLayout.MoveLabel(name);
         battleMoveHelp.TryGetValue(label.Name, out var details);
-        var accent = details is null ? CompanionAccent : TypeColor(details.Type);
+        var accent = preview is { Type.Length: > 0 } ? TypeColor(preview.Type) : details is null ? CompanionAccent : TypeColor(details.Type);
         PushAccentButtonStyle(selected ? PokemonGreen : accent);
         var clicked = ImGui.Button($"##{id}", new Vector2(-1, height));
         ImGui.PopStyleVar(); ImGui.PopStyleColor(5);
@@ -299,15 +304,35 @@ public sealed partial class MainWindow
         var draw = ImGui.GetWindowDrawList();
         draw.PushClipRect(min + new Vector2(6, 0), max - new Vector2(6, 0), true);
         var disabled = !BattleLayout.HasUsablePp(move) || move.Disabled && name == move.Move;
+        var twoRows = height >= 2 * ImGui.GetTextLineHeight() + 8 * CompanionScale;
+        var badgeSize = preview is null ? Vector2.Zero : ImGui.CalcTextSize(preview.Badge) + new Vector2(10, 2) * CompanionScale;
+        var showBadge = preview is not null && badgeSize.X + 16 * CompanionScale < max.X - min.X;
+        if (!twoRows && ImGui.CalcTextSize(label.ButtonText).X + badgeSize.X + 27 * CompanionScale > max.X - min.X) showBadge = false;
+        var badgeBelow = twoRows && max.X - min.X < 170 * CompanionScale;
+        var badgeMin = new Vector2(max.X - badgeSize.X - 7 * CompanionScale, badgeBelow ? max.Y - ImGui.GetTextLineHeight() - 5 * CompanionScale : min.Y + 4 * CompanionScale);
+        draw.PushClipRect(min + new Vector2(6, 0), new Vector2(showBadge && !badgeBelow ? badgeMin.X - 5 * CompanionScale : max.X - 6 * CompanionScale, max.Y), true);
         draw.AddText(min + new Vector2(9, 4) * CompanionScale, ImGui.GetColorU32(disabled ? CompanionMuted : selected ? PokemonGreen : Vector4.One), label.ButtonText);
-        if (height >= 2 * ImGui.GetTextLineHeight() + 8 * CompanionScale)
-            draw.AddText(min + new Vector2(9 * CompanionScale, height - ImGui.GetTextLineHeight() - 4 * CompanionScale), ImGui.GetColorU32(disabled ? CompanionMuted : accent), $"{details?.Type ?? "Move"} / {BattleLayout.MovePpLabel(move)}");
         draw.PopClipRect();
-        DrawBattleMoveTooltip(name);
+        if (twoRows)
+        {
+            draw.PushClipRect(min + new Vector2(6, 0), new Vector2(showBadge && badgeBelow ? badgeMin.X - 5 * CompanionScale : max.X - 6 * CompanionScale, max.Y), true);
+            draw.AddText(min + new Vector2(9 * CompanionScale, height - ImGui.GetTextLineHeight() - 4 * CompanionScale), ImGui.GetColorU32(disabled ? CompanionMuted : accent), $"{(preview is { Type.Length: > 0 } ? preview.Type : details?.Type ?? "Move")} / {BattleLayout.MovePpLabel(move)}");
+            draw.PopClipRect();
+        }
+        if (showBadge && preview is not null)
+        {
+            var color = preview.Kind switch { BattleTypeHintKind.SuperEffective => PokemonGreen, BattleTypeHintKind.Resisted => PokemonOrange,
+                BattleTypeHintKind.Immune => PokemonRed, _ => CompanionMuted };
+            if (disabled) color = CompanionMuted;
+            draw.AddRectFilled(badgeMin, badgeMin + badgeSize, ImGui.GetColorU32(CompanionSurface), 3 * CompanionScale);
+            draw.AddText(badgeMin + new Vector2(5, 0) * CompanionScale, ImGui.GetColorU32(color), preview.Badge);
+        }
+        draw.PopClipRect();
+        DrawBattleMoveTooltip(name, preview is null ? null : preview with { Description = BattleLayout.MovePpLabel(move) + "\n" + preview.Description });
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
         {
-            if (move.Pp is null && move.Maxpp is null) ImGui.SetTooltip($"{label.ButtonText}\n{BattleLayout.MovePpLabel(move)}. This action does not spend additional PP.");
-            else if (details is null) ImGui.SetTooltip($"{label.ButtonText}\n{BattleLayout.MovePpLabel(move)}");
+            if (preview is null && move.Pp is null && move.Maxpp is null) ImGui.SetTooltip($"{label.ButtonText}\n{BattleLayout.MovePpLabel(move)}. This action does not spend additional PP.");
+            else if (preview is null && details is null) ImGui.SetTooltip($"{label.ButtonText}\n{BattleLayout.MovePpLabel(move)}");
         }
         return clicked;
     }
@@ -392,10 +417,25 @@ public sealed partial class MainWindow
         ImGui.SetNextItemWidth(-1);
         if (ImGui.BeginCombo("##ConsoleBall", $"{ball.Name} x{InventoryCount(ball.Id)}"))
         {
-            foreach (var option in balls) if (ImGui.Selectable($"{option.Name} x{InventoryCount(option.Id)}", option.Id == ball.Id)) battleBallId = option.Id;
+            foreach (var option in balls)
+            {
+                var effect = current.BallOptions.FirstOrDefault(entry => entry.ItemId == option.Id);
+                var label = effect is null ? "" : $" / {BallModifier(effect)}";
+                if (ImGui.Selectable($"{option.Name} x{InventoryCount(option.Id)}{label}", option.Id == ball.Id)) battleBallId = option.Id;
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(option.Description);
+            }
             ImGui.EndCombo();
         }
         ball = balls.First(item => item.Id == battleBallId);
+        var selectedEffect = current.BallOptions.FirstOrDefault(entry => entry.ItemId == ball.Id);
+        if (selectedEffect is not null)
+        {
+            var prefix = selectedEffect.Guaranteed ? "Guaranteed capture" : $"{(selectedEffect.BonusActive ? "Bonus active / " : "")}{BallModifier(selectedEffect)}";
+            ImGui.TextColored(selectedEffect.BonusActive || selectedEffect.Guaranteed ? PokemonGreen : CompanionMuted, prefix);
+            DrawClippedText(selectedEffect.Detail, ImGui.GetContentRegionAvail().X, CompanionMuted);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip($"{selectedEffect.Detail}\n\n{ball.Description}");
+        }
+        else ImGui.TextWrapped(ball.Description);
         DrawItemImage(ball.Id, new Vector2(34, 34) * CompanionScale); ImGui.SameLine();
         if (DrawAccentButton($"Throw {ball.Name}", new Vector2(-1, 34 * CompanionScale), PokemonGreen))
         {
@@ -404,6 +444,10 @@ public sealed partial class MainWindow
         }
         DrawClippedText("Lower HP and status improve your odds. Throwing uses your turn.", ImGui.GetContentRegionAvail().X, CompanionMuted);
     }
+
+    private static string BallModifier(BallEffectDto effect) => effect.Guaranteed ? "Guaranteed"
+        : effect.CatchRateAdjustment != 0 ? $"{effect.CatchRateAdjustment:+0;-0} catch rate{(effect.Multiplier != 1 ? $" / {effect.Multiplier:0.##}x" : "")}"
+        : $"{effect.Multiplier:0.##}x catch modifier";
 
     private void DrawConsoleExit(BattleSnapshotDto current, bool pvp)
     {

@@ -13,7 +13,7 @@ public sealed class ConfigWindow : Window, IDisposable
     {
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(470, 160),
+            MinimumSize = new Vector2(470, 230),
             MaximumSize = new Vector2(800, 420)
         };
         configuration = plugin.Configuration;
@@ -33,6 +33,10 @@ public sealed class ConfigWindow : Window, IDisposable
         var notifications = configuration.NotificationsEnabled;
         if (ImGui.Checkbox("Dalamud notifications", ref notifications)) { configuration.NotificationsEnabled = notifications; configuration.Save(); }
         ImGui.TextWrapped("Invitations, gifts, raids and connection alerts. No notification sounds.");
+        ImGui.Spacing();
+        var typeHints = configuration.MoveTypeHintsEnabled;
+        if (ImGui.Checkbox("Move type effectiveness badges", ref typeHints)) { configuration.MoveTypeHintsEnabled = typeHints; configuration.Save(); }
+        ImGui.TextWrapped("Show type matchups on battle moves. Uses visible types; hidden abilities, items and damage rolls are not predicted.");
         ImGui.Spacing();
         if (ImGui.Button("Forget login on this computer"))
         {

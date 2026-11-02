@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window, IDisposable
         get => trainerState;
         set
         {
-            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); }
+            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); }
             ObserveTrainerActivity(trainerState, value);
             trainerState = value;
             if (value is not null) trainerProfiles.Invalidate(value.User.TrainerId);
@@ -67,7 +67,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private int starterGeneration = 1;
     private bool confirmStarter;
     private int targetIndex;
-    private int shopCategoryIndex;
+    private int shopCategoryIndex = -1;
     private int pveTierIndex;
     private int pvpModeIndex = 1;
     private int mainSection;
@@ -700,37 +700,49 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         if (trainer is null)
             return;
-        DrawSectionHeader("POKÉ MART", "Supplies, training items, and special Pokémon");
+        DrawSectionHeader("POKÉ MART", "Items and Pokémon exchanges");
         DrawCurrencyGuideShortcut();
         ImGui.Spacing();
+        if (ImGui.GetContentRegionAvail().X < 620 * CompanionScale)
+        {
+            shopCompact = true;
+            DrawCompactShop();
+            return;
+        }
+        if (shopCompact) { requestedShopTab ??= ShopExchanges[shopExchange]; shopCompact = false; }
 
         if (!ImGui.BeginTabBar("MagitekMonstersShopTabs"))
             return;
         if (ImGui.BeginTabItem("Items", requestedShopTab == "Items" ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
         {
+            shopExchange = 0;
             DrawItemShop();
             ImGui.EndTabItem();
         }
         if (ImGui.BeginTabItem("Rank Token Exchange", requestedShopTab == "Rank Token Exchange" ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
         {
+            shopExchange = 1;
             ImGui.TextWrapped("Spend ranked-season tokens on guaranteed captures. Master Balls do not skip Sanctuary boss fights or unlock requirements.");
             ImGui.Spacing();
             DrawItemShop(true);
             ImGui.EndTabItem();
         }
-        if (ImGui.BeginTabItem("Prize Exchange"))
+        if (ImGui.BeginTabItem("Prize Exchange", requestedShopTab == "Prize Exchange" ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
         {
+            shopExchange = 2;
             DrawPrizeExchange();
             ImGui.EndTabItem();
         }
-        if (ImGui.BeginTabItem("Collection Exchange", openCollectionExchange ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
+        if (ImGui.BeginTabItem("Collection Exchange", openCollectionExchange || requestedShopTab == "Collection Exchange" ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
         {
+            shopExchange = 3;
             openCollectionExchange = false;
             DrawCollectionExchange();
             ImGui.EndTabItem();
         }
         requestedShopTab = null;
         ImGui.EndTabBar();
+        DrawPurchaseConfirmation();
     }
 
     private void DrawItemShop(bool rankTokensOnly = false)

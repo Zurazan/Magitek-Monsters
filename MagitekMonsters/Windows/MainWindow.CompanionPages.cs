@@ -108,104 +108,29 @@ public sealed partial class MainWindow
         ImGui.PopStyleVar();
     }
 
-    private void DrawCompanionItemShop(bool rankTokensOnly)
-    {
-        if (trainer is null) return;
-        var scale = CompanionScale;
-        if (!rankTokensOnly)
-        {
-            ImGui.TextDisabled("Competitive rewards are in Battle Frontier > BP Exchange.");
-            if (DrawAccentSmallButton("Open BP Exchange", CompanionAccent)) { openBpExchange = true; mainSection = 8; }
-            ImGui.SameLine();
-        }
-        ImGui.BeginDisabled(busy);
-        if (DrawAccentSmallButton("Refresh shop", CompanionAccent)) Run(RefreshShop, "Refreshing shop...");
-        ImGui.EndDisabled();
-        ImGui.Spacing();
-        var categories = new (string Label, string Id)[]
-        {
-            ("Poké Balls", "ball"), ("Medicine", "healing"), ("Evolution", "evolution"), ("Training", "training"),
-            ("Held Items", "held"), ("Key Items", "key"), ("TMs", "machine"), ("Move Tutors", "tutor")
-        };
-        shopCategoryIndex = Math.Clamp(shopCategoryIndex, 0, categories.Length - 1);
-        if (!rankTokensOnly)
-        {
-            ImGui.SetNextItemWidth(Math.Min(220 * scale, ImGui.GetContentRegionAvail().X));
-            if (ImGui.BeginCombo("Category", categories[shopCategoryIndex].Label))
-            {
-                for (var index = 0; index < categories.Length; index++)
-                    if (ImGui.Selectable(categories[index].Label, shopCategoryIndex == index)) { shopCategoryIndex = index; shopPage = 0; }
-                ImGui.EndCombo();
-            }
-        }
-        ImGui.SetNextItemWidth(-1);
-        if (ImGui.InputTextWithHint("##ShopSearch", "Search items or descriptions...", ref shopSearch, 100)) shopPage = 0;
-        ImGui.SetNextItemWidth(100 * scale);
-        ImGui.InputInt("Quantity", ref shopBuyQuantity);
-        shopBuyQuantity = Math.Clamp(shopBuyQuantity, 1, 999);
-        var items = shop.Where(entry => (entry.Currency == "rank-tokens") == rankTokensOnly
-            && (rankTokensOnly || BagInventory.Pocket(entry) == categories[shopCategoryIndex].Id)
-            && (string.IsNullOrWhiteSpace(shopSearch) || entry.Name.Contains(shopSearch, StringComparison.OrdinalIgnoreCase)
-                || entry.Description.Contains(shopSearch, StringComparison.OrdinalIgnoreCase))).ToList();
-        DrawPager("Shop", ref shopPage, items.Count, 8);
-        ImGui.Spacing();
-        foreach (var item in items.Skip(shopPage * 8).Take(8))
-        {
-            var owned = InventoryCount(item.Id);
-            var quantity = item.MaxOwned.HasValue ? Math.Min(shopBuyQuantity, Math.Max(0, item.MaxOwned.Value - owned)) : shopBuyQuantity;
-            var price = (long)item.Price * quantity;
-            var balance = rankTokensOnly ? trainer.PvpProfile.RankTokens?.Balance ?? 0 : trainer.Currency;
-            var currency = rankTokensOnly ? "RT" : "¥";
-            ImGui.PushID(item.Id);
-            if (ImGui.BeginTable("ShopRow", 3, ImGuiTableFlags.SizingStretchProp))
-            {
-                ImGui.TableSetupColumn("Art", ImGuiTableColumnFlags.WidthFixed, 42 * scale);
-                ImGui.TableSetupColumn("Details", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableSetupColumn("Purchase", ImGuiTableColumnFlags.WidthFixed, 110 * scale);
-                ImGui.TableNextColumn(); DrawItemImage(item.Id, new Vector2(36 * scale));
-                ImGui.TableNextColumn();
-                ImGui.TextWrapped(item.Name);
-                if (ImGui.IsItemHovered() && !string.IsNullOrWhiteSpace(item.AcquisitionNote))
-                    ImGui.SetTooltip(item.AcquisitionNote + (item.BpPrice is int bpPrice ? $" Also available for {bpPrice:N0} BP." : string.Empty));
-                ImGui.PushStyleColor(ImGuiCol.Text, CompanionMuted);
-                ImGui.TextWrapped(item.Description);
-                ImGui.PopStyleColor();
-                ImGui.TextDisabled($"Owned: {owned} / {currency} {item.Price:N0} each");
-                ImGui.TableNextColumn();
-                ImGui.TextWrapped($"{currency} {price:N0}");
-                ImGui.BeginDisabled(busy || quantity == 0 || balance < price);
-                if (DrawAccentButton(quantity == 0 ? "Owned" : $"Buy x{quantity}", new Vector2(-1, 32 * scale), balance < price ? PokemonRed : CompanionAccent))
-                {
-                    pendingPurchase = item;
-                    pendingPurchaseQuantity = quantity;
-                    requestPurchase = true;
-                }
-                ImGui.EndDisabled();
-                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                    ImGui.SetTooltip(quantity == 0 ? "You already own the maximum quantity." : balance < price ? $"You need {currency} {price - balance:N0} more." : $"Buy {quantity} for {currency} {price:N0}.");
-                ImGui.EndTable();
-            }
-            ImGui.PopID();
-            ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
-        }
-        if (items.Count == 0) ImGui.TextWrapped("No items match your search.");
-        DrawPurchaseConfirmation();
-    }
-
     private void DrawPurchaseConfirmation()
     {
         if (requestPurchase) { ImGui.OpenPopup("Confirm purchase"); requestPurchase = false; }
         if (!BeginConfirmationModal("Confirm purchase")) return;
         var item = pendingPurchase;
-        if (item is null || trainer is null) { ImGui.CloseCurrentPopup(); EndConfirmationModal(); return; }
+        var current = item is null ? null : shop.FirstOrDefault(entry => entry.Id == item.Id);
+        if (item is null || trainer is null || purchaseOwner != trainer.User.Id)
+        { pendingPurchase = null; ImGui.CloseCurrentPopup(); EndConfirmationModal(); return; }
+        if (current is null || current.Price != purchaseUnitPrice || current.Currency != purchaseCurrency)
+        {
+            ImGui.TextWrapped("This offer changed while the confirmation was open. Review the item and price before buying again.");
+            DrawConfirmationActions(null, CompanionMuted, cancelLabel: "Back to shop");
+            EndConfirmationModal(); return;
+        }
         var price = (long)item.Price * pendingPurchaseQuantity;
         var rankTokens = item.Currency == "rank-tokens";
         var currency = rankTokens ? "RT" : "¥";
         var balance = rankTokens ? trainer.PvpProfile.RankTokens?.Balance ?? 0 : trainer.Currency;
+        var quote = MartCatalog.Quote(current, InventoryCount(item.Id), pendingPurchaseQuantity, balance);
         ImGui.TextWrapped($"Buy {pendingPurchaseQuantity} x {item.Name} for {currency} {price:N0}?");
         ImGui.TextDisabled($"Balance after purchase: {currency} {Math.Max(0, balance - price):N0}");
         if (DrawConfirmationActions("Confirm purchase", CompanionAccent,
-            busy || balance < price || item.MaxOwned.HasValue && InventoryCount(item.Id) + pendingPurchaseQuantity > item.MaxOwned.Value))
+            busy || !quote.CanBuy || quote.Quantity != pendingPurchaseQuantity))
         {
             var quantity = pendingPurchaseQuantity;
             ImGui.CloseCurrentPopup();

@@ -125,7 +125,9 @@ public sealed partial class MainWindow
                 var move = active.Moves[index];
                 var zMove = choice.Modifier == "zmove" ? active.CanZMove?.ElementAtOrDefault(index) : null;
                 ImGui.BeginDisabled(!BattleLayout.CanMove(move, choice.Modifier == "zmove", zMove));
-                if (DrawConsoleMoveButton($"DoublesMove{index}", zMove?.Move ?? move.Move, move, cardHeight, choice.Move == index))
+                var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(choice.Modifier == "zmove" ? zMove?.TypeHints : move.TypeHints,
+                    choice.Modifier == "zmove" ? "" : choice.Modifier, choice.Target) : null;
+                if (DrawTypedMoveButton($"DoublesMove{index}", zMove?.Move ?? move.Move, move, cardHeight, choice.Move == index, preview))
                 { choice.Move = index; choice.Switch = 0; choice.Pass = false; choice.Target = 0; }
                 ImGui.EndDisabled();
             }
@@ -145,7 +147,12 @@ public sealed partial class MainWindow
         if (ImGui.BeginCombo("##SlotTarget", choice.Target == 0 ? "Choose target" : TargetName(choice.Target)))
         {
             foreach (var location in targets)
-                if (ImGui.Selectable(TargetName(location), choice.Target == location)) choice.Target = location;
+            {
+                var selectedHints = choice.Modifier == "zmove" ? active.CanZMove?.ElementAtOrDefault(choice.Move)?.TypeHints : active.Moves.ElementAtOrDefault(choice.Move)?.TypeHints;
+                var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(selectedHints, choice.Modifier == "zmove" ? "" : choice.Modifier, location) : null;
+                if (ImGui.Selectable(TargetName(location) + (preview is null ? "" : $" / {preview.Badge}"), choice.Target == location)) choice.Target = location;
+                if (preview is not null && ImGui.IsItemHovered()) ImGui.SetTooltip(preview.Description);
+            }
             ImGui.EndCombo();
         }
     }

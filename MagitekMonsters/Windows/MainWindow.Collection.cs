@@ -161,21 +161,32 @@ public sealed partial class MainWindow
         })) RetryCatalogs();
     }
 
-    private void DrawBattleMoveTooltip(string name)
+    private void DrawBattleMoveTooltip(string name, BattleTypePreview? preview = null)
     {
         if (!ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) return;
         var label = BattleLayout.MoveLabel(name);
-        if (!battleMoveHelp.TryGetValue(label.Name, out var move)) return;
+        battleMoveHelp.TryGetValue(label.Name, out var move);
+        if (move is null && preview is null) return;
         ImGui.BeginTooltip();
         ImGui.PushTextWrapPos(ImGui.GetFontSize() * 28);
-        ImGui.TextColored(PokemonBlue, $"{move.Name} | {move.Type} | {move.Category}");
-        var power = label.Power ?? move.Power;
-        ImGui.Text($"Power: {(power > 0 ? power.ToString() : "N/A")} | Accuracy: {move.Accuracy?.ToString() ?? "Always"} | Base PP: {move.Pp}");
-        if (label.Power is not null)
-            ImGui.TextWrapped(label.Name == "Return"
-                ? "Power rises with friendship, up to 102. EV-reset berries also raise friendship."
-                : "Power falls as friendship rises, from a maximum of 102.");
-        ImGui.TextWrapped(move.Description);
+        if (move is not null)
+        {
+            ImGui.TextColored(PokemonBlue, $"{move.Name} | {move.Type} | {move.Category}");
+            var power = label.Power ?? move.Power;
+            ImGui.Text($"Power: {(power > 0 ? power.ToString() : "N/A")} | Accuracy: {move.Accuracy?.ToString() ?? "Always"} | Base PP: {move.Pp}");
+            if (label.Power is not null)
+                ImGui.TextWrapped(label.Name == "Return"
+                    ? "Power rises with friendship, up to 102. EV-reset berries also raise friendship."
+                    : "Power falls as friendship rises, from a maximum of 102.");
+            ImGui.TextWrapped(move.Description);
+        }
+        else ImGui.TextUnformatted(label.ButtonText);
+        if (preview is not null)
+        {
+            ImGui.Separator();
+            ImGui.TextColored(PokemonBlue, $"Type matchup / {preview.Badge}");
+            ImGui.TextWrapped(preview.Description);
+        }
         ImGui.PopTextWrapPos();
         ImGui.EndTooltip();
     }
