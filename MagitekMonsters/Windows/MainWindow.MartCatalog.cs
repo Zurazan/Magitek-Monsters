@@ -79,7 +79,7 @@ public sealed partial class MainWindow
         ImGui.SetNextItemWidth(-1);
         if (ImGui.InputTextWithHint("##ShopSearch", "Search items, descriptions or moves...", ref search, 100)) page = 0;
         var category = shopCategoryIndex < 0 ? "" : MartCategories[Math.Clamp(shopCategoryIndex, 0, MartCategories.Length - 1)].Id;
-        var items = MartCatalog.Filter(shop, rankTokensOnly, category, search);
+        var items = GetMartItems(rankTokensOnly, category, search);
         var selectedId = selected;
         if (!items.Any(item => item.Id == selectedId))
         {

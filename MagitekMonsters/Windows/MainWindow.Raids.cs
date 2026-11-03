@@ -188,7 +188,7 @@ public sealed partial class MainWindow
         ImGui.TextWrapped("One Pokémon per trainer. Builds are frozen for the raid. Both high and low levels sync to the den's advertised level.");
         ImGui.SetNextItemWidth(-1);
         if (ImGui.InputTextWithHint("##RaidRosterSearch", "Search party and PC...", ref raidRosterSearch, 80)) raidRosterPage = 0;
-        var candidates = OnlineOwnedPokemon().Where(pokemon => pokemon.Nickname.Contains(raidRosterSearch, StringComparison.OrdinalIgnoreCase) || pokemon.Species.Contains(raidRosterSearch, StringComparison.OrdinalIgnoreCase)).ToList();
+        var candidates = GetRaidCandidates();
         DrawPager("RaidRoster", ref raidRosterPage, candidates.Count, 8);
         ImGui.BeginChild("RaidRosterList", new Vector2(0, -40 * CompanionScale), false);
         foreach (var pokemon in candidates.Skip(raidRosterPage * 8).Take(8))
@@ -263,9 +263,9 @@ public sealed partial class MainWindow
             foreach (var move in own.Moves)
             {
                 ImGui.TableNextColumn(); ImGui.BeginDisabled(move.Disabled || move.Pp == 0 || move.LegalTargets.Count == 0);
-                var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(move.TypeHints, raidModifier, move.LegalTargets.Count == 1 ? move.LegalTargets[0] : 0) : null;
                 var buttonMove = new BattleMoveDto { Id = BattleLayout.MoveLabel(move.Move).Name, Move = move.Move, Pp = move.Pp, Maxpp = move.Maxpp, Disabled = move.Disabled };
-                if (DrawTypedMoveButton($"RaidMove{move.Index}", move.Move, buttonMove, (compact ? 38 : 44) * scale, false, preview))
+                if (DrawTypedMoveButton($"RaidMove{move.Index}", move.Move, buttonMove, (compact ? 38 : 44) * scale, false,
+                    move.TypeHints, raidModifier, move.LegalTargets.Count == 1 ? move.LegalTargets[0] : 0))
                 {
                     if (move.LegalTargets.Count == 1) SubmitRaidMove(move, move.LegalTargets[0]);
                     else { raidTargetMove = move; raidTargetOpen = true; }
@@ -392,9 +392,9 @@ public sealed partial class MainWindow
             foreach (var target in move.LegalTargets)
             {
                 var label = target == 1 ? current.Boss.Species : target < 0 ? $"Ally {-target}: {current.Allies[-target - 1].Species}" : "Field";
-                var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(move.TypeHints, raidModifier, target) : null;
+                var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(move.TypeHints, raidModifier, target, includeDescription: false) : null;
                 if (ImGui.Selectable(label + (preview is null ? "" : $" / {preview.Badge}"))) { ImGui.CloseCurrentPopup(); SubmitRaidMove(move, target); }
-                if (preview is not null && ImGui.IsItemHovered()) ImGui.SetTooltip(preview.Description);
+                if (preview is not null && ImGui.IsItemHovered()) ImGui.SetTooltip(BattleTypeHints.Preview(move.TypeHints, raidModifier, target)!.Description);
             }
             ImGui.EndPopup();
         }

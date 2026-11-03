@@ -31,8 +31,7 @@ public sealed partial class MainWindow
         var work = ImGui.GetMainViewport().WorkSize;
         ImGui.SetNextWindowSize(new Vector2(Math.Min(780 * scale, work.X * 0.94f), Math.Min(720 * scale, work.Y * 0.9f)), ImGuiCond.Appearing);
         if (!BeginCenteredModal("Compare Pokémon", ImGuiWindowFlags.None)) return;
-        var owned = trainer?.Party.Concat(trainer.Storage).OrderBy(pokemon => pokemon.DisplaySpecies, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(pokemon => pokemon.Nickname, StringComparer.OrdinalIgnoreCase).ThenBy(pokemon => pokemon.Id, StringComparer.Ordinal).ToList() ?? [];
+        var owned = GetComparisonPokemon();
         var left = owned.FirstOrDefault(pokemon => pokemon.Id == storageComparisonLeft);
         var right = owned.FirstOrDefault(pokemon => pokemon.Id == storageComparisonRight);
         ImGui.TextColored(CompanionAccent, "COMPARE YOUR POKÉMON");

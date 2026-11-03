@@ -15,7 +15,7 @@ public sealed partial class MainWindow
     {
         if (trainer is null) return;
         var scale = CompanionScale;
-        var discovered = trainer.Pokedex.CaughtForms.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var discovered = GetDiscoveredForms();
         var heading = $"DISCOVERED  {entry.Forms.Count(discovered.Contains)}/{entry.Forms.Count}";
         const string note = "Permanent forms only. No extra Dex entries or CP.";
         var sameLine = ImGui.GetContentRegionAvail().X > ImGui.CalcTextSize(heading).X + ImGui.CalcTextSize(note).X + ImGui.GetStyle().ItemSpacing.X;

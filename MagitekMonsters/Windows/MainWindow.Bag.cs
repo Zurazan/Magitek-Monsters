@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
@@ -16,12 +17,27 @@ public sealed partial class MainWindow
     private string? bagPokemonId;
     private string? requestedManagementTab;
     private string? requestedShopTab;
+    private List<InventoryEntryDto>? bagInventorySource;
+    private List<ShopItemDto>? bagCatalogSource;
+    private List<CollectionRewardDto>? bagRewardsSource;
+    private List<BagEntry> bagOwned = [];
+
+    private List<BagEntry> OwnedBag()
+    {
+        if (!ReferenceEquals(bagInventorySource, trainer!.Inventory) || !ReferenceEquals(bagCatalogSource, itemCatalog)
+            || !ReferenceEquals(bagRewardsSource, collectionRewards))
+        {
+            bagOwned = BagInventory.Owned(trainer.Inventory, itemCatalog, collectionRewards);
+            bagInventorySource = trainer.Inventory; bagCatalogSource = itemCatalog; bagRewardsSource = collectionRewards;
+        }
+        return bagOwned;
+    }
 
     private void DrawBag()
     {
         if (trainer is null) return;
         var scale = CompanionScale;
-        var owned = BagInventory.Owned(trainer.Inventory, itemCatalog, collectionRewards);
+        var owned = OwnedBag();
         DrawSectionHeader("Bag", $"{owned.Count:N0} item types / {owned.Sum(entry => (long)entry.Quantity):N0} items owned");
         bagPocket = Math.Clamp(bagPocket, 0, BagInventory.Pockets.Length - 1);
         ImGui.SetNextItemWidth(Math.Min(240 * scale, ImGui.GetContentRegionAvail().X));
@@ -37,7 +53,7 @@ public sealed partial class MainWindow
         }
         ImGui.SetNextItemWidth(-1);
         if (ImGui.InputTextWithHint("##BagSearch", "Search owned items or descriptions...", ref bagSearch, 100)) bagPage = 0;
-        var entries = BagInventory.Filter(owned, BagInventory.Pockets[bagPocket].Id, bagSearch);
+        var entries = GetBagItems(owned);
         if (!entries.Any(entry => entry.Item.Id == selectedBagItem)) selectedBagItem = entries.FirstOrDefault()?.Item.Id;
         ImGui.Spacing();
         var layout = CompanionLayout.Selection(ImGui.GetContentRegionAvail().X, ImGui.GetContentRegionAvail().Y, scale);

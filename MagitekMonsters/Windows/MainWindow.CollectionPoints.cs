@@ -37,16 +37,12 @@ public sealed partial class MainWindow
         if (DrawAccentSmallButton("Open Collection Exchange", PokemonBlue)) { mainSection = 5; openCollectionExchange = true; }
         ImGui.Spacing();
         string[] categories = ["All objectives", "Species milestones", "Type collections", "Evolution families", "Generation surveys"];
-        string[] categoryIds = ["", "species", "type", "family", "generation"];
         string[] states = ["In progress", "Completed", "All"];
         ImGui.SetNextItemWidth(210);
         if (ImGui.Combo("##ObjectiveCategory", ref objectiveCategory, categories, categories.Length)) objectivePage = 0;
         ImGui.SameLine(); ImGui.SetNextItemWidth(150);
         if (ImGui.Combo("##ObjectiveState", ref objectiveState, states, states.Length)) objectivePage = 0;
-        var objectives = progress.Objectives.Where(entry => (objectiveCategory == 0 || entry.Category == categoryIds[objectiveCategory])
-            && (objectiveState == 2 || entry.Completed == (objectiveState == 1)))
-            .OrderBy(entry => entry.Completed).ThenByDescending(entry => (double)entry.Progress / Math.Max(1, entry.Target))
-            .ThenBy(entry => entry.Category).ThenBy(entry => entry.Target).ToList();
+        var objectives = GetCollectionObjectives();
         DrawPager("CollectionObjectives", ref objectivePage, objectives.Count, 8);
         if (objectives.Count == 0) ImGui.TextDisabled("No objectives match these filters.");
         foreach (var objective in objectives.Skip(objectivePage * 8).Take(8))

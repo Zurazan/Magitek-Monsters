@@ -17,7 +17,7 @@ public sealed partial class MainWindow
         var scale = CompanionScale;
         var circuits = PvePresentation.Circuits;
         pveTierIndex = Math.Clamp(pveTierIndex, 0, circuits.Length - 1);
-        var defeated = trainer.PveProgress.DefeatedOpponentIds.ToHashSet();
+        var defeated = GetDefeatedOpponents();
         ImGui.SetNextItemWidth(150 * scale);
         if (ImGui.BeginCombo("Circuit", circuits[pveTierIndex].Label))
         {
@@ -25,8 +25,7 @@ public sealed partial class MainWindow
                 if (ImGui.Selectable(circuits[index].Label, pveTierIndex == index)) { pveTierIndex = index; pveOpponentPage = 0; }
             ImGui.EndCombo();
         }
-        var visible = opponents.Where(entry => entry.RegionId is null && !entry.Legacy && entry.RematchOf is null
-            && (circuits[pveTierIndex].Id == "all" || entry.Tier == circuits[pveTierIndex].Id)).ToArray();
+        var visible = GetCircuitOpponents();
         ImGui.Spacing();
         ImGui.TextColored(CompanionMuted, $"{circuits[pveTierIndex].Label} circuit / {visible.Count(entry => defeated.Contains(entry.Id))} of {visible.Length} cleared");
         DrawPager("PveOpponents", ref pveOpponentPage, visible.Length, 6);

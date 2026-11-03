@@ -173,6 +173,8 @@ public sealed partial class MainWindow
     {
         if (LiveStateOrder.IsOlder(next, battle)) return;
         ObserveRecentBattle(next, action: choice is not null);
+        if (next.Id != battle?.Id) eventBattleId = string.Empty;
+        if (next.Kind == "wild" && trainer?.ActiveEncounter is { } encounter && encounter.Id == next.Id && IsEventEncounter(encounter)) eventBattleId = next.Id;
         battle = next;
         refreshState.Acknowledge(next.Id, next.Revision, choice is not null);
         if (trainer is null) return;
@@ -182,7 +184,15 @@ public sealed partial class MainWindow
                 if (trainer.Party.FirstOrDefault(pokemon => pokemon.Id == vital.PokemonId) is { } pokemon) pokemon.Vitals = vital;
         var parts = choice?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
         if (parts.Length >= 2 && parts[0] is "item" or "ball")
-            if (trainer.Inventory.FirstOrDefault(item => item.ItemId == parts[1]) is { } item) item.Quantity = Math.Max(0, item.Quantity - 1);
+        {
+            var index = trainer.Inventory.FindIndex(item => item.ItemId == parts[1]);
+            if (index >= 0)
+            {
+                var item = trainer.Inventory[index];
+                trainer.Inventory = [.. trainer.Inventory];
+                trainer.Inventory[index] = new() { ItemId = item.ItemId, Quantity = Math.Max(0, item.Quantity - 1) };
+            }
+        }
         if (next.Status != "active") refreshState.Trainer();
     }
 }

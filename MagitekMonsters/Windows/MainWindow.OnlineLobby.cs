@@ -85,7 +85,7 @@ public sealed partial class MainWindow
         {
             var owned = OnlineOwnedPokemon();
             var party = owned.Where(pokemon => pokemon.PartySlot is not null).ToList();
-            PvpRoster.Synchronize(ids, owned, format.MaxTeamSize);
+            SynchronizeOnlineRoster(ids, owned, format.MaxTeamSize);
             var initialized = onlineView == 2 ? friendlyTeamInitialized : onlineTeamInitialized;
             if (!initialized && owned.Count > 0)
             {

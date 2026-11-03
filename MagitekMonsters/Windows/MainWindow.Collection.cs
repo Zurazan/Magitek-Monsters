@@ -137,13 +137,12 @@ public sealed partial class MainWindow
         }
     }
 
-    private List<PokemonDto> OnlineOwnedPokemon() => trainer is null ? [] : Services.PvpRoster.Owned(trainer.Party, trainer.Storage);
-    private string[] SelectedOnlineTeam() => Services.PvpRoster.Selected(OnlineOwnedPokemon(), pvpTeamIds).Select(pokemon => pokemon.Id).ToArray();
+    private string[] SelectedOnlineTeam() => SelectedOnlinePokemon(pvpTeamIds).Select(pokemon => pokemon.Id).ToArray();
 
     private readonly HashSet<string> friendlyTeamIds = [];
     private readonly List<PvpFormatDto> friendlyFormats = [];
     private string friendlyFormatId = "gen9nationaldex";
-    private string[] FriendlyTeam() => Services.PvpRoster.Selected(OnlineOwnedPokemon(), friendlyTeamIds).Select(pokemon => pokemon.Id).ToArray();
+    private string[] FriendlyTeam() => SelectedOnlinePokemon(friendlyTeamIds).Select(pokemon => pokemon.Id).ToArray();
 
     private async Task LoadBattleHelp()
     {
@@ -161,7 +160,7 @@ public sealed partial class MainWindow
         })) RetryCatalogs();
     }
 
-    private void DrawBattleMoveTooltip(string name, BattleTypePreview? preview = null)
+    private void DrawBattleMoveTooltip(string name, BattleTypePreview? preview = null, BattleMoveDto? selectedMove = null)
     {
         if (!ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) return;
         var label = BattleLayout.MoveLabel(name);
@@ -185,7 +184,7 @@ public sealed partial class MainWindow
         {
             ImGui.Separator();
             ImGui.TextColored(PokemonBlue, $"Type matchup / {preview.Badge}");
-            ImGui.TextWrapped(preview.Description);
+            ImGui.TextWrapped(selectedMove is null ? preview.Description : BattleLayout.MovePpLabel(selectedMove) + "\n" + preview.Description);
         }
         ImGui.PopTextWrapPos();
         ImGui.EndTooltip();

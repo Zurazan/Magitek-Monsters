@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -17,9 +18,12 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
 {
     private readonly Configuration configuration;
     private readonly ProtectedTokenStore tokenStore;
-    private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private readonly HttpClient http = CreateHttpClient();
+    private static HttpClient CreateHttpClient() => new(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip })
+        { Timeout = TimeSpan.FromSeconds(15) };
     private readonly JsonSerializerOptions json = new(JsonSerializerDefaults.Web);
     private readonly ConditionalWeakTable<TrainerSnapshotDto, SnapshotChange> snapshotChanges = new();
+    private readonly TrainerRosterCache rosterCache = new();
     private sealed record SnapshotChange(string Id);
     public ClientUpdateState Update { get; } = new();
     public CatalogVersions Catalogs { get; } = new();
@@ -337,16 +341,16 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     public Task<PvpStatusDto> DismissPvpBattle(CancellationToken cancellationToken = default) =>
         Send<PvpStatusDto>(HttpMethod.Delete, "/api/pvp/battle", null, true, cancellationToken);
 
-    public void SaveSession(SessionDto session) => tokenStore.Write(session.AccessToken);
+    public void SaveSession(SessionDto session) { tokenStore.Write(session.AccessToken); rosterCache.Reset(); }
 
     public Task<TrainerSnapshotDto> RestParty(CancellationToken cancellationToken = default) =>
         Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/trainer/rest", EmptyRequest.Instance, true, cancellationToken);
 
-    public void Logout() { tokenStore.Clear(); Catalogs.Reset(); }
+    public void Logout() { tokenStore.Clear(); rosterCache.Reset(); Catalogs.Reset(); }
 
-    public void Dispose() => http.Dispose();
+    public void Dispose() { rosterCache.Reset(); http.Dispose(); }
 
-    private async Task<T> Send<T>(HttpMethod method, string path, IClientRequest? body, bool authenticated, CancellationToken cancellationToken, bool changesState = true)
+    private async Task<T> Send<T>(HttpMethod method, string path, IClientRequest? body, bool authenticated, CancellationToken cancellationToken, bool changesState = true, bool fullRoster = false, TrainerRosterCache.Request? recoveryOf = null)
     {
         if (Update.Required) throw new ApiException(426, Update.Message, "client_update_required");
         if (body is not null && (ApiRequestContracts.Find(method.Method, path) is not { } contract || contract.BodyType != body.GetType()))
@@ -355,6 +359,8 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
         var serverTiming = "unavailable";
         var dispatched = false;
         var catalogRequest = Catalogs.BeginRequest();
+        TrainerRosterCache.Request? rosterRequest = null;
+        string? requestToken = null;
         try
         {
             if (authenticated && Live is { CanInvoke: true } live && ServerConnection.Command(method, path, body) is { } command)
@@ -374,6 +380,12 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
                 if (string.IsNullOrWhiteSpace(token))
                     throw new ApiException(401, "Log in before using this feature.");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                if (typeof(T) == typeof(TrainerSnapshotDto))
+                {
+                    requestToken = token;
+                    rosterRequest = rosterCache.Begin(token, fullRoster, recoveryOf);
+                    rosterRequest.ApplyHeaders(request.Headers);
+                }
             }
             if (body is not null)
                 request.Content = JsonContent.Create(body, body.GetType(), options: json);
@@ -404,6 +416,21 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
             var parseStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             var result = await response.Content.ReadFromJsonAsync<T>(json, cancellationToken).ConfigureAwait(false)
                 ?? throw new ApiException((int)response.StatusCode, "The server returned an empty response.");
+            if (result is TrainerSnapshotDto roster && rosterRequest is not null)
+            {
+                try { rosterCache.Complete(rosterRequest, roster); }
+                catch (TrainerRosterCacheException) when (!fullRoster && rosterCache.IsCurrent(rosterRequest) && tokenStore.Read() == requestToken)
+                {
+                    var recovered = await Send<TrainerSnapshotDto>(HttpMethod.Get, "/api/me", null, true, cancellationToken, fullRoster: true, recoveryOf: rosterRequest).ConfigureAwait(false);
+                    if (response.Headers.TryGetValues(ProtocolInfo.ChangeHeader, out var committed)
+                        && Guid.TryParseExact(string.Join(",", committed), "D", out var committedId))
+                    {
+                        snapshotChanges.Remove(recovered);
+                        snapshotChanges.Add(recovered, new(committedId.ToString("D")));
+                    }
+                    return (T)(object)recovered;
+                }
+            }
             if (result is ServerMetadataDto metadata && catalogVersion is null)
             {
                 catalogVersion = metadata.CatalogVersion;

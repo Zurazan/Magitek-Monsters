@@ -76,6 +76,18 @@ public sealed partial class MainWindow
 
     private void FlushRecentActivity()
     {
+        if (pendingActivity?.IsEmpty == false) DrainRecentActivity();
+        if (!activityDirty || DateTimeOffset.UtcNow < nextActivitySave) return;
+        try { plugin.Configuration.Save(); activityDirty = false; }
+        catch (Exception exception)
+        {
+            nextActivitySave = DateTimeOffset.UtcNow.AddSeconds(30);
+            Plugin.Log.Warning(exception, "Could not save recent activity.");
+        }
+    }
+
+    private void DrainRecentActivity()
+    {
         plugin.Configuration.RecentActivities ??= new();
         var batches = new Dictionary<string, List<RecentActivityEntry>>();
         while (pendingActivity?.TryDequeue(out var pending) == true)
@@ -85,13 +97,6 @@ public sealed partial class MainWindow
         }
         foreach (var (owner, entries) in batches)
             activityDirty |= RecentActivity.Record(RecentActivity.Preferences(plugin.Configuration.RecentActivities, owner), entries);
-        if (!activityDirty || DateTimeOffset.UtcNow < nextActivitySave) return;
-        try { plugin.Configuration.Save(); activityDirty = false; }
-        catch (Exception exception)
-        {
-            nextActivitySave = DateTimeOffset.UtcNow.AddSeconds(30);
-            Plugin.Log.Warning(exception, "Could not save recent activity.");
-        }
     }
 
     private RecentActivityPreferences LocalRecentActivity() => RecentActivity.Preferences(plugin.Configuration.RecentActivities ??= new(), trainer!.User.Id);

@@ -39,8 +39,9 @@ public sealed partial class MainWindow : Window, IDisposable
         get => trainerState;
         set
         {
-            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); }
+            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetBrowseCaches(); }
             ObserveTrainerActivity(trainerState, value);
+            navigationAlertTrainer = null;
             trainerState = value;
             if (value is not null) trainerProfiles.Invalidate(value.User.TrainerId);
             if (value is not null && plugin.Api?.SnapshotChangeId(value) is { } change) refreshState.CoverTrainerChange(change);
@@ -309,12 +310,7 @@ public sealed partial class MainWindow : Window, IDisposable
             nextEnvironmentReadAt = DateTimeOffset.UtcNow.AddSeconds(1);
             (evolutionEnvironment, evolutionEnvironmentLabel) = EvolutionEnvironment.Read(CurrentEvolutionTheme);
         }
-        if (trainer is not null)
-            foreach (var option in trainer.EvolutionOptions.Where(option => option.ReadyWithoutEnvironment.HasValue))
-                option.Ready = option.ReadyWithoutEnvironment == true
-                               && (option.EnvironmentAlternatives.Count > 0
-                                   ? option.EnvironmentAlternatives.Any(route => evolutionEnvironment?.Matches(route.RequiredTime, route.RequiredWeather, route.EnvironmentChecks) == true)
-                                   : evolutionEnvironment?.Matches(option.RequiredTime, option.RequiredWeather, option.EnvironmentChecks) == true);
+        UpdateEvolutionReadiness();
         ObserveShopVisibility();
         ObserveCatalogVersion();
         if (!initialized)
@@ -402,11 +398,7 @@ public sealed partial class MainWindow : Window, IDisposable
         var bodyHeight = Math.Max(1, available.Y);
         var navigationWidth = Math.Min(160 * scale, available.X * 0.25f);
         var gap = 8 * scale;
-        var partyIds = trainer.Party.Select(entry => entry.Id).ToHashSet();
-        var partyAlerts = trainer.PendingMoves.Count(entry => partyIds.Contains(entry.PokemonId))
-                          + trainer.EvolutionOptions.Count(entry => partyIds.Contains(entry.PokemonId) && entry.Ready);
-        var storageAlerts = trainer.PendingMoves.Count(entry => !partyIds.Contains(entry.PokemonId))
-                            + trainer.EvolutionOptions.Count(entry => !partyIds.Contains(entry.PokemonId) && entry.Ready);
+        var (partyAlerts, storageAlerts) = GetNavigationAlerts();
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 12) * scale);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.105f, 0.105f, 0.114f, 1));
         if (ImGui.BeginChild("CompanionNavigation", new Vector2(navigationWidth, bodyHeight), false))
@@ -639,25 +631,7 @@ public sealed partial class MainWindow : Window, IDisposable
         DrawBattleConsole(battle);
     }
 
-    private static bool CanUseBattleItem(ShopItemDto item, BattleSidePokemonDto pokemon)
-    {
-        var fainted = pokemon.Condition.EndsWith(" fnt", StringComparison.Ordinal);
-        var reviving = item.BattleEffect is "revive" or "max-revive";
-        if (reviving)
-            return fainted;
-        if (fainted)
-            return false;
-        if (item.BattleEffect is "pp-restore" or "pp-restore-all") return pokemon.PpMoves.Any(move => move.Pp < move.MaxPp);
-
-        var conditionParts = pokemon.Condition.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var hpParts = conditionParts.FirstOrDefault()?.Split('/') ?? [];
-        var missingHp = hpParts.Length == 2
-                        && int.TryParse(hpParts[0], out var currentHp)
-                        && int.TryParse(hpParts[1], out var maximumHp)
-                        && currentHp < maximumHp;
-        var hasStatus = conditionParts.Length > 1;
-        return missingHp || item.BattleEffect == "full-heal" && hasStatus;
-    }
+    private static bool CanUseBattleItem(ShopItemDto item, BattleSidePokemonDto pokemon) => BattleBag.Reason(item, pokemon).Length == 0;
 
     private void DrawPvp()
     {
@@ -895,7 +869,7 @@ public sealed partial class MainWindow : Window, IDisposable
         DrawMegaEvolutionGuide(pokemon);
         if (!ImGui.TreeNode($"Choose from bag##HeldItemBag{pokemon.Id}"))
             return;
-        var available = itemCatalog.Where(item => (item.Category == "held" || item.CanBeHeld) && InventoryCount(item.Id) > 0).ToList();
+        var available = GetHeldItems();
         if (available.Count == 0)
         {
             ImGui.TextDisabled("No held items are currently in your bag.");
@@ -1007,8 +981,19 @@ public sealed partial class MainWindow : Window, IDisposable
             ImGui.Dummy(size);
     }
 
-    private int InventoryCount(string itemId) =>
-        trainer?.Inventory.FirstOrDefault(entry => entry.ItemId == itemId)?.Quantity ?? 0;
+    private List<InventoryEntryDto>? inventoryCountSource;
+    private Dictionary<string, int> inventoryCounts = new(StringComparer.Ordinal);
+    private int InventoryCount(string itemId)
+    {
+        if (trainer is null) return 0;
+        if (!ReferenceEquals(inventoryCountSource, trainer.Inventory))
+        {
+            inventoryCounts = new(StringComparer.Ordinal);
+            foreach (var entry in trainer.Inventory) inventoryCounts.TryAdd(entry.ItemId, entry.Quantity);
+            inventoryCountSource = trainer.Inventory;
+        }
+        return inventoryCounts.GetValueOrDefault(itemId);
+    }
 
     private async Task Initialize()
     {
@@ -1178,9 +1163,10 @@ public sealed partial class MainWindow : Window, IDisposable
         SetStatus(encounter.Pokemon.Shiny ? $"A shiny {encounter.Pokemon.Species} appeared!" : $"A wild {encounter.Pokemon.Species} appeared!");
     }
 
-    private async Task ResumeWildBattle(string encounterId)
+    private async Task ResumeWildBattle(string encounterId, bool fromEvent = false)
     {
         ApplyBattleResponse(await InSession(plugin.Api.StartWildBattle(encounterId)));
+        if (fromEvent && battle is not null) eventBattleId = battle.Id;
         megaEvolveSelected = false;
         nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1);
         SetStatus("Wild battle ready. Choose your action.");
@@ -1517,6 +1503,7 @@ public sealed partial class MainWindow : Window, IDisposable
         selectedPokedexSpecies = null;
         habitat = null;
         battle = null;
+        eventBattleId = string.Empty;
         pvpStatus = null;
         raidRoom = null; raidBoard = null; raidPokemonId = ""; raidJoinCode = ""; raidRefreshRequested = false;
         pendingRaidChoice = null; raidCaptureRequest = null; raidTargetMove = null;

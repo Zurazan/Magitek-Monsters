@@ -20,20 +20,33 @@ public sealed partial class MainWindow
         public bool Pass;
     }
     private string doublesRequest = string.Empty;
+    private BattleRequestDto? doublesRequestSource;
+    private string? doublesRequestBattle;
+    private int doublesRequestTurn;
     private readonly DoublesChoice[] doublesChoices = [new(), new()];
 
+    private void ObserveDoublesRequest(BattleSnapshotDto current)
+    {
+        var request = current.Request!;
+        var forced = request.ForceSwitch is not null;
+        if (!ReferenceEquals(doublesRequestSource, request) || doublesRequestBattle != current.Id || doublesRequestTurn != current.Turn)
+        {
+            var stamp = $"{current.Id}:{current.Turn}:{JsonSerializer.Serialize(request)}";
+            if (doublesRequest != stamp)
+            {
+                doublesRequest = stamp;
+                for (var slot = 0; slot < 2; slot++)
+                    doublesChoices[slot] = new DoublesChoice { Pass = forced ? request.ForceSwitch?.ElementAtOrDefault(slot) != true : request.Active?.ElementAtOrDefault(slot)?.PassRequired == true };
+            }
+            doublesRequestSource = request; doublesRequestBattle = current.Id; doublesRequestTurn = current.Turn;
+        }
+    }
     private void DrawDoublesChoices(BattleSnapshotDto current)
     {
         var request = current.Request!;
         var roster = request.Side?.Pokemon ?? [];
         var forced = request.ForceSwitch is not null;
-        var stamp = $"{current.Id}:{current.Turn}:{JsonSerializer.Serialize(request)}";
-        if (doublesRequest != stamp)
-        {
-            doublesRequest = stamp;
-            for (var slot = 0; slot < 2; slot++)
-                doublesChoices[slot] = new DoublesChoice { Pass = forced ? request.ForceSwitch?.ElementAtOrDefault(slot) != true : request.Active?.ElementAtOrDefault(slot)?.PassRequired == true };
-        }
+        ObserveDoublesRequest(current);
         var height = Math.Max(1, ImGui.GetContentRegionAvail().Y - 36 * CompanionScale);
         if (ImGui.BeginTable("DoublesSlots", 2, ImGuiTableFlags.SizingStretchSame))
         {
@@ -125,9 +138,8 @@ public sealed partial class MainWindow
                 var move = active.Moves[index];
                 var zMove = choice.Modifier == "zmove" ? active.CanZMove?.ElementAtOrDefault(index) : null;
                 ImGui.BeginDisabled(!BattleLayout.CanMove(move, choice.Modifier == "zmove", zMove));
-                var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(choice.Modifier == "zmove" ? zMove?.TypeHints : move.TypeHints,
-                    choice.Modifier == "zmove" ? "" : choice.Modifier, choice.Target) : null;
-                if (DrawTypedMoveButton($"DoublesMove{index}", zMove?.Move ?? move.Move, move, cardHeight, choice.Move == index, preview))
+                if (DrawTypedMoveButton($"DoublesMove{index}", zMove?.Move ?? move.Move, move, cardHeight, choice.Move == index,
+                    choice.Modifier == "zmove" ? zMove?.TypeHints : move.TypeHints, choice.Modifier == "zmove" ? "" : choice.Modifier, choice.Target))
                 { choice.Move = index; choice.Switch = 0; choice.Pass = false; choice.Target = 0; }
                 ImGui.EndDisabled();
             }
@@ -149,9 +161,9 @@ public sealed partial class MainWindow
             foreach (var location in targets)
             {
                 var selectedHints = choice.Modifier == "zmove" ? active.CanZMove?.ElementAtOrDefault(choice.Move)?.TypeHints : active.Moves.ElementAtOrDefault(choice.Move)?.TypeHints;
-                var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(selectedHints, choice.Modifier == "zmove" ? "" : choice.Modifier, location) : null;
+                var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(selectedHints, choice.Modifier == "zmove" ? "" : choice.Modifier, location, includeDescription: false) : null;
                 if (ImGui.Selectable(TargetName(location) + (preview is null ? "" : $" / {preview.Badge}"), choice.Target == location)) choice.Target = location;
-                if (preview is not null && ImGui.IsItemHovered()) ImGui.SetTooltip(preview.Description);
+                if (preview is not null && ImGui.IsItemHovered()) ImGui.SetTooltip(BattleTypeHints.Preview(selectedHints, choice.Modifier == "zmove" ? "" : choice.Modifier, location)!.Description);
             }
             ImGui.EndCombo();
         }

@@ -34,16 +34,9 @@ public sealed partial class MainWindow
         ImGui.SameLine(0, 6 * scale);
         if (DrawCompanionSegment("Caught", pokedexCaughtOnly, filterWidth)) { pokedexCaughtOnly = true; pokedexPage = 0; }
         ImGui.Spacing();
-        var caught = trainer!.Pokedex.CaughtSpecies.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        bool Registered(PokedexEntryDto entry) => entry.Registered && caught.Contains(entry.Species);
-        var source = pokedexCatalog.Count > 0 ? pokedexCatalog : trainer.Pokedex.CaughtSpecies.Select((species, index) => new PokedexEntryDto
-        {
-            DexNumber = index + 1, Species = species, Registered = true, Methods = ["Acquisition data is synchronizing."]
-        }).ToList();
-        var entries = source.Where(entry => (!pokedexCaughtOnly || Registered(entry)) && (string.IsNullOrWhiteSpace(pokedexSearch)
-                || entry.DexNumber.ToString().Contains(pokedexSearch, StringComparison.OrdinalIgnoreCase)
-                || Registered(entry) && entry.Species.Contains(pokedexSearch, StringComparison.OrdinalIgnoreCase)))
-            .OrderBy(entry => entry.DexNumber).ToList();
+        var directory = GetDexDirectory();
+        var source = directory.Source; var entries = directory.Entries;
+        bool Registered(PokedexEntryDto entry) => directory.Registered(entry);
         var layout = CompanionLayout.Selection(ImGui.GetContentRegionAvail().X, ImGui.GetContentRegionAvail().Y, scale);
         var columns = Math.Clamp((int)(layout.ListWidth / (132 * scale)), 2, 6);
         var rows = Math.Clamp((int)((layout.Height - 45 * scale) / (166 * scale)), 1, 4);
@@ -81,7 +74,7 @@ public sealed partial class MainWindow
             DrawCenteredCompanionText(selected.Species, ImGui.GetStyle().Colors[(int)ImGuiCol.Text]);
             DrawCenteredCompanionText($"#{selected.DexNumber:0000} / Registered", CompanionMuted);
             DrawWishlistPin("species", selected.Species);
-            var owned = trainer.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Species.Equals(selected.Species, StringComparison.OrdinalIgnoreCase) && entry.Form.Length == 0);
+            var owned = trainer!.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Species.Equals(selected.Species, StringComparison.OrdinalIgnoreCase) && entry.Form.Length == 0);
             if (owned is not null) DrawStarterTypeBadges(owned.Types.ToArray(), 64 * scale, scale);
             if (ImGui.BeginTabBar("CompanionDexDetails"))
             {

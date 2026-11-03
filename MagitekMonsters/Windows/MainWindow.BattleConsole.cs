@@ -21,9 +21,15 @@ public sealed partial class MainWindow
 
     private void DrawBattleConsole(BattleSnapshotDto current, bool pvp = false)
     {
+        var forced = current.Request?.ForceSwitch?.Any(value => value) == true;
+        var stamp = $"{current.Id}:{current.Turn}:{current.PlayerActive?.Ident}";
+        battleMenu = BattleLayout.NextMenu(battleMenu, battleMenuBattleId != current.Id, battleMenuStamp != stamp, forced, current.Kind == "wild");
+        if (battleMenuStamp != stamp) megaEvolveSelected = false;
+        battleMenuStamp = stamp;
+        battleMenuBattleId = current.Id;
         var scale = CompanionScale;
         var available = ImGui.GetContentRegionAvail();
-        var layout = BattleLayout.Console(available.X, available.Y, scale, current.GameType == "doubles");
+        var layout = BattleLayout.Console(available.X, available.Y, scale, current.GameType == "doubles", !pvp && current.Status == "active" && battleMenu is BattleMenu.Bag or BattleMenu.Catch);
         var origin = ImGui.GetCursorPos();
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         ImGui.BeginChild("BattleConsoleMain", new Vector2(layout.MainWidth, available.Y), false, FixedBattlePanel);
@@ -53,7 +59,8 @@ public sealed partial class MainWindow
             : busy ? "Resolving your action..." : current.Request?.Wait == true ? "Waiting for the next turn..." : "Choose your next action.";
         DrawClippedText(latest, ImGui.GetContentRegionAvail().X, string.IsNullOrWhiteSpace(current.Error) ? CompanionMuted : PokemonRed);
         ImGui.EndChild();
-        ImGui.SetCursorPosY(height - layout.ActionHeight);
+        ImGui.SetCursorPosY(Math.Min(height - layout.ActionHeight,
+            layout.HeaderHeight + layout.FieldHeight + layout.LatestHeight + 3 * layout.Gap));
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6) * scale);
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(6, 3) * scale);
         ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(3, 1) * scale);
@@ -122,6 +129,12 @@ public sealed partial class MainWindow
         ImGui.BeginChild($"ConsolePokemon-{ours}-{slot}", new Vector2(0, height), true, FixedBattlePanel);
         var width = ImGui.GetContentRegionAvail().X;
         var role = ours ? doubles ? $"YOUR SLOT {slot + 1}" : "YOUR POKÉMON" : wild ? "WILD POKÉMON" : doubles ? $"FOE SLOT {slot + 1}" : "OPPONENT";
+        if (height < 110 * CompanionScale)
+        {
+            DrawCompactTrayCombatant(pokemon, ours, wild, captured, role, width);
+            ImGui.EndChild(); ImGui.PopStyleColor(); ImGui.PopStyleVar(2);
+            return;
+        }
         if (wild && !ours && pokemon is not null)
         {
             var caught = captured || IsAdventureSpeciesCaught(pokemon.Species);
@@ -210,12 +223,7 @@ public sealed partial class MainWindow
         var request = current.Request;
         var available = request is not null && request.Wait != true;
         var ready = !busy && available;
-        var stamp = $"{current.Id}:{current.Turn}:{current.PlayerActive?.Ident}";
         var forced = request?.ForceSwitch?.Any(value => value) == true;
-        battleMenu = BattleLayout.NextMenu(battleMenu, battleMenuBattleId != current.Id, battleMenuStamp != stamp, forced, current.Kind == "wild");
-        if (battleMenuStamp != stamp) megaEvolveSelected = false;
-        battleMenuStamp = stamp;
-        battleMenuBattleId = current.Id;
         if (pvp && current.GameType == "doubles")
         {
             ImGui.BeginDisabled(!ready);
@@ -225,8 +233,15 @@ public sealed partial class MainWindow
             return;
         }
         ImGui.BeginDisabled(!ready);
+        var previousMenu = battleMenu;
         DrawConsoleMenu(current, pvp, forced);
         ImGui.Spacing();
+        if (previousMenu is not (BattleMenu.Bag or BattleMenu.Catch) && battleMenu is BattleMenu.Bag or BattleMenu.Catch)
+        {
+            DrawClippedText("Opening your Bag...", ImGui.GetContentRegionAvail().X, CompanionMuted);
+            ImGui.EndDisabled();
+            return;
+        }
         var party = request?.Side?.Pokemon ?? [];
         if (!available)
             DrawClippedText(busy ? "Resolving your choice..." : pvp ? "Waiting for the other Trainer..." : "Waiting for the battle server...", ImGui.GetContentRegionAvail().X, PokemonYellow);
@@ -276,9 +291,8 @@ public sealed partial class MainWindow
             var zSelected = pvp && pvpModifier == "zmove";
             var zMove = zSelected ? active.CanZMove?.ElementAtOrDefault(index) : null;
             ImGui.BeginDisabled(!BattleLayout.CanMove(move, zSelected, zMove));
-            var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(zSelected ? zMove?.TypeHints : move.TypeHints,
-                zSelected ? "" : pvp ? pvpModifier : megaEvolveSelected ? "mega" : "", 1) : null;
-            if (DrawTypedMoveButton($"SingleMove{index}", zMove?.Move ?? move.Move, move, cardHeight, false, preview))
+            if (DrawTypedMoveButton($"SingleMove{index}", zMove?.Move ?? move.Move, move, cardHeight, false,
+                zSelected ? zMove?.TypeHints : move.TypeHints, zSelected ? "" : pvp ? pvpModifier : megaEvolveSelected ? "mega" : "", 1))
             {
                 var suffix = pvp ? PvpModifierSuffix(active, index) : megaEvolveSelected ? " mega" : "";
                 var command = $"move {index + 1}{suffix}";
@@ -289,11 +303,9 @@ public sealed partial class MainWindow
         ImGui.EndTable();
     }
 
-    private bool DrawConsoleMoveButton(string id, string name, BattleMoveDto move, float height, bool selected)
-        => DrawTypedMoveButton(id, name, move, height, selected, null);
-
-    private bool DrawTypedMoveButton(string id, string name, BattleMoveDto move, float height, bool selected, BattleTypePreview? preview)
+    private bool DrawTypedMoveButton(string id, string name, BattleMoveDto move, float height, bool selected, MoveTypeHintsDto? hints, string modifier = "", int target = 0)
     {
+        var preview = plugin.Configuration.MoveTypeHintsEnabled ? BattleTypeHints.Preview(hints, modifier, target, includeDescription: false) : null;
         var label = BattleLayout.MoveLabel(name);
         battleMoveHelp.TryGetValue(label.Name, out var details);
         var accent = preview is { Type.Length: > 0 } ? TypeColor(preview.Type) : details is null ? CompanionAccent : TypeColor(details.Type);
@@ -328,7 +340,8 @@ public sealed partial class MainWindow
             draw.AddText(badgeMin + new Vector2(5, 0) * CompanionScale, ImGui.GetColorU32(color), preview.Badge);
         }
         draw.PopClipRect();
-        DrawBattleMoveTooltip(name, preview is null ? null : preview with { Description = BattleLayout.MovePpLabel(move) + "\n" + preview.Description });
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            DrawBattleMoveTooltip(name, preview is null ? null : BattleTypeHints.Preview(hints, modifier, target), move);
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
         {
             if (preview is null && move.Pp is null && move.Maxpp is null) ImGui.SetTooltip($"{label.ButtonText}\n{BattleLayout.MovePpLabel(move)}. This action does not spend additional PP.");
@@ -356,93 +369,6 @@ public sealed partial class MainWindow
             ImGui.EndDisabled();
         }
         ImGui.EndTable();
-    }
-
-    private void DrawConsoleMedicine(BattleSnapshotDto current, List<BattleSidePokemonDto> party)
-    {
-        if (current.Rules?.BagLimit is int limit && current.BagActionsUsed >= limit)
-        { DrawClippedText(limit == 0 ? "Bag disabled by this challenge" : "Medicine limit reached", ImGui.GetContentRegionAvail().X, PokemonOrange); return; }
-        var items = itemCatalog.Where(item => item.Category == "healing" && !string.IsNullOrWhiteSpace(item.BattleEffect) && InventoryCount(item.Id) > 0).ToList();
-        if (items.Count == 0) { ImGui.TextDisabled("No battle medicine in your Bag."); return; }
-        var item = items.FirstOrDefault(item => item.Id == battleMedicineId) ?? items[0];
-        battleMedicineId = item.Id;
-        ImGui.SetNextItemWidth(-1);
-        if (ImGui.BeginCombo("##BattleMedicine", $"{item.Name} x{InventoryCount(item.Id)}"))
-        {
-            foreach (var option in items) if (ImGui.Selectable($"{option.Name} x{InventoryCount(option.Id)}", option.Id == item.Id)) { battleMedicineId = option.Id; battleMedicineMove = 0; }
-            ImGui.EndCombo();
-        }
-        item = items.First(option => option.Id == battleMedicineId);
-        var targets = party.Select((pokemon, index) => (Pokemon: pokemon, Index: index)).Where(target => CanUseBattleItem(item, target.Pokemon)).ToArray();
-        if (targets.Length == 0) { ImGui.TextDisabled("No valid target for this item."); return; }
-        var target = targets.FirstOrDefault(target => target.Index == battleMedicineTarget, targets[0]);
-        battleMedicineTarget = target.Index;
-        ImGui.SetNextItemWidth(-1);
-        if (ImGui.BeginCombo("##MedicineTarget", $"Use on {CleanIdent(target.Pokemon.Ident)} / {target.Pokemon.Condition}"))
-        {
-            foreach (var option in targets) if (ImGui.Selectable($"{CleanIdent(option.Pokemon.Ident)} / {option.Pokemon.Condition}", option.Index == target.Index)) { battleMedicineTarget = option.Index; battleMedicineMove = 0; }
-            ImGui.EndCombo();
-        }
-        target = targets.First(option => option.Index == battleMedicineTarget);
-        var suffix = "";
-        if (item.BattleEffect == "pp-restore")
-        {
-            var moves = target.Pokemon.PpMoves.Select((move, index) => (Move: move, Index: index)).Where(move => move.Move.Pp < move.Move.MaxPp).ToArray();
-            var move = moves.FirstOrDefault(move => move.Index == battleMedicineMove, moves[0]);
-            battleMedicineMove = move.Index;
-            ImGui.SetNextItemWidth(-1);
-            if (ImGui.BeginCombo("##MedicineMove", $"{move.Move.Name} / PP {move.Move.Pp}/{move.Move.MaxPp}"))
-            {
-                foreach (var option in moves) if (ImGui.Selectable($"{option.Move.Name} / PP {option.Move.Pp}/{option.Move.MaxPp}", option.Index == move.Index)) battleMedicineMove = option.Index;
-                ImGui.EndCombo();
-            }
-            suffix = $" {battleMedicineMove + 1}";
-        }
-        if (DrawAccentButton($"Use {item.Name}##UseMedicine", new Vector2(-1, 28 * CompanionScale), PokemonGreen))
-        {
-            var command = $"item {item.Id} {target.Index + 1}{suffix}";
-            Run(() => ChooseBattle(command), $"Using {item.Name}...");
-        }
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Uses one item and consumes your turn. Medicine is only available in PvE.");
-    }
-
-    private void DrawConsoleCatch(BattleSnapshotDto current)
-    {
-        if (current.CaptureShakes is < 4)
-            DrawClippedText("BROKE FREE / Capture failed. You can throw another ball.", ImGui.GetContentRegionAvail().X, PokemonOrange);
-        var balls = itemCatalog.Where(item => item.Category == "ball" && InventoryCount(item.Id) > 0).ToList();
-        if (balls.Count == 0) { ImGui.TextDisabled("No Poké Balls in your Bag."); return; }
-        var ball = balls.FirstOrDefault(item => item.Id == battleBallId) ?? balls[0];
-        battleBallId = ball.Id;
-        ImGui.SetNextItemWidth(-1);
-        if (ImGui.BeginCombo("##ConsoleBall", $"{ball.Name} x{InventoryCount(ball.Id)}"))
-        {
-            foreach (var option in balls)
-            {
-                var effect = current.BallOptions.FirstOrDefault(entry => entry.ItemId == option.Id);
-                var label = effect is null ? "" : $" / {BallModifier(effect)}";
-                if (ImGui.Selectable($"{option.Name} x{InventoryCount(option.Id)}{label}", option.Id == ball.Id)) battleBallId = option.Id;
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip(option.Description);
-            }
-            ImGui.EndCombo();
-        }
-        ball = balls.First(item => item.Id == battleBallId);
-        var selectedEffect = current.BallOptions.FirstOrDefault(entry => entry.ItemId == ball.Id);
-        if (selectedEffect is not null)
-        {
-            var prefix = selectedEffect.Guaranteed ? "Guaranteed capture" : $"{(selectedEffect.BonusActive ? "Bonus active / " : "")}{BallModifier(selectedEffect)}";
-            ImGui.TextColored(selectedEffect.BonusActive || selectedEffect.Guaranteed ? PokemonGreen : CompanionMuted, prefix);
-            DrawClippedText(selectedEffect.Detail, ImGui.GetContentRegionAvail().X, CompanionMuted);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip($"{selectedEffect.Detail}\n\n{ball.Description}");
-        }
-        else ImGui.TextWrapped(ball.Description);
-        DrawItemImage(ball.Id, new Vector2(34, 34) * CompanionScale); ImGui.SameLine();
-        if (DrawAccentButton($"Throw {ball.Name}", new Vector2(-1, 34 * CompanionScale), PokemonGreen))
-        {
-            var command = $"ball {ball.Id}";
-            Run(() => ChooseBattle(command), $"Throwing a {ball.Name}...");
-        }
-        DrawClippedText("Lower HP and status improve your odds. Throwing uses your turn.", ImGui.GetContentRegionAvail().X, CompanionMuted);
     }
 
     private static string BallModifier(BallEffectDto effect) => effect.Guaranteed ? "Guaranteed"

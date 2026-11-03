@@ -8,7 +8,22 @@ public sealed partial class MainWindow
 {
     private readonly GameNotificationFeed notificationFeed = new();
     private CompanionNotice? deliveredFeedback;
-    internal string NotificationScope => (trainer?.User.Id ?? "") + ":" + sessionResponses.Generation;
+    private string notificationOwner = "";
+    private long notificationSession = -1;
+    private string notificationScope = "";
+    internal string NotificationScope
+    {
+        get
+        {
+            var owner = trainer?.User.Id ?? ""; var session = sessionResponses.Generation;
+            if (notificationOwner != owner || notificationSession != session)
+            {
+                notificationOwner = owner; notificationSession = session;
+                notificationScope = owner + ":" + session;
+            }
+            return notificationScope;
+        }
+    }
 
     private void UpdateNotifications()
     {

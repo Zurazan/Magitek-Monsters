@@ -19,6 +19,13 @@ public sealed partial class MainWindow
     private bool requestResultMove;
     private bool requestResultEvolution;
     private float resultBodyContentHeight;
+    private string eventBattleId = string.Empty;
+
+    private static bool IsEventEncounter(EncounterDto encounter) => encounter.HabitatId.StartsWith("event:", StringComparison.Ordinal)
+        || encounter.Pokemon.Source == "recurring-event";
+
+    private bool IsEventBattle(BattleSnapshotDto current) => current.Id.Length > 0 && (eventBattleId == current.Id
+        || current.Kind == "wild" && trainer?.ActiveEncounter is { } encounter && encounter.Id == current.Id && IsEventEncounter(encounter));
 
     private void AcknowledgeBattleResultTrainer()
     {
@@ -203,7 +210,7 @@ public sealed partial class MainWindow
             ImGui.TextWrapped("The boss is defeated. Catch it in the follow-up wild battle.");
             ImGui.BeginDisabled(busy || !synchronized || trainer?.ActiveEncounter is null);
             if (DrawAccentButton("Start capture battle", new Vector2(-1, 30 * CompanionScale), PokemonGreen) && trainer?.ActiveEncounter is { } encounter)
-                Run(async () => { await InSession(ResumeWildBattle(encounter.Id)); mainSection = 0; }, "Opening your capture opportunity...");
+                Run(async () => { await InSession(ResumeWildBattle(encounter.Id, IsEventBattle(current))); mainSection = 0; }, "Opening your capture opportunity...");
             ImGui.EndDisabled(); ImGui.Spacing();
         }
         if (!synchronized)
@@ -249,7 +256,7 @@ public sealed partial class MainWindow
 
     private void DrawBattleResultFooter(BattleSnapshotDto current)
     {
-        var label = current.Kind == "wild" ? "Continue adventuring" : current.FrontierId is not null ? "Return to Frontier" : current.LeagueId is not null ? "Return to League" : "Return to challengers";
+        var label = IsEventBattle(current) ? "Return to Events" : current.Kind == "wild" ? "Continue adventuring" : current.FrontierId is not null ? "Return to Frontier" : current.LeagueId is not null ? "Return to League" : "Return to challengers";
         var scale = CompanionScale;
         ImGui.BeginDisabled(busy);
         var width = ImGui.GetContentRegionAvail().X;
@@ -266,6 +273,7 @@ public sealed partial class MainWindow
     private async Task ReturnFromBattle()
     {
         var current = battle;
+        var returnToEvents = current is not null && IsEventBattle(current);
         await InSession(RefreshTrainer());
         if (current is not null && !RegionalLeaguePresentation.ResultReady(current, trainer?.LeagueRun))
         {
@@ -274,6 +282,8 @@ public sealed partial class MainWindow
             return;
         }
         battle = null;
+        eventBattleId = string.Empty;
+        if (returnToEvents) mainSection = 10;
     }
 
     private void DrawBattleResultMovePopup()

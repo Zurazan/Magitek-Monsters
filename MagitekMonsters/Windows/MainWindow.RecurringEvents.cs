@@ -37,12 +37,12 @@ public sealed partial class MainWindow
         }
         if (recurringSchedule is null) { ImGui.TextDisabled("Loading event schedule..."); return; }
         var now = recurringSchedule.ServerTime + (DateTimeOffset.UtcNow - eventLoadedAt);
-        if (trainer.ActiveEncounter is { Status: "active" } encounter && (encounter.HabitatId.StartsWith("event:", StringComparison.Ordinal) || encounter.Pokemon.Source == "recurring-event"))
+        if (trainer.ActiveEncounter is { Status: "active" } encounter && IsEventEncounter(encounter))
         {
             ImGui.TextColored(PokemonGreen, "YOUR EVENT CAPTURE BATTLE IS SAVED");
             ImGui.BeginDisabled(busy);
             if (DrawAccentButton("Resume capture battle", new Vector2(230, 34), PokemonGreen))
-                Run(async () => { await InSession(ResumeWildBattle(encounter.Id)); mainSection = 0; }, "Resuming event capture...");
+                Run(async () => { await InSession(ResumeWildBattle(encounter.Id, true)); mainSection = 0; }, "Resuming event capture...");
             ImGui.EndDisabled(); ImGui.Separator();
         }
         if (recurringSchedule.Active is { } active && now < active.EndsAt)
@@ -75,12 +75,12 @@ public sealed partial class MainWindow
                         var occurrence = active.OccurrenceId; var boss = active.BossId; var ids = trainer.Party.Select(item => item.Id).ToArray();
                         Run(async () =>
                         {
-                            if (sanctuary) { battle = await InSession(plugin.Api.StartEventSanctuary(boss, occurrence, ids)); megaEvolveSelected = false; nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1); }
+                            if (sanctuary) { battle = await InSession(plugin.Api.StartEventSanctuary(boss, occurrence, ids)); eventBattleId = battle.Id; megaEvolveSelected = false; nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1); }
                             else
                             {
                                 var key = occurrence + ":" + species; var request = eventRequests.GetOrAdd(key, _ => Guid.NewGuid().ToString());
                                 var found = await InSession(plugin.Api.SearchRecurringEvent(occurrence, species, request)); eventRequests.TryRemove(key, out _);
-                                if (found.Status == "active") { await InSession(ResumeWildBattle(found.Id)); mainSection = 0; }
+                                if (found.Status == "active") { await InSession(ResumeWildBattle(found.Id, true)); mainSection = 0; }
                             }
                             trainer = await InSession(plugin.Api.GetMe()); await InSession(RefreshRecurringEvents());
                         }, sanctuary ? "Starting the event Sanctuary raid..." : "Starting the event encounter...");

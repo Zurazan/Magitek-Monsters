@@ -24,7 +24,7 @@ public sealed partial class MainWindow
     private void DrawSavedTeams()
     {
         if (trainer is null) return;
-        var views = SavedTeams.Resolve(trainer);
+        var views = GetSavedTeams();
         if (DrawAccentSmallButton($"Saved teams ({views.Count})", CompanionAccent))
         {
             savedTeamLibraryOwner = trainer.User.Id;

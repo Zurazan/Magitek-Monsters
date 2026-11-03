@@ -88,9 +88,7 @@ public sealed partial class MainWindow
         StorageSameLine(right, ImGui.CalcTextSize("Clear selection").X + 2 * ImGui.GetStyle().FramePadding.X);
         if (DrawAccentSmallButton("Clear selection", CompanionMuted)) storageSelection.Clear();
         ImGui.EndDisabled();
-        var selected = StorageBrowser.Selected(trainer!.Storage, storageSelection);
-        var visibleIds = filtered.Select(pokemon => pokemon.Id).ToHashSet();
-        var hidden = selected.Count(pokemon => !visibleIds.Contains(pokemon.Id));
+        var (selected, hidden) = GetStorageSelection(filtered);
         var selectionLabel = $"{selected.Count}/{StorageLimits.MaximumBatch} selected{(hidden > 0 ? $" / {hidden} in other boxes or filters" : "")}";
         StorageSameLine(right, ImGui.CalcTextSize(selectionLabel).X);
         ImGui.PushStyleColor(ImGuiCol.Text, CompanionAccent);
@@ -107,7 +105,7 @@ public sealed partial class MainWindow
         if (DrawAccentSmallButton("More actions", CompanionMuted)) ImGui.OpenPopup("StorageBatchActions");
         if (!ImGui.BeginPopup("StorageBatchActions")) return;
         ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null);
-        var room = 6 - trainer.Party.Count;
+        var room = 6 - trainer!.Party.Count;
         ImGui.BeginDisabled(selected.Count > room);
         if (DrawAccentSmallButton("To party", CompanionAccent)) { StartStorageBatch("party", selected); ImGui.CloseCurrentPopup(); }
         ImGui.EndDisabled();

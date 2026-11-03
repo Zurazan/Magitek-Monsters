@@ -25,8 +25,12 @@ public sealed partial class MainWindow
         bool UseResetItem, EvTrainingPlanDto Plan, string Stamp, string RequestId);
     private EvTrainingDraft? evTrainingDraft;
     private EvTrainingConfirmation? evTrainingConfirmation;
+    private PokemonDto? evStampPokemon;
+    private List<InventoryEntryDto>? evStampInventory;
+    private string evStamp = string.Empty;
+    private static readonly string[] EvPresets = ["Current spread", "Fast physical attacker", "Fast special attacker", "Bulky physical attacker", "Custom spread"];
 
-    private void ResetEvTrainingPlanner() { evTrainingDraft = null; evTrainingConfirmation = null; }
+    private void ResetEvTrainingPlanner() { evTrainingDraft = null; evTrainingConfirmation = null; evStampPokemon = null; evStampInventory = null; evStamp = string.Empty; }
 
     private EvTrainingDraft PrepareEvTraining(PokemonDto pokemon)
     {
@@ -38,8 +42,14 @@ public sealed partial class MainWindow
         return evTrainingDraft;
     }
 
-    private string EvTrainingStamp(PokemonDto pokemon) => JsonSerializer.Serialize(new {
-        Pokemon = pokemon, Inventory = trainer!.Inventory.OrderBy(item => item.ItemId, StringComparer.Ordinal) });
+    private string EvTrainingStamp(PokemonDto pokemon)
+    {
+        var inventory = trainer!.Inventory;
+        if (ReferenceEquals(evStampPokemon, pokemon) && ReferenceEquals(evStampInventory, inventory)) return evStamp;
+        evStamp = JsonSerializer.Serialize(new { Pokemon = pokemon, Inventory = inventory.OrderBy(item => item.ItemId, StringComparer.Ordinal) });
+        evStampPokemon = pokemon; evStampInventory = inventory;
+        return evStamp;
+    }
 
     private void DrawEvTraining(PokemonDto pokemon)
     {
@@ -47,10 +57,9 @@ public sealed partial class MainWindow
         if (draft.Plan is not null && draft.Stamp != EvTrainingStamp(pokemon)) draft.Plan = null;
         ImGui.TextColored(CompanionAccent, "EV TRAINING PLANNER");
         ImGui.TextWrapped("Choose a target spread. Preview the exact items and resulting stats before applying it.");
-        string[] presets = ["Current spread", "Fast physical attacker", "Fast special attacker", "Bulky physical attacker", "Custom spread"];
         ImGui.TextUnformatted("Starting spread");
         ImGui.SetNextItemWidth(-1);
-        if (ImGui.Combo("##EvPlanPreset", ref draft.Preset, presets, presets.Length))
+        if (ImGui.Combo("##EvPlanPreset", ref draft.Preset, EvPresets, EvPresets.Length))
         {
             int[] values = draft.Preset switch {
                 1 => [4, 252, 0, 0, 0, 252], 2 => [4, 0, 0, 252, 0, 252], 3 => [252, 252, 0, 0, 0, 4],

@@ -16,23 +16,68 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
     private readonly TimeProvider clock = time ?? TimeProvider.System;
     private readonly HashSet<string> seen = new(StringComparer.Ordinal);
     private readonly Queue<string> history = new();
-    private string scope = "";
+    private string ownerScope = "";
+    private long sessionScope = -1;
     private int previousUnread;
     private bool wasConnected;
     private DateTimeOffset? interruptedAt;
     private int interruption;
+    private NoticeInputs? previousInputs;
+    private (string Id, string? SeenAt)[] giftInputs = [];
+    private ChallengeInputs[] challengeInputs = [];
+    private GameNoticeBatch? idleBatch;
+    private DateTimeOffset observedAt;
+    private DateTimeOffset refreshAt = DateTimeOffset.MinValue;
+
+    private readonly record struct ChallengeInputs(string Id, string From, string To, string Name, string Format, string Status, string ExpiresAt);
+    private readonly record struct NoticeInputs(string Owner, long Session, int Unread, int Gifts, int Challenges,
+        string? Match, string? MatchStatus, string? Opponent, string? Raid, string? RaidStatus, bool Host, int Players, bool Ready,
+        string? Species, string? Capture, DateTimeOffset? CaptureExpiry, ServerConnectionState Connection, string? Update);
+
+    private bool InputsChanged(string owner, long session, GiftInboxDto? gifts, PvpStatusDto? pvp, RaidRoomDto? raid,
+        ServerConnectionState connection, string? update)
+    {
+        var ready = true;
+        if (raid is not null) foreach (var player in raid.Players) ready &= player.Ready;
+        var current = new NoticeInputs(owner, session, gifts?.Unread ?? 0, gifts?.Entries.Count ?? 0, pvp?.Challenges.Count ?? 0,
+            pvp?.Battle?.Id, pvp?.Battle?.Status, pvp?.Battle?.OpponentName, raid?.Id, raid?.Status, raid?.Host ?? false,
+            raid?.Players.Count ?? 0, ready, raid?.Den.Species, raid?.CaptureState, raid?.CaptureExpiresAt, connection, update);
+        var changed = previousInputs != current;
+        if (giftInputs.Length < current.Gifts) giftInputs = new (string, string?)[current.Gifts];
+        for (var index = 0; index < current.Gifts; index++)
+        {
+            var gift = gifts!.Entries[index]; var value = (gift.Id, gift.SeenAt);
+            changed |= giftInputs[index] != value; giftInputs[index] = value;
+        }
+        if (challengeInputs.Length < current.Challenges) challengeInputs = new ChallengeInputs[current.Challenges];
+        for (var index = 0; index < current.Challenges; index++)
+        {
+            var invite = pvp!.Challenges[index];
+            var value = new ChallengeInputs(invite.Id, invite.FromUserId, invite.ToUserId, invite.FromName, invite.FormatName, invite.Status, invite.ExpiresAt);
+            changed |= challengeInputs[index] != value; challengeInputs[index] = value;
+        }
+        if (previousInputs is { } previous && (previous.Owner != owner || previous.Session != session))
+        {
+            if (giftInputs.Length > current.Gifts) Array.Clear(giftInputs, current.Gifts, giftInputs.Length - current.Gifts);
+            if (challengeInputs.Length > current.Challenges) Array.Clear(challengeInputs, current.Challenges, challengeInputs.Length - current.Challenges);
+        }
+        previousInputs = current;
+        return changed;
+    }
 
     public GameNoticeBatch Observe(string owner, long session, GiftInboxDto? gifts, PvpStatusDto? pvp, RaidRoomDto? raid,
         ServerConnectionState connection, string? requiredUpdate = null)
     {
-        var nextScope = owner + ":" + session;
-        var reset = scope != nextScope;
+        var now = clock.GetUtcNow();
+        var changed = InputsChanged(owner, session, gifts, pvp, raid, connection, requiredUpdate);
+        if (!changed && idleBatch is not null && now >= observedAt && now < refreshAt) return idleBatch;
+        observedAt = now; refreshAt = DateTimeOffset.MaxValue;
+        var reset = ownerScope != owner || sessionScope != session;
         if (reset)
         {
-            scope = nextScope; seen.Clear(); history.Clear(); previousUnread = 0;
+            ownerScope = owner; sessionScope = session; seen.Clear(); history.Clear(); previousUnread = 0;
             wasConnected = false; interruptedAt = null; interruption = 0;
         }
-        var now = clock.GetUtcNow();
         var notices = new List<GameNotice>();
         var active = new HashSet<string>(StringComparer.Ordinal);
         bool Remember(string key)
@@ -63,8 +108,11 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
             foreach (var invite in pvp?.Challenges ?? [])
                 if (invite.ToUserId == owner && invite.FromUserId != owner && invite.Status == "pending"
                     && DateTimeOffset.TryParse(invite.ExpiresAt, out var expiry) && expiry > now)
+                {
+                    if (expiry < refreshAt) refreshAt = expiry;
                     Add(new("challenge:" + invite.Id, "Friendly challenge", $"{invite.FromName} challenges you to {invite.FormatName}.",
                         Target: GameNoticeTarget.Challenge, Subject: invite.Id, ActionLabel: "Review challenge", ExpiresAt: expiry));
+                }
             if (pvp?.Battle is { Status: "active" } match)
                 Add(new("match:" + match.Id, "Online battle ready", $"Your battle against {match.OpponentName} is ready.",
                     Target: GameNoticeTarget.Match, Subject: match.Id, ActionLabel: "Open battle"));
@@ -76,9 +124,12 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
                 if (raid.Status == "active")
                     Add(new("raid-battle:" + raid.Id, "Raid started", $"The raid against {raid.Den.Species} has started.",
                         Target: GameNoticeTarget.RaidBattle, Subject: raid.Id, ActionLabel: "Open raid"));
-                if (raid.CaptureState == "pending" && raid.CaptureExpiresAt > now)
+                if (raid.CaptureState == "pending" && raid.CaptureExpiresAt is { } captureExpiry && captureExpiry > now)
+                {
+                    if (captureExpiry < refreshAt) refreshAt = captureExpiry;
                     Add(new("raid-capture:" + raid.Id, "Raid capture available", $"Use one owned Poké Ball to catch {raid.Den.Species}. The catch is guaranteed.",
                         GameNoticeKind.Success, GameNoticeTarget.RaidCapture, raid.Id, "Open capture", raid.CaptureExpiresAt));
+                }
             }
         }
         if (connection == ServerConnectionState.Connected) { wasConnected = true; interruptedAt = null; }
@@ -88,6 +139,7 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
             if (now - interruptedAt >= TimeSpan.FromSeconds(5))
                 Add(new("connection", "Connection interrupted", "Reconnecting to Magitek Monsters. Your progress stays on the server.",
                     GameNoticeKind.Warning, GameNoticeTarget.Connection, ActionLabel: "Open plugin"), "connection:" + interruption);
+            else if (interruptedAt.Value.AddSeconds(5) < refreshAt) refreshAt = interruptedAt.Value.AddSeconds(5);
         }
         else interruptedAt = null;
         if (connection == ServerConnectionState.Unauthorized)
@@ -96,6 +148,7 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
         if (!string.IsNullOrWhiteSpace(requiredUpdate))
             Add(new("update", "Client update required", requiredUpdate, GameNoticeKind.Warning,
                 GameNoticeTarget.Update, ActionLabel: "Open Plugin Installer"));
+        idleBatch = new(false, Array.Empty<GameNotice>(), active);
         return new(reset, notices, active);
     }
 }

@@ -24,6 +24,8 @@ public sealed class UserDto
 
 public sealed class TrainerSnapshotDto
 {
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public TrainerRosterCacheDto? RosterCache { get; set; }
     public GiftInboxDto Gifts { get; set; } = new();
     public string? ActiveRaidId { get; set; }
     public bool RaidLocked { get; set; }
@@ -51,6 +53,15 @@ public sealed class TrainerSnapshotDto
     public PvpProfileDto PvpProfile { get; set; } = new();
     public CollectionSettingsDto Collection { get; set; } = new();
     public CollectionPointProgressDto CollectionPoints { get; set; } = new();
+}
+
+public sealed class TrainerRosterCacheDto
+{
+    public int Version { get; set; } = 1;
+    public string StorageVersion { get; set; } = "";
+    public string OptionsVersion { get; set; } = "";
+    public bool StorageIncluded { get; set; } = true;
+    public bool OptionsIncluded { get; set; } = true;
 }
 
 public sealed class SearchCooldownDto

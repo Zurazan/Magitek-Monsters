@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
@@ -23,6 +24,12 @@ public sealed partial class MainWindow
     ];
     private readonly ConcurrentDictionary<string, (string Stamp, PokemonBuildDto Build)> pokemonBuilds = new();
     private readonly ConcurrentDictionary<string, DateTimeOffset> buildRetryAt = new();
+    private ConditionalWeakTable<PokemonDto, PokemonBuildStamp>? pokemonBuildStamps;
+    private sealed record PokemonBuildStamp(string Value);
+    private void ResetPokemonBuildCache()
+    {
+        pokemonBuilds?.Clear(); buildRetryAt?.Clear(); pokemonBuildStamps = null;
+    }
     private readonly Dictionary<string, string> moveLicenseSearches = new();
     private readonly Dictionary<string, int> moveLicensePages = new();
     private readonly Dictionary<string, string> teraSelections = new();
@@ -34,22 +41,27 @@ public sealed partial class MainWindow
 
     private PokemonBuildDto? GetPokemonBuild(PokemonDto pokemon)
     {
-        var stamp = JsonSerializer.Serialize(pokemon);
+        var stamps = pokemonBuildStamps ??= new();
+        if (!stamps.TryGetValue(pokemon, out var saved)) saved = stamps.GetValue(pokemon, static value => new(JsonSerializer.Serialize(value)));
+        var stamp = saved.Value;
         if (pokemonBuilds.TryGetValue(pokemon.Id, out var cached) && cached.Stamp == stamp)
             return cached.Build;
         if (!busy && (!buildRetryAt.TryGetValue(pokemon.Id, out var retryAt) || DateTimeOffset.UtcNow >= retryAt))
         {
             buildRetryAt[pokemon.Id] = DateTimeOffset.UtcNow.AddSeconds(15);
-            Run(async () =>
-            {
-                var build = await InSession(plugin.Api.GetPokemonBuild(pokemon.Id, disposeCancellation.Token));
-                pokemonBuilds[pokemon.Id] = (stamp, build);
-                buildRetryAt.TryRemove(pokemon.Id, out _);
-                SetStatus("Pokémon build loaded.");
-            }, "Loading Pokémon build...");
+            LoadPokemonBuild(pokemon.Id, stamp);
         }
         return null;
     }
+    private void LoadPokemonBuild(string pokemonId, string stamp) => Run(async () =>
+    {
+        var build = await InSession(plugin.Api.GetPokemonBuild(pokemonId, disposeCancellation.Token));
+        pokemonBuilds[pokemonId] = (stamp, build);
+        if (pokemonBuilds.Count > 64)
+            foreach (var id in pokemonBuilds.Keys.Where(id => id != pokemonId).Take(pokemonBuilds.Count - 64)) pokemonBuilds.TryRemove(id, out _);
+        buildRetryAt.TryRemove(pokemonId, out _);
+        SetStatus("Pokémon build loaded.");
+    }, "Loading Pokémon build...");
 
     private void DrawTeamBuildingSummary(PokemonDto pokemon)
     {
@@ -289,9 +301,7 @@ public sealed partial class MainWindow
             moveLicensePages[pokemon.Id] = 0;
         }
         ImGui.TextWrapped("Reusable licenses are purchased once per trainer. Tutors also cover supported egg moves. Choose a known move to replace when you have four moves. Showdown checks the complete resulting build before teaching.");
-        var compatible = build.TeachableItemIds.ToHashSet();
-        var items = itemCatalog.Where(item => compatible.Contains(item.Id) && (string.IsNullOrWhiteSpace(search) || item.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))
-            .OrderByDescending(item => InventoryCount(item.Id) > 0).ThenBy(item => item.Name).ToList();
+        var items = GetTeachingItems(build, search);
         var page = moveLicensePages.GetValueOrDefault(pokemon.Id);
         DrawPager($"MoveLicenses{pokemon.Id}", ref page, items.Count, 8);
         moveLicensePages[pokemon.Id] = page;

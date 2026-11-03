@@ -267,8 +267,7 @@ public sealed partial class MainWindow
     {
         var scale = CompanionScale;
         if (ImGui.Checkbox("Show empty boxes", ref storageShowEmptyBoxes)) storageScrollToTop = true;
-        var groups = filtered.GroupBy(pokemon => pokemon.BoxNumber).ToDictionary(group => group.Key, group => group.ToList());
-        var boxes = Enumerable.Range(1, StorageBrowser.BoxCount).Where(number => storageShowEmptyBoxes || groups.ContainsKey(number)).ToArray();
+        var (groups, boxes) = GetStorageOverview(filtered);
         ImGui.SameLine(); ImGui.TextColored(CompanionMuted, $"{filtered.Count:N0} Pokémon / {boxes.Length} boxes");
         var height = Math.Max(240 * scale, ImGui.GetContentRegionAvail().Y - 100 * scale);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);

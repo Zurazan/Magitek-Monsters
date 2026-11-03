@@ -10,6 +10,7 @@ namespace MagitekMonsters.Services;
 public sealed class DalamudNotifications(INotificationManager manager, Action<GameNotice> open, Func<string> readScope) : IDisposable
 {
     private readonly Dictionary<string, (GameNotice Notice, IActiveNotification Active)> active = new(StringComparer.Ordinal);
+    private readonly List<string> expired = [];
     private long generation;
     private bool disposed;
     private bool enabled = true;
@@ -21,9 +22,11 @@ public sealed class DalamudNotifications(INotificationManager manager, Action<Ga
         if (disposed) return;
         if (batch.Reset || enabled != allow) Clear();
         enabled = allow;
-        foreach (var entry in active.ToArray())
+        expired.Clear();
+        foreach (var entry in active)
             if (entry.Value.Active.DismissReason is not null || entry.Value.Notice.Target != GameNoticeTarget.None && !batch.ActiveKeys.Contains(entry.Key))
-                Remove(entry.Key);
+                expired.Add(entry.Key);
+        foreach (var key in expired) Remove(key);
         if (enabled) foreach (var notice in batch.New) Show(notice);
     }
 

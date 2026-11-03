@@ -23,7 +23,8 @@ public sealed class AnimatedPokemonSprites : IDisposable
     private const int MaximumMemoryEntries = 16;
 
     private readonly ConcurrentDictionary<SpriteKey, CacheEntry> entries = new();
-    private readonly CancellationTokenSource cancellation = new();
+    private readonly SpriteLoadQueue loads = new();
+    private int trimRequested;
     private readonly HttpClient http;
     private readonly string cacheDirectory;
     private readonly AssetCatalog assets;
@@ -50,12 +51,13 @@ public sealed class AnimatedPokemonSprites : IDisposable
             return null;
 
         var key = new SpriteKey(species.Trim(), shiny);
-        var entry = entries.GetOrAdd(key, createdKey => new CacheEntry(
-            new Lazy<Task<Animation?>>(
-                () => LoadAnimation(createdKey, cancellation.Token),
-                LazyThreadSafetyMode.ExecutionAndPublication)));
+        if (!entries.TryGetValue(key, out var entry))
+        {
+            entry = entries.GetOrAdd(key, static (createdKey, owner) => owner.CreateEntry(createdKey), this);
+            Volatile.Write(ref trimRequested, 1);
+        }
         entry.Touch();
-        TrimMemoryCache(key);
+        if (Interlocked.Exchange(ref trimRequested, 0) != 0) TrimMemoryCache(key);
 
         var loading = entry.Animation.Value;
         if (!loading.IsCompletedSuccessfully)
@@ -64,18 +66,24 @@ public sealed class AnimatedPokemonSprites : IDisposable
         return loading.Result?.CurrentFrame;
     }
 
+    private CacheEntry CreateEntry(SpriteKey key) => new(new Lazy<Task<Animation?>>(
+        () => loads.Run(async token =>
+        {
+            try { return await LoadAnimation(key, token).ConfigureAwait(false); }
+            finally { Volatile.Write(ref trimRequested, 1); }
+        }), LazyThreadSafetyMode.ExecutionAndPublication));
+
     public void Dispose()
     {
         if (disposed)
             return;
 
         disposed = true;
-        cancellation.Cancel();
+        loads.Dispose();
         foreach (var entry in entries.Values)
-            entry.DisposeIfLoaded();
+            entry.DisposeWhenReady();
         entries.Clear();
         http.Dispose();
-        cancellation.Dispose();
     }
 
     private async Task<Animation?> LoadAnimation(SpriteKey key, CancellationToken token)
@@ -121,7 +129,7 @@ public sealed class AnimatedPokemonSprites : IDisposable
         }
         catch (Exception exception)
         {
-            Plugin.Log.Warning(exception, "Animated front sprite unavailable for {Species} (shiny: {Shiny}).", key.Species, key.Shiny);
+            if (!disposed) Plugin.Log.Warning(exception, "Animated front sprite unavailable for {Species} (shiny: {Shiny}).", key.Species, key.Shiny);
             return null;
         }
     }
@@ -169,7 +177,7 @@ public sealed class AnimatedPokemonSprites : IDisposable
                 var frameDelay = source.Delay;
                 frames.Add(new AnimationFrame(texture, Math.Clamp(frameDelay * 10, 20, 2_000)));
             }
-            return new Animation(frames, region!.Value);
+            return new Animation(frames.ToArray(), region!.Value);
         }
         catch
         {
@@ -181,15 +189,14 @@ public sealed class AnimatedPokemonSprites : IDisposable
 
     private void TrimMemoryCache(SpriteKey current)
     {
-        if (entries.Count <= MaximumMemoryEntries)
-            return;
-
-        var oldest = entries
-            .Where(pair => pair.Key != current && pair.Value.IsLoaded)
-            .OrderBy(pair => pair.Value.LastAccess)
-            .FirstOrDefault();
-        if (!oldest.Equals(default(KeyValuePair<SpriteKey, CacheEntry>)) && entries.TryRemove(oldest.Key, out var removed))
+        while (entries.Count > MaximumMemoryEntries)
+        {
+            KeyValuePair<SpriteKey, CacheEntry>? oldest = null;
+            foreach (var pair in entries)
+                if (pair.Key != current && pair.Value.IsLoaded && (oldest is null || pair.Value.LastAccess < oldest.Value.Value.LastAccess)) oldest = pair;
+            if (oldest is null || !entries.TryRemove(oldest.Value.Key, out var removed)) break;
             removed.DisposeIfLoaded();
+        }
     }
 
     private static IEnumerable<string> SpriteIds(string species)
@@ -245,11 +252,20 @@ public sealed class AnimatedPokemonSprites : IDisposable
             if (Animation.IsValueCreated && Animation.Value.IsCompletedSuccessfully)
                 Animation.Value.Result?.Dispose();
         }
+        public void DisposeWhenReady()
+        {
+            if (Animation.IsValueCreated) _ = DisposeAfterLoad(Animation.Value);
+        }
+        private static async Task DisposeAfterLoad(Task<Animation?> task)
+        {
+            try { (await task.ConfigureAwait(false))?.Dispose(); }
+            catch { }
+        }
     }
 
     public readonly record struct AnimatedSprite(IDalamudTextureWrap Texture, SpriteRegion Region);
 
-    private sealed class Animation(IReadOnlyList<AnimationFrame> frames, SpriteRegion region) : IDisposable
+    private sealed class Animation(AnimationFrame[] frames, SpriteRegion region) : IDisposable
     {
         private readonly long startedAt = Stopwatch.GetTimestamp();
         private readonly int totalDuration = frames.Sum(frame => frame.DurationMilliseconds);

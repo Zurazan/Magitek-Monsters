@@ -34,13 +34,13 @@ public sealed partial class MainWindow
         var open = true;
         if (!BeginCenteredModal("Choose battle Pokémon", ref open, ImGuiWindowFlags.None)) return;
         var owned = OnlineOwnedPokemon(); var ids = onlineRosterFriendly ? friendlyTeamIds : pvpTeamIds;
-        PvpRoster.Synchronize(ids, owned, format.MaxTeamSize);
+        SynchronizeOnlineRoster(ids, owned, format.MaxTeamSize);
         ImGui.TextColored(CompanionAccent, $"REGISTERED TEAM / {ids.Count} of {format.MaxTeamSize}");
         ImGui.TextWrapped("Click a registered name to remove it, then choose a replacement below. Your PvE party and PC positions stay unchanged.");
         ImGui.BeginDisabled(CollectionLocked);
         if (ids.Count > 0 && ImGui.BeginTable("OnlineRegisteredNames", ImGui.GetContentRegionAvail().X >= 540 * scale ? 3 : 2, ImGuiTableFlags.SizingStretchSame))
         {
-            foreach (var pokemon in PvpRoster.Selected(owned, ids))
+            foreach (var pokemon in SelectedOnlinePokemon(ids))
             {
                 ImGui.TableNextColumn();
                 if (DrawAccentButton($"Remove {pokemon.Nickname}##RemoveRoster{pokemon.Id}", new Vector2(-1, 26 * scale), PokemonOrange)) { ids.Remove(pokemon.Id); pvpTeamError = string.Empty; }
@@ -72,7 +72,7 @@ public sealed partial class MainWindow
         }
         ImGui.SetNextItemWidth(-1);
         if (ImGui.InputTextWithHint("##OnlineRosterSearch", "Species, nickname, type, move, ability or held item...", ref onlineRosterSearch, 100)) onlineRosterPage = 0;
-        var candidates = PvpRoster.Filter(owned, onlineRosterSource, onlineRosterBox, onlineRosterSearch);
+        var candidates = GetOnlineCandidates(owned);
         var footer = ImGui.GetFrameHeight() + ImGui.GetTextLineHeightWithSpacing() + 12 * scale;
         ImGui.BeginChild("OnlineRosterCandidates", new Vector2(0, Math.Max(1, ImGui.GetContentRegionAvail().Y - footer)), false);
         DrawPager("OnlineRoster", ref onlineRosterPage, candidates.Count, 6);

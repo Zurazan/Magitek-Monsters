@@ -196,13 +196,11 @@ public sealed partial class MainWindow
             }
             ImGui.BeginChild("TrainerCardPartners", new Vector2(0, 220 * CompanionScale), false);
             var matches = 0;
-            foreach (var pokemon in trainer!.Party.Concat(trainer.Storage).OrderBy(entry => entry.PartySlot is null).ThenBy(entry => entry.PartySlot).ThenBy(entry => entry.BoxNumber).ThenBy(entry => entry.BoxSlot))
+            foreach (var choice in GetCardPartners())
             {
-                var label = TrainerCard.PartnerLabel(pokemon);
-                if (!string.IsNullOrWhiteSpace(trainerCardSearch) && !label.Contains(trainerCardSearch.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
+                var pokemon = choice.Pokemon;
                 matches++;
-                var location = pokemon.PartySlot is int slot ? $"Party {slot}" : $"Box {pokemon.BoxNumber}, slot {pokemon.BoxSlot}";
-                if (ImGui.Selectable($"{label} / {location}##CardPartner{pokemon.Id}", preferences.FeaturedPokemonId == pokemon.Id))
+                if (ImGui.Selectable(choice.Button, preferences.FeaturedPokemonId == pokemon.Id))
                 {
                     preferences.FeaturedPokemonId = pokemon.Id;
                     SaveTrainerCard();

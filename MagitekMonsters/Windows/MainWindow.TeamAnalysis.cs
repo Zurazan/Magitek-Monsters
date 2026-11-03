@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Numerics;
-using System.Text.Json;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
 using MagitekMonsters.Services;
@@ -16,7 +15,8 @@ public sealed partial class MainWindow
     private string? teamAnalysisPresetId;
     private bool requestTeamAnalysis;
     private bool teamAnalysisInLibrary;
-    private string teamAnalysisStamp = string.Empty;
+    private TrainerSnapshotDto? teamAnalysisTrainer;
+    private string? teamAnalysisCachedPreset;
     private BattleHelpDto? teamAnalysisMoveCatalog;
     private TeamAnalysisReport? teamAnalysisReport;
     private string teamAnalysisDefenseType = "Ice";
@@ -24,7 +24,8 @@ public sealed partial class MainWindow
 
     private void ResetTeamAnalysis()
     {
-        teamAnalysisOwner = teamAnalysisStamp = string.Empty;
+        teamAnalysisOwner = string.Empty;
+        teamAnalysisTrainer = null; teamAnalysisCachedPreset = null;
         teamAnalysisPresetId = null;
         requestTeamAnalysis = teamAnalysisInLibrary = false;
         teamAnalysisMoveCatalog = null;
@@ -60,24 +61,29 @@ public sealed partial class MainWindow
         var preset = teamAnalysisPresetId is null ? null : trainer.Collection.TeamPresets.FirstOrDefault(team => team.Id == teamAnalysisPresetId);
         if (teamAnalysisPresetId is not null && preset is null)
         { ImGui.TextWrapped("This saved team is no longer available."); if (ImGui.Button("Close")) ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return; }
-        var owned = trainer.Party.Concat(trainer.Storage).DistinctBy(pokemon => pokemon.Id).ToDictionary(pokemon => pokemon.Id);
-        var members = preset is null ? trainer.Party.OrderBy(pokemon => pokemon.PartySlot).ToArray()
-            : preset.PokemonIds.Where(owned.ContainsKey).Select(id => owned[id]).ToArray();
-        var expected = preset?.PokemonIds.Count ?? members.Length;
-        var stamp = JsonSerializer.Serialize(new { expected, Pokemon = members.Select(pokemon => new {
-            pokemon.Id, pokemon.Nickname, pokemon.Species, pokemon.Form, pokemon.Types, pokemon.Ability, pokemon.HeldItem, pokemon.Moves, pokemon.Ivs }) });
-        if (teamAnalysisReport is null || stamp != teamAnalysisStamp || !ReferenceEquals(teamAnalysisMoveCatalog, battleHelp))
-        {
-            teamAnalysisReport = TeamAnalysis.Analyze(members, battleMoveHelp.Values, expected);
-            teamAnalysisStamp = stamp; teamAnalysisMoveCatalog = battleHelp;
-        }
-        DrawSectionHeader(preset is null ? "Current party analysis" : preset.Name, $"{teamAnalysisReport.Members.Count}/{expected} members analyzed / Current builds");
+        var report = GetTeamAnalysisReport(preset);
+        var expected = preset?.PokemonIds.Count ?? trainer.Party.Count;
+        DrawSectionHeader(preset is null ? "Current party analysis" : preset.Name, $"{report.Members.Count}/{expected} members analyzed / Current builds");
         var footer = ImGui.GetFrameHeight() + 16 * scale;
         if (ImGui.BeginChild("TeamAnalysisBody", new Vector2(0, Math.Max(1, ImGui.GetContentRegionAvail().Y - footer)), false))
-            DrawTeamAnalysisContent(teamAnalysisReport);
+            DrawTeamAnalysisContent(report);
         ImGui.EndChild();
         if (ImGui.Button("Close")) ImGui.CloseCurrentPopup();
         ImGui.EndPopup();
+    }
+
+    private TeamAnalysisReport GetTeamAnalysisReport(TeamPresetDto? preset)
+    {
+        if (teamAnalysisReport is null || !ReferenceEquals(teamAnalysisTrainer, trainer) || teamAnalysisCachedPreset != preset?.Id
+            || !ReferenceEquals(teamAnalysisMoveCatalog, battleHelp))
+        {
+            var owned = preset is null ? null : trainer!.Party.Concat(trainer.Storage).DistinctBy(pokemon => pokemon.Id).ToDictionary(pokemon => pokemon.Id);
+            var members = preset is null ? trainer!.Party.OrderBy(pokemon => pokemon.PartySlot).ToArray()
+                : preset.PokemonIds.Where(owned!.ContainsKey).Select(id => owned![id]).ToArray();
+            teamAnalysisReport = TeamAnalysis.Analyze(members, battleMoveHelp.Values, preset?.PokemonIds.Count ?? members.Length);
+            teamAnalysisTrainer = trainer; teamAnalysisCachedPreset = preset?.Id; teamAnalysisMoveCatalog = battleHelp;
+        }
+        return teamAnalysisReport;
     }
 
     private void DrawTeamAnalysisContent(TeamAnalysisReport report)

@@ -41,7 +41,22 @@ function Add-PackageFile([string]$source, [string]$name) {
 foreach ($name in @('MagitekMonsters.dll', 'MagitekMonsters.Contracts.dll', 'SixLabors.ImageSharp.dll', 'System.Security.Cryptography.ProtectedData.dll', 'MagitekMonsters.deps.json', 'images/icon.png', 'runtimes/win/lib/netstandard2.0/System.Security.Cryptography.ProtectedData.dll')) { Add-PackageFile (Join-Path $release $name) $name }
 Add-PackageFile (Join-Path $root 'LICENSE') 'LICENSE'
 Add-PackageFile (Join-Path $release 'Graphics/asset-manifest.json') 'Graphics/asset-manifest.json'
+Add-PackageFile (Join-Path $release 'Graphics/asset-catalog.bin') 'Graphics/asset-catalog.bin'
+$assetCompiler = Join-Path $root 'Tools/AssetCatalogCompiler/bin/Release/net10.0/AssetCatalogCompiler.dll'
+& dotnet $assetCompiler --verify $files['Graphics/asset-manifest.json'] $files['Graphics/asset-catalog.bin']
+if ($LASTEXITCODE -ne 0) { throw 'Asset snapshot verification failed. Rebuild the client.' }
 $assets = Get-Content -LiteralPath $files['Graphics/asset-manifest.json'] -Raw | ConvertFrom-Json
+$assetHashes = @{}
+foreach ($asset in $assets.files) { $assetHashes[$asset.path] = $asset.sha256 }
+foreach ($variants in $assets.pokemon.PSObject.Properties.Value) {
+    foreach ($relative in $variants.PSObject.Properties.Value) {
+        $region = @($assets.pokemonRegions.PSObject.Properties[$relative].Value)
+        if ($region.Count -ne 7 -or $region[6] -ne $assetHashes[[string]$relative] -or $region[0] -lt 0 -or $region[1] -lt 0 -or
+            $region[2] -le 0 -or $region[3] -le 0 -or ($region[0] + $region[2]) -gt $region[4] -or ($region[1] + $region[3]) -gt $region[5]) {
+            throw "Missing or stale portrait region: $relative"
+        }
+    }
+}
 foreach ($asset in $assets.files) {
     if ($asset.path -notmatch '^(items/(gen\d+/)?[^/]+\.png|pokemon/(shiny/)?[^/]+\.png|overrides/items/[^/]+\.png|types/generation-viii/brilliant-diamond-shining-pearl/\d+\.png|licenses/[^/]+\.txt)$') { throw 'Unexpected graphics path.' }
     $name = 'Graphics/' + $asset.path

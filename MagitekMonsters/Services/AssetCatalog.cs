@@ -1,94 +1,136 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
+using System.Security.Cryptography;
 
 namespace MagitekMonsters.Services;
 
 public sealed class AssetCatalog
 {
     private readonly string graphicsRoot;
+    private readonly string pokemonRoot;
+    private readonly bool useBinarySnapshot;
     private readonly Dictionary<string, string> itemPaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> aliases = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(string Species, bool Shiny), string> pokemonPaths = [];
     private readonly Dictionary<(string Species, bool Shiny), string> animationIds = [];
+    private readonly Dictionary<string, string> typePaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (SpriteRegion Region, int Width, int Height)> spriteRegions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<(string Species, bool Shiny), PokemonAsset> pokemonLookups = new();
+    private readonly ConcurrentDictionary<string, string> itemLookups = new(StringComparer.OrdinalIgnoreCase);
+    private sealed record PokemonAsset(string Path, bool Exact, string? Animation, string? SpriteId);
 
-    public AssetCatalog(string assemblyDirectory)
+    public AssetCatalog(string assemblyDirectory) : this(assemblyDirectory, useBinarySnapshot: true) { }
+
+    internal AssetCatalog(string assemblyDirectory, bool useBinarySnapshot)
     {
+        this.useBinarySnapshot = useBinarySnapshot;
         graphicsRoot = Path.GetFullPath(Path.Combine(assemblyDirectory, "Graphics"));
+        pokemonRoot = Path.Combine(graphicsRoot, "pokemon") + Path.DirectorySeparatorChar;
+        IsAvailable = Directory.Exists(graphicsRoot);
+        string[] types = ["Normal", "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost", "Steel", "Fire", "Water", "Grass", "Electric", "Psychic", "Ice", "Dragon", "Dark", "Fairy"];
+        for (var index = 0; index < types.Length; index++)
+        {
+            var file = Path.Combine(graphicsRoot, "types", "generation-viii", "brilliant-diamond-shining-pearl", $"{index + 1}.png");
+            if (File.Exists(file)) typePaths[types[index]] = file;
+        }
         var items = Path.Combine(graphicsRoot, "items");
         if (Directory.Exists(items))
             foreach (var file in Directory.EnumerateFiles(items, "*.png", SearchOption.AllDirectories)
                 .OrderByDescending(file => Priority(Path.GetRelativePath(items, file))).ThenBy(file => file, StringComparer.Ordinal))
                 itemPaths.TryAdd(SpriteNames.Normalize(Path.GetFileNameWithoutExtension(file)), file);
+        var knownPokemonFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var shiny in new[] { false, true })
         {
             var folder = Path.Combine(graphicsRoot, "pokemon", shiny ? "shiny" : "");
             if (!Directory.Exists(folder)) continue;
             foreach (var file in Directory.EnumerateFiles(folder, "*.png", SearchOption.TopDirectoryOnly).Order(StringComparer.Ordinal))
+            {
+                knownPokemonFiles.Add(file);
                 pokemonPaths.TryAdd((SpriteNames.Normalize(Path.GetFileNameWithoutExtension(file)), shiny), file);
+            }
         }
         var manifest = Path.Combine(graphicsRoot, "asset-manifest.json");
         if (!File.Exists(manifest)) return;
-        using var json = JsonDocument.Parse(File.ReadAllText(manifest));
-        if (json.RootElement.GetProperty("format").GetInt32() != 1) throw new InvalidDataException("Unsupported graphics manifest.");
-        ModernSprites = json.RootElement.TryGetProperty("pokemonStyle", out var style) && style.GetString() == PokemonSpriteSource.Style;
-        if (json.RootElement.TryGetProperty("pokemonAnimations", out var animations))
-            foreach (var entry in animations.EnumerateObject())
-                foreach (var variant in entry.Value.EnumerateObject())
-                {
-                    if (variant.Name is not ("normal" or "shiny")) throw new InvalidDataException("Invalid sprite variant.");
-                    var id = variant.Value.GetString()!;
-                    _ = PokemonSpriteSource.AnimationUrl(id, variant.Name == "shiny");
-                    animationIds[(SpriteNames.Normalize(entry.Name), variant.Name == "shiny")] = id;
-                }
-        foreach (var entry in json.RootElement.GetProperty("itemAliases").EnumerateObject())
-            aliases[SpriteNames.Normalize(entry.Name)] = SpriteNames.Normalize(entry.Value.GetString()!);
-        foreach (var entry in json.RootElement.GetProperty("pokemon").EnumerateObject())
-            foreach (var variant in entry.Value.EnumerateObject())
-                pokemonPaths[(SpriteNames.Normalize(entry.Name), variant.Name == "shiny")] = AssetPath(variant.Value.GetString()!);
+        var metadata = LoadMetadata(manifest);
+        ModernSprites = metadata.ModernSprites; aliases = metadata.Aliases; animationIds = metadata.Animations;
+        foreach (var entry in metadata.Pokemon)
+        {
+            var file = AssetPath(entry.Value);
+            if (knownPokemonFiles.TryGetValue(file, out var known)) pokemonPaths[entry.Key] = known;
+            else if (File.Exists(file)) pokemonPaths[entry.Key] = file;
+            else pokemonPaths.Remove(entry.Key);
+        }
+        foreach (var entry in metadata.Regions)
+        {
+            var file = AssetPath(entry.Key);
+            if (knownPokemonFiles.TryGetValue(file, out var known)) file = known;
+            spriteRegions[file] = (entry.Value.Region, entry.Value.Width, entry.Value.Height);
+        }
         var overrides = Path.Combine(graphicsRoot, "overrides", "items");
         if (Directory.Exists(overrides))
             foreach (var file in Directory.EnumerateFiles(overrides, "*.png")) itemPaths[SpriteNames.Normalize(Path.GetFileNameWithoutExtension(file))] = file;
     }
-    public bool IsAvailable => Directory.Exists(graphicsRoot);
+    public bool IsAvailable { get; }
     public bool ModernSprites { get; }
-    public string? PokemonAnimationId(string species, bool shiny) => animationIds.GetValueOrDefault((SpriteNames.Normalize(species), shiny));
+    public bool UsesBinarySnapshot { get; private set; }
+    private AssetCatalogSnapshot LoadMetadata(string manifest)
+    {
+        var snapshot = Path.Combine(graphicsRoot, AssetCatalogSnapshot.FileName);
+        if (useBinarySnapshot && File.Exists(snapshot))
+        {
+            try
+            {
+                using var source = new FileStream(manifest, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
+                var metadata = AssetCatalogSnapshot.Read(snapshot, SHA256.HashData(source));
+                UsesBinarySnapshot = true; return metadata;
+            }
+            catch (InvalidDataException) { }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return AssetCatalogSnapshot.FromManifest(manifest);
+    }
+    public string? PokemonAnimationId(string species, bool shiny) => Pokemon(species, shiny).Animation;
     public bool HasItem(string itemId) => ResolveItem(itemId) is not null;
     public string Item(string itemId) => ResolveItem(itemId) ?? string.Empty;
-    public string TypeBadge(string type)
+    public string TypeBadge(string type) => typePaths.GetValueOrDefault(type, string.Empty);
+    public string PokemonFront(string species, bool shiny) => Pokemon(species, shiny).Path;
+    private PokemonAsset Pokemon(string species, bool shiny)
     {
-        string[] types = ["Normal", "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost", "Steel", "Fire", "Water", "Grass", "Electric", "Psychic", "Ice", "Dragon", "Dark", "Fairy"];
-        var index = Array.FindIndex(types, entry => string.Equals(entry, type, StringComparison.OrdinalIgnoreCase));
-        if (index < 0) return string.Empty;
-        var file = Path.Combine(graphicsRoot, "types", "generation-viii", "brilliant-diamond-shining-pearl", $"{index + 1}.png");
-        return File.Exists(file) ? file : string.Empty;
-    }
-    public string PokemonFront(string species, bool shiny)
-    {
+        if (pokemonLookups.TryGetValue((species, shiny), out var cached)) return cached;
         var key = SpriteNames.Normalize(species);
-        if (pokemonPaths.TryGetValue((key, shiny), out var exact) && File.Exists(exact)) return exact;
-        var separator = species.IndexOf('-');
-        if (separator > 0 && pokemonPaths.TryGetValue((SpriteNames.Normalize(species[..separator]), shiny), out var basic) && File.Exists(basic)) return basic;
-        return pokemonPaths.GetValueOrDefault(("UNKNOWN", shiny), string.Empty);
+        var exact = pokemonPaths.TryGetValue((key, shiny), out var file);
+        var spriteId = exact ? Path.GetFileNameWithoutExtension(file) : null;
+        if (!exact)
+        {
+            var separator = species.IndexOf('-');
+            if (separator <= 0 || !pokemonPaths.TryGetValue((SpriteNames.Normalize(species[..separator]), shiny), out file))
+                file = pokemonPaths.GetValueOrDefault(("UNKNOWN", shiny), string.Empty);
+        }
+        var result = new PokemonAsset(file!, exact, animationIds.GetValueOrDefault((key, shiny)), spriteId);
+        if (pokemonLookups.Count < 4096) pokemonLookups.TryAdd((species, shiny), result);
+        return result;
     }
-    public string PokemonIcon(string species, bool shiny) => PokemonFront(species, shiny);
-    public bool HasExactPokemon(string species, bool shiny) =>
-        pokemonPaths.TryGetValue((SpriteNames.Normalize(species), shiny), out var file) && File.Exists(file);
-    public bool HasPokemonIcon(string species, bool shiny) => false;
-    public string? PokemonSpriteId(string species) => pokemonPaths.TryGetValue((SpriteNames.Normalize(species), false), out var file)
-        ? Path.GetFileNameWithoutExtension(file) : null;
+    public bool HasExactPokemon(string species, bool shiny) => Pokemon(species, shiny).Exact;
+    public string? PokemonSpriteId(string species) => Pokemon(species, false).SpriteId;
+    public SpriteRegion PokemonRegion(string path, int width, int height) => spriteRegions.TryGetValue(path, out var saved)
+        && saved.Width == width && saved.Height == height ? saved.Region : new(0, 0, width, height);
     private string? ResolveItem(string id)
     {
+        if (itemLookups.TryGetValue(id, out var cached)) return cached.Length > 0 ? cached : null;
         var key = SpriteNames.Normalize(id);
-        if (itemPaths.TryGetValue(key, out var direct)) return direct;
-        return aliases.TryGetValue(key, out var alias) && itemPaths.TryGetValue(alias, out var mapped) ? mapped : null;
+        var path = itemPaths.GetValueOrDefault(key);
+        if (path is null && aliases.TryGetValue(key, out var alias)) path = itemPaths.GetValueOrDefault(alias);
+        if (itemLookups.Count < 2048) itemLookups.TryAdd(id, path ?? string.Empty);
+        return path;
     }
     private string AssetPath(string relative)
     {
         var file = Path.GetFullPath(Path.Combine(graphicsRoot, relative));
-        if (!file.StartsWith(Path.Combine(graphicsRoot, "pokemon") + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+        if (!file.StartsWith(pokemonRoot, StringComparison.OrdinalIgnoreCase)
             || !relative.StartsWith("pokemon/", StringComparison.Ordinal) || !file.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Invalid sprite path.");
         return file;
