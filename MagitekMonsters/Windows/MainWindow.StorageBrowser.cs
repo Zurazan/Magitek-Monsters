@@ -197,13 +197,13 @@ public sealed partial class MainWindow
             var image = Math.Min(Math.Min(size.X, size.Y) - 4 * scale, 68 * scale);
             image = Math.Max(1, image);
             DrawPokemonIconAt(pokemon.Appearance, pokemon.Shiny, min + (size - new Vector2(image)) / 2, new Vector2(image));
-            var marks = (pokemon.Shiny ? "★" : "") + (pokemon.Favorite ? "F" : "") + (pokemon.FusionHostId.Length > 0 ? "L" : "");
+            var marks = (pokemon.Shiny ? "★" : "") + (pokemon.Favorite ? "F" : "") + (pokemon.FusionHostId.Length > 0 ? "L" : "") + (pokemon.TradeLockId is not null ? " T" : "");
             if (marks.Length > 0) draw.AddText(min + new Vector2(Math.Max(2 * scale, size.X - ImGui.CalcTextSize(marks).X - 3 * scale), 2 * scale), ImGui.GetColorU32(PokemonYellow), marks);
             if (marked) draw.AddText(min + new Vector2(3 * scale, Math.Max(0, size.Y - ImGui.GetTextLineHeight())), ImGui.GetColorU32(PokemonYellow), "✓");
             if (clicked)
             {
                 selectedStoragePokemon = pokemon.Id;
-                if (!busy && (storageSelecting || ImGui.GetIO().KeyShift) && pokemon.FusionHostId.Length == 0)
+                if (!busy && (storageSelecting || ImGui.GetIO().KeyShift) && pokemon.FusionHostId.Length == 0 && pokemon.TradeLockId is null)
                 {
                     storageSelecting = true;
                     if (!storageSelection.Remove(pokemon.Id)) StorageBrowser.Select(storageSelection, [pokemon]);
@@ -228,6 +228,7 @@ public sealed partial class MainWindow
         if (copies > 1) ImGui.TextColored(CompanionAccent, $"{copies} owned copies");
         if (pokemon.Favorite) ImGui.TextColored(PokemonYellow, "Favourite / Protected from release");
         if (pokemon.Shiny) ImGui.TextColored(PokemonYellow, "Shiny");
+        if (pokemon.TradeLockId is not null) ImGui.TextColored(PokemonOrange, "Reserved for trading / Open Trading to cancel or withdraw.");
         if (pokemon.FusionHostId.Length > 0) ImGui.TextWrapped("Fusion partner / Unfuse the host to manage this Pokémon.");
         ImGui.EndTooltip();
     }
@@ -412,7 +413,7 @@ public sealed partial class MainWindow
                 var location = pokemon.PartySlot is int slot ? $"Party slot {slot}" : $"Box {pokemon.BoxNumber} / {pokemon.BoxSlot}";
                 DrawClippedText(location, Math.Max(1, ImGui.GetContentRegionAvail().X - favouriteWidth - 6 * scale), CompanionMuted);
                 ImGui.SameLine(0, 6 * scale);
-                ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || pokemon.FusionHostId.Length > 0);
+                ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || pokemon.FusionHostId.Length > 0 || pokemon.TradeLockId is not null);
                 if (DrawAccentButton("★##StorageFavourite", new Vector2(favouriteWidth, 24 * scale), pokemon.Favorite ? PokemonYellow : CompanionMuted))
                     Run(() => UpdateCollection(plugin.Api.EditPokemon(pokemon.Id, favorite: !pokemon.Favorite), "Favourite updated."), "Updating favourite...");
                 ImGui.EndDisabled();
@@ -430,7 +431,7 @@ public sealed partial class MainWindow
                 ImGui.TextColored(CompanionMuted, $"IV {StorageBrowser.IvTotal(pokemon)}/186 / {StorageBrowser.PerfectIvs(pokemon)} perfect");
                 if (pokemon.Favorite || pokemon.Shiny) ImGui.TextColored(PokemonYellow, $"{(pokemon.Shiny ? "★ Shiny  " : "")}{(pokemon.Favorite ? "Favourite" : "")}");
                 ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
-                ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || pokemon.FusionHostId.Length > 0);
+                ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || pokemon.FusionHostId.Length > 0 || pokemon.TradeLockId is not null);
                 ImGui.BeginDisabled(pokemon.PartySlot is null && trainer.Party.Count >= 6);
                 if (DrawAccentButton(pokemon.PartySlot is null ? "To party" : "To PC", new Vector2(-1, 30 * scale), CompanionAccent))
                     Run(() => MovePokemon(pokemon.Id, pokemon.PartySlot is null ? "party" : "storage"), $"Moving {pokemon.Nickname}...");
@@ -453,12 +454,17 @@ public sealed partial class MainWindow
                         else OpenStorageComparison(storageComparePin, pokemon.Id);
                         ImGui.CloseCurrentPopup();
                     }
-                    ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || StorageBrowser.ReleaseProtected(pokemon));
+                    ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || StorageBrowser.ReleaseProtected(pokemon) || pokemon.TradeLockId is not null);
                     if (DrawAccentButton("Release...", Vector2.Zero, PokemonRed))
                     { releasePokemonId = pokemon.Id; requestRelease = true; ImGui.CloseCurrentPopup(); }
                     ImGui.EndDisabled(); ImGui.EndPopup();
                 }
                 if (pokemon.FusionHostId.Length > 0) ImGui.TextWrapped("Fusion partner / Unfuse the host to manage this Pokémon.");
+                if (pokemon.TradeLockId is not null)
+                {
+                    ImGui.TextColored(PokemonOrange, "Reserved for trading");
+                    if (DrawAccentSmallButton("Open Trading", CompanionAccent)) mainSection = 16;
+                }
                 if (CollectionLocked) ImGui.TextWrapped("Finish your battle, run or matchmaking before editing Pokémon.");
                 ImGui.PopID();
             }
@@ -468,7 +474,7 @@ public sealed partial class MainWindow
 
     private void DrawStorageMovePicker(string id, List<PokemonDto> selected)
     {
-        ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || selected.Count == 0 || selected.Any(pokemon => pokemon.FusionHostId.Length > 0));
+        ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || selected.Count == 0 || selected.Any(pokemon => pokemon.FusionHostId.Length > 0 || pokemon.TradeLockId is not null));
         if (ImGui.BeginCombo(id, "Move to box..."))
         {
             for (var number = 1; number <= StorageBrowser.BoxCount; number++)

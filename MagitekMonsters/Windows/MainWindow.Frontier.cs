@@ -280,8 +280,19 @@ public sealed partial class MainWindow
         DrawPager("FrontierAchievements", ref frontierAchievementPage, achievements.Count, 7);
         foreach (var achievement in achievements.Skip(frontierAchievementPage * 7).Take(7))
         {
-            ImGui.TextColored(achievement.Completed ? PokemonGreen : PokemonBlue, achievement.Name);
-            ImGui.SameLine(); ImGui.TextDisabled(achievement.Completed ? $"+{achievement.Bonus} BP awarded" : $"One-time bonus: {achievement.Bonus} BP");
+            if (ImGui.BeginTable("FrontierRibbon##" + achievement.Id, 2, ImGuiTableFlags.SizingStretchProp))
+            {
+                ImGui.TableSetupColumn("Ribbon", ImGuiTableColumnFlags.WidthFixed, 36 * CompanionScale);
+                ImGui.TableSetupColumn("Achievement", ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableNextColumn();
+                var icon = ImGui.GetCursorScreenPos(); ImGui.Dummy(new Vector2(32 * CompanionScale));
+                DrawAchievementIconAt("frontier:" + achievement.Id, icon, new Vector2(32 * CompanionScale), achievement.Completed);
+                ImGui.TableNextColumn();
+                ImGui.PushStyleColor(ImGuiCol.Text, achievement.Completed ? PokemonGreen : PokemonBlue);
+                ImGui.TextWrapped(achievement.Name); ImGui.PopStyleColor();
+                ImGui.TextWrapped(achievement.Completed ? $"+{achievement.Bonus} BP awarded" : $"One-time bonus: {achievement.Bonus} BP");
+                ImGui.EndTable();
+            }
             DrawProgressBar((float)achievement.Progress / Math.Max(1, achievement.Target), new Vector2(-1, 18), $"{achievement.Progress}/{achievement.Target}", achievement.Completed ? PokemonGreen : PokemonBlue);
             ImGui.Spacing();
         }

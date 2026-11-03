@@ -6359,6 +6359,414 @@
   "missingPokemon": [],
   "files": [
     {
+      "path": "badges/1.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/1.png",
+      "gitBlob": "d223c3c1c0d5b8d8fbba81a1699776e87d7c9641",
+      "sha256": "20bb0970731b0dcf6ae42115b5d16de26802700dde5fc63e500c748465a29355"
+    },
+    {
+      "path": "badges/10.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/10.png",
+      "gitBlob": "e855c8a06a7bba68d4c186050e641e2277346d07",
+      "sha256": "ab38a4f5845375195b00ca78f3b8fed48cceaf64c3babca191e197962b4683e8"
+    },
+    {
+      "path": "badges/11.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/11.png",
+      "gitBlob": "160eb4163862f217dcc6e1972b60961243bda7d6",
+      "sha256": "c8b04c5f7b5264538f8cf4786662402167351a7b1e2e5767dca2d52e0dc08346"
+    },
+    {
+      "path": "badges/12.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/12.png",
+      "gitBlob": "f1559116a34b0760e57b07bee60c3a82aee11234",
+      "sha256": "9c96456a69d6b2ed58fab2c863b5d5e5db821b0e3261ca72198a7e06bf45b0c9"
+    },
+    {
+      "path": "badges/13.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/13.png",
+      "gitBlob": "01634139be0aabd06f185206c2abef7c053a55bb",
+      "sha256": "ab0235971c526f525084117157d2d1109ad4308a9fa0591053544d93785a4caf"
+    },
+    {
+      "path": "badges/14.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/14.png",
+      "gitBlob": "34b1aeed431a16fe87beb09835d528dff525dd41",
+      "sha256": "8a60bc2eb5a68b630806341df5a10dc760bc2deb72bf5eeac64c4404e6fca1c2"
+    },
+    {
+      "path": "badges/15.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/15.png",
+      "gitBlob": "a57a400309c888ed20dbfaaad1373f176686c423",
+      "sha256": "498df8114dbc6d995438d87d0232053aa6e613c2767c3b4bcefc5de2566c0dd4"
+    },
+    {
+      "path": "badges/16.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/16.png",
+      "gitBlob": "9206e340cdffe89e1cf2ad55a0ca2ee6f26239a0",
+      "sha256": "00ed9f3ac8bcb252434c81d0b67613ab51457d067da93e22fb5373b187354696"
+    },
+    {
+      "path": "badges/17.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/17.png",
+      "gitBlob": "bcde674fe72ca69a3b266abd962b0b7535ac4378",
+      "sha256": "d171026353ac682e8ffe7115f275a86fef5582f714b86e5df96a73abfe94eb94"
+    },
+    {
+      "path": "badges/18.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/18.png",
+      "gitBlob": "58413e63395d5d80afa7a05513baa058636c3a2f",
+      "sha256": "1cd616afff6c9254ed50038dbea9a047ec2819c32ba25c77c00b70a04210a7f7"
+    },
+    {
+      "path": "badges/19.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/19.png",
+      "gitBlob": "a73315e4d0968baf05d914cf1575cf78abed5d24",
+      "sha256": "3519ca0c91c7fea2a47f025f4d6aa470bbf5cdc8f6bf8ebb6e0b4a7d4ab266ba"
+    },
+    {
+      "path": "badges/2.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/2.png",
+      "gitBlob": "7e3aba975fe888a025487b2e3615ae197d7717cf",
+      "sha256": "6bc6124205fe07ef26fb5864ad136b6b6ab1e874120ed009e16ee39f88d77017"
+    },
+    {
+      "path": "badges/20.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/20.png",
+      "gitBlob": "5098dd431cbb9a768cb742c3fac20fd3090ac91a",
+      "sha256": "c4e86ebc6c22023025fdb50a0e7bbf0ce208d81e45168e17e5c1adb58b68df18"
+    },
+    {
+      "path": "badges/21.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/21.png",
+      "gitBlob": "3c8b6bf2a89462f5da94b98545a3c79636ff7e53",
+      "sha256": "fdc8c85542d1208a056d12f2ec5763cf64b73711dec2ed1cf2165dcb5ebe4f58"
+    },
+    {
+      "path": "badges/22.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/22.png",
+      "gitBlob": "ed65a3dadb9c9c762327f6328581b7911f6be628",
+      "sha256": "6081c06a99a88636f2462223b5e896fe70c800ad56020439d46f39a484314269"
+    },
+    {
+      "path": "badges/23.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/23.png",
+      "gitBlob": "a9fe2e317b76e330a2cdf2559977ff295eafd7c7",
+      "sha256": "30c67e7a0bb4785ae9a820100da62a135749eeadda187da10e03a12e39426885"
+    },
+    {
+      "path": "badges/24.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/24.png",
+      "gitBlob": "40d11cf9a1082c96937ee159bb74f4294b1571dd",
+      "sha256": "56c8b90aaebdd7eb883f9f01d8b2d9c9d5fbc8f67bb4cbcd98603cd04fc6e267"
+    },
+    {
+      "path": "badges/25.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/25.png",
+      "gitBlob": "fedbe1ea5df7f37bc7bda0a4548d9be1c64d455b",
+      "sha256": "0ce641201e364361bf925216285612e8fde6b8f992214b82ac15ecece94baee6"
+    },
+    {
+      "path": "badges/26.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/26.png",
+      "gitBlob": "66bfd1438a8376b5ab869df14b85d5a84cfe45f0",
+      "sha256": "d02c8bc555b0d30183042ad383e6b34bc719549ae0bb0702995f0c4f222c608c"
+    },
+    {
+      "path": "badges/27.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/27.png",
+      "gitBlob": "8427dc0f4effede9a26fdc23457da42f9e9642d9",
+      "sha256": "663f7e45ab5918c69a50a7d96c68ae98c1d3492298de4e243cbe8ec21159ff25"
+    },
+    {
+      "path": "badges/28.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/28.png",
+      "gitBlob": "b4a159bb9506f80904b0407ec398de4a6340ee50",
+      "sha256": "fb6a223a8c1f04fd55c55ce06762bf59dc462229f5283a3041f1aeb245f7b411"
+    },
+    {
+      "path": "badges/29.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/29.png",
+      "gitBlob": "a4a0a57bb0820fb6f7db2f1290ab0a5f920089f4",
+      "sha256": "f6c78498e24a7efaea1e4f8c5c7b133a24961ca71b0fdbc55b8d0afd72e155cf"
+    },
+    {
+      "path": "badges/3.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/3.png",
+      "gitBlob": "1bd69df402619338aa54e1aca06fa47592c4a1c7",
+      "sha256": "da9d86ba9d67d836bba0974464030dcdc8ca53db17f5d55b69fb4253ac003427"
+    },
+    {
+      "path": "badges/30.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/30.png",
+      "gitBlob": "a0febf8070ae2e7bf0bbd0643858910f87059166",
+      "sha256": "1144477356fea4fbddc8e799f636dc5431e0d111fb9c108969381f5dbaef63e2"
+    },
+    {
+      "path": "badges/31.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/31.png",
+      "gitBlob": "d593da1963e10e758ce7f4d7b63bd6de758bba06",
+      "sha256": "9c6fb59e1f8b5d4ce5aaa543db305e3707c721c1854abce217b7f62b6d34bb9d"
+    },
+    {
+      "path": "badges/32.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/32.png",
+      "gitBlob": "b8d5be2594c0eb7b054cc300c2243ce574fdc456",
+      "sha256": "ecf70701f3feca51f8d930b864869bd3bc72a5ba6a3ce6afb83db4db62e11430"
+    },
+    {
+      "path": "badges/33.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/33.png",
+      "gitBlob": "174b4429e37a0a4010c9948313d74ca0d1a2080a",
+      "sha256": "123adcd9bebdc92ede8b74da259d49a3cc0fdc2baf9497c87c2523204fbfcf87"
+    },
+    {
+      "path": "badges/34.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/34.png",
+      "gitBlob": "a10cc8d1273213b81555667a9e6731282c32d8c9",
+      "sha256": "15931159713e05660091a0e174148a001501718d0b2fa6a74cd8f91c44d59f1c"
+    },
+    {
+      "path": "badges/35.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/35.png",
+      "gitBlob": "00a6e830f045d1847e02ec74364744314272cfaa",
+      "sha256": "91f3f7cdf88ca34979e871d1bec23e65f2373bedabb16c328040bb0d461de737"
+    },
+    {
+      "path": "badges/36.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/36.png",
+      "gitBlob": "af9810c725556099de675338df172dc17027f79a",
+      "sha256": "a9df9e33ab8930518b1fbd0d64a831087137883d415f1b698ed2c6edd069c597"
+    },
+    {
+      "path": "badges/37.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/37.png",
+      "gitBlob": "aa0c543117eb0651de5719c15027a1858715d1b5",
+      "sha256": "fda92e73e18cef81b605fe31c9f90ecc55bbfd314b85e57632ebaaecbc1f3a84"
+    },
+    {
+      "path": "badges/38.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/38.png",
+      "gitBlob": "b164ee142561a70396e77fe4c2044ee052963dcb",
+      "sha256": "5f3774ae64da2467cd9dc51d84ac07af095ae2944c9328ff25571039994a0bce"
+    },
+    {
+      "path": "badges/39.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/39.png",
+      "gitBlob": "a87634671e595998e0e815000e9a9214c8988da4",
+      "sha256": "c1ae3c646d42d5fb69430c8278bec1074e9f92165f8f394985c3fee01a4e9e8c"
+    },
+    {
+      "path": "badges/4.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/4.png",
+      "gitBlob": "f5f3119b008884f7e8f0c9266b08e2a4f5ba42d6",
+      "sha256": "c0841f531c1907e72d4b2024f4eeee9c967610c90b2aff6f31eeac45bc82c367"
+    },
+    {
+      "path": "badges/40.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/40.png",
+      "gitBlob": "e2af2c83f78ee54e3a1ef9a086cd5e2e414642f7",
+      "sha256": "5801e0b232d2304427f7f5f678074738f9fae5496f8b8713fdf3c56981bf46e0"
+    },
+    {
+      "path": "badges/41.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/41.png",
+      "gitBlob": "9d29d6b7792d1814523845276998b7ae234c076b",
+      "sha256": "24c01729f85c6ec63d94be663643b3c1e5a5ff8d0b41e99c6e3c60f4b98427c5"
+    },
+    {
+      "path": "badges/42.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/42.png",
+      "gitBlob": "754bbc5ff350dd555bcbcfb8a068e831719a8c35",
+      "sha256": "2e872f6dd6dd1bc07400a201bf3cbc7a4e3dfeea8e494f2cb51503be5afb956c"
+    },
+    {
+      "path": "badges/43.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/43.png",
+      "gitBlob": "f6a410131be0f01d8bf474a00a57826def3ec57a",
+      "sha256": "911bdf677528be29258ba9fc7e499b6f0d40cac48628df83b220318990a5974c"
+    },
+    {
+      "path": "badges/44.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/44.png",
+      "gitBlob": "8318a3f5c13d15ab7e138ae76590db0333fda669",
+      "sha256": "40be5e616e21325b04daad1aa3c3d20bfff84cff0e486b262bdae22724803eaf"
+    },
+    {
+      "path": "badges/45.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/45.png",
+      "gitBlob": "8f58274c1d084438f556daec3fdae49d404e70b8",
+      "sha256": "0c7a17024e33e5f6bb19946de3edaca7df627ba8d288953b6ee6df619c047b7a"
+    },
+    {
+      "path": "badges/46.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/46.png",
+      "gitBlob": "9fbb32aa6d31c58d416852f865d4215d554f7166",
+      "sha256": "c6f1632aaa76b2a06d3b7ceac4eb40cb105a996bdad90cb85567be5a9fe94e93"
+    },
+    {
+      "path": "badges/47.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/47.png",
+      "gitBlob": "04408c9652b7f27abc7de5ca66de2727f4c765aa",
+      "sha256": "f54d1ae2c236434e35d0dd162bb559320c4e77891704235185a6581dcd7eff8f"
+    },
+    {
+      "path": "badges/48.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/48.png",
+      "gitBlob": "f8a9fe44ce2460d9b246de7eb92d18ff81a6e8bf",
+      "sha256": "7f6c9b7e19981222864c518b4ae9b3389e1bc86a5c6687ae3240a3b10d82f76d"
+    },
+    {
+      "path": "badges/49.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/49.png",
+      "gitBlob": "cc7a9e5e5d61a6cbd6c8668bf134a4e45ca5ec05",
+      "sha256": "eec9f447a78ebe1ec076a3838fcf12411aa096242620ffb5bfdde7b4efa3dd84"
+    },
+    {
+      "path": "badges/5.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/5.png",
+      "gitBlob": "c8c3b738c09d9f0d58e3464993a7b900b68057be",
+      "sha256": "10c7722973b359363cb32f7b66704fe6dcd951cf9babacb5e64c2dde4e6dfd13"
+    },
+    {
+      "path": "badges/50.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/50.png",
+      "gitBlob": "de74625e27c607d48a237fd04b099808c030f337",
+      "sha256": "6981c8ab940798bb046d7319bd3d7043fbd45d382d87de908476ea2d3ab60da1"
+    },
+    {
+      "path": "badges/51.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/51.png",
+      "gitBlob": "f5b2ccf3f3533f3164c3a351399aa2f5a3464270",
+      "sha256": "ce9622bccdcaf697d191db47ca48356a61aa92101f038ad803f487dff42b8d1b"
+    },
+    {
+      "path": "badges/52.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/52.png",
+      "gitBlob": "55daca30ecda6daef87fec8e4a03c3f03c643cbd",
+      "sha256": "be8e416a40cf690a28012653ca15ac0e8c6a2d3667ab73c68530d41eb554d125"
+    },
+    {
+      "path": "badges/53.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/53.png",
+      "gitBlob": "6bb06e061c73065cb0339a2a07b0c6c27e41ccaf",
+      "sha256": "a4ad9767577c1d249c1f833b4b267e277bd88ba069416927b090a2a08d3d4524"
+    },
+    {
+      "path": "badges/54.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/54.png",
+      "gitBlob": "6af9e6df9e34c42ead498765a4c7f3d3a6e0cd51",
+      "sha256": "bf7dbcad6cedb6c7b5e8a5a10badbdd901eeda3bd5167039d465f612391e2089"
+    },
+    {
+      "path": "badges/55.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/55.png",
+      "gitBlob": "c53b340d438aa0d9f335a07e11839a953d8fccd7",
+      "sha256": "2577d98c5fac53dae322c8adc0a917c2ba1a44f6f82439a53ac1bb62aa853e07"
+    },
+    {
+      "path": "badges/56.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/56.png",
+      "gitBlob": "a3028e20281188b730708f047b32e1e3b5efc5c0",
+      "sha256": "7fae6b5899143bfd0c6157db3e6bbe868af17aa2738c52cfabca5ecb97f1fb13"
+    },
+    {
+      "path": "badges/57.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/57.png",
+      "gitBlob": "ac1f69c0490afcb0ad0031a4762c02f978f05b18",
+      "sha256": "0053465903392e3196350356c7f7040c95ab6e1131a4a6ef061c8b9b24b1f4a4"
+    },
+    {
+      "path": "badges/58.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/58.png",
+      "gitBlob": "622a7bd74a9aa58df2314120962321ddc4d3c098",
+      "sha256": "faa93888378893458cc2297c38945692b18c654d1f24fd841c1a10fe0e892894"
+    },
+    {
+      "path": "badges/59.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/59.png",
+      "gitBlob": "5c40f1e375f32bb8aedeadcf61901eadfcf0db20",
+      "sha256": "059c69836543fa66159ab9d2be0825fb13e1dd4d517b82ea3774a4647f222cfb"
+    },
+    {
+      "path": "badges/6.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/6.png",
+      "gitBlob": "22b532b0ab6961cfc6fef4162fbd07c2243b335d",
+      "sha256": "888cda46d6ea588ef903e0714386973c7a4dca29b307845598a7e867c29bed03"
+    },
+    {
+      "path": "badges/60.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/60.png",
+      "gitBlob": "736a332cc102ff350df1a9cc30d9c2ecb42883a7",
+      "sha256": "3cbd9bae6b2a205866c9178b471b00f8ba66a9e5d63012adc731590a9892de03"
+    },
+    {
+      "path": "badges/7.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/7.png",
+      "gitBlob": "0a640027a55bf19d9c4eacbaa27f0c19b7a8e38e",
+      "sha256": "b180df51b78bd9cd996a4f49a831537cb97c8005c20b9179d879e0b10511840d"
+    },
+    {
+      "path": "badges/70.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/70.png",
+      "gitBlob": "0eac52ffa43e8b841d53bca9631f3e4a45a9715c",
+      "sha256": "9686eab75fa5c5f4d796e2fc3f44107ace7b0baec36be0ee20ca236264a4d182"
+    },
+    {
+      "path": "badges/71.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/71.png",
+      "gitBlob": "3a72cce8a54222accc09ef63c48478b4214d669d",
+      "sha256": "ccafc1745a83c5b5d2d19954f9b522a8c1672cc6b0750de3d21a9d27f87b74b5"
+    },
+    {
+      "path": "badges/72.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/72.png",
+      "gitBlob": "75ba3458f7f3f701fc528608e95756f79be83ea9",
+      "sha256": "89eae56a9d74533d8115213c47bead72c78755601eb9da1c3482c96d6e20835f"
+    },
+    {
+      "path": "badges/73.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/73.png",
+      "gitBlob": "4a740af8fd1f87884f343cf2c1f34cd1f21012b7",
+      "sha256": "d23d89083995ff95ae00e1ba3d311a8d0daabb811e53b600a538495c8245fa50"
+    },
+    {
+      "path": "badges/74.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/74.png",
+      "gitBlob": "368ff5e053b960fa2a4ec4bb4fec04d83702328a",
+      "sha256": "48d7e14a885ead0eab1cec2e9c62ab2dc035fd9390b9502e07562e364cc15801"
+    },
+    {
+      "path": "badges/75.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/75.png",
+      "gitBlob": "cd7cbb61543213e557beb3abeb5c4970c370bc33",
+      "sha256": "37dbb2478eae2353d1ef5f341c12556b399f759f0c16c61e1c94be7eb04837a3"
+    },
+    {
+      "path": "badges/76.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/76.png",
+      "gitBlob": "ba2b3cba6df99d8504cf1218d51fe1a99b6bd4d2",
+      "sha256": "654edcb105138c58b57d678c9dacbb4df1238429d6bc9eac184d75cb4a6e447d"
+    },
+    {
+      "path": "badges/77.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/77.png",
+      "gitBlob": "5039260ad8ccaa61922f2d53d8cadb21f1baca53",
+      "sha256": "9c90d8dc7a91dd09b03e1b486befb12570bfc9443b6b92f12d3285ea15af8be2"
+    },
+    {
+      "path": "badges/8.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/8.png",
+      "gitBlob": "ebe39b5ed6f9099f600e174d91ff90588203154b",
+      "sha256": "4a1770a685892e31135969bd3fbd36f345ad70aa79c2b058b65e7b37e4334f38"
+    },
+    {
+      "path": "badges/9.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/badges/9.png",
+      "gitBlob": "71e55c59c1da6c19913c8e64536312af127bf770",
+      "sha256": "b9a5065aeff3ae1a21b546e24e0b490a19632a4e310d30c9fbe95fa3c9d4ed92"
+    },
+    {
       "path": "items/ability-capsule.png",
       "url": "https://raw.githubusercontent.com/PokeAPI/sprites/8491ffde1b247e4de574d4bb8e24b7bd9fa876fa/sprites/items/ability-capsule.png",
       "gitBlob": "2e94287614bd83c5e0337d28344ae38f69060481",
@@ -15722,11 +16130,6 @@
       "url": "https://raw.githubusercontent.com/PokeAPI/sprites/8491ffde1b247e4de574d4bb8e24b7bd9fa876fa/sprites/items/zygarde-cube.png",
       "gitBlob": "fd8eab569d98372be1adb1ffe5887fd636bb9f68",
       "sha256": "830dfb4afabb1ac00ac9a6bc5cc7e5783bb75f87619d3e2c014aab3a5f27ffbb"
-    },
-    {
-      "path": "licenses/pokeapi.txt",
-      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/8491ffde1b247e4de574d4bb8e24b7bd9fa876fa/LICENCE.txt",
-      "sha256": "552687c669af07559413189ef237b023bd1e37de65639aaacfe299c6c685a70b"
     },
     {
       "path": "overrides/items/abilitypatch.png",
@@ -51389,6 +51792,204 @@
         "height": 107,
         "frames": 79
       }
+    },
+    {
+      "path": "ribbons/ribbonability.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonability.png",
+      "gitBlob": "22eb4acabaee382ba0ed9554ed495e62b831de69",
+      "sha256": "7859d761a0ec350934663ad7497a737e6d217aa0221adca4e3f9a408487d3973"
+    },
+    {
+      "path": "ribbons/ribbonabilitydouble.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonabilitydouble.png",
+      "gitBlob": "2d4fd22e3d605f7d02603a891c086b0fbc506371",
+      "sha256": "3b1efd58ec5048380108b514b2f058a84e89337256e680a8929d10729abe4467"
+    },
+    {
+      "path": "ribbons/ribbonabilitygreat.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonabilitygreat.png",
+      "gitBlob": "6bab9ce1222ce852d332e8cd24fb54d9924b531c",
+      "sha256": "a9ae7b79781b31234e3bd4ded86fa393c3a7fb10ddc6a9afea55acb600444238"
+    },
+    {
+      "path": "ribbons/ribbonabilitymulti.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonabilitymulti.png",
+      "gitBlob": "3a00463e062b9e405052a6ede2696edafb176d9e",
+      "sha256": "ecad02dc55f7bbe4f3174210422cf7f2929d4f794db3b60318e47e6833efd9e7"
+    },
+    {
+      "path": "ribbons/ribbonabilitypair.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonabilitypair.png",
+      "gitBlob": "a244226cfecd00d267dd1d875b9261962cc33eb1",
+      "sha256": "7eb78cc535d124cfdddb909bea1050f7a0ad4d160df15046e9287bd49de71ca1"
+    },
+    {
+      "path": "ribbons/ribbonabilityworld.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonabilityworld.png",
+      "gitBlob": "bfd1d064f7409b0ff267cb7fd60b6c679b2f9f27",
+      "sha256": "c1ebe0df7d9c9d24cb5a38b062296dfed0fb03f77baf99f0888e33d487f38199"
+    },
+    {
+      "path": "ribbons/ribbonbattlerexpert.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonbattlerexpert.png",
+      "gitBlob": "6bc0c01edcc422f9d26d714db2094788fae0f747",
+      "sha256": "036224eaabe02d5d4f137145e95475af0be98c2a90a1c2b69796ec86a5ea5522"
+    },
+    {
+      "path": "ribbons/ribbonbattlerskillful.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonbattlerskillful.png",
+      "gitBlob": "f6bc8aa8d9b820490196bba88ea660f473aced31",
+      "sha256": "3d1ce2dcbe5194b525eb1cd03bc3f20ec31745f2fd4fa2ec0984651b562df836"
+    },
+    {
+      "path": "ribbons/ribbonbattletreegreat.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonbattletreegreat.png",
+      "gitBlob": "dc20ebe21bd3857e51d1734b2590a9be640c0016",
+      "sha256": "4c4b466ea282a0cacb9aeea5125d51d091e204216ff2ac68516397b2c88e96fb"
+    },
+    {
+      "path": "ribbons/ribbonbattletreemaster.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonbattletreemaster.png",
+      "gitBlob": "3f17e6bccfccb0d99d03a7dc04c2872989bee21e",
+      "sha256": "a1e774921b153a1553df76f891eb6d4796f638c8f964e780c1caf950d431ce2b"
+    },
+    {
+      "path": "ribbons/ribbonbestfriends.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonbestfriends.png",
+      "gitBlob": "ef6a12450c905f7571883c15e536ae8f357e7ce3",
+      "sha256": "c311e3a88b1a6ba8db868b7d489584687fc60f22d998291792b17ef088cb37d6"
+    },
+    {
+      "path": "ribbons/ribbonchampionalola.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonchampionalola.png",
+      "gitBlob": "ef49909f66a83c203c2e1d892471b993dc90fc09",
+      "sha256": "435ee64e55cfb543ef778e0b4bf3ea1f0d880edd58b14a1762fc5760dec0968b"
+    },
+    {
+      "path": "ribbons/ribbonchampiong3.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonchampiong3.png",
+      "gitBlob": "3fa63e95848bd05a381e31dac050500bd80f827b",
+      "sha256": "ddd2cba6c7098d77ef18ea394e81ef3feab0517805d9a839c2e0d8fef3111efd"
+    },
+    {
+      "path": "ribbons/ribbonchampiong6hoenn.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonchampiong6hoenn.png",
+      "gitBlob": "9c8f788bdc26c547ad9d519de49ebed28e884896",
+      "sha256": "b4c67599fe620abe9f06cc2344ecda9fed2a78905ead5af38b6a13ae52857595"
+    },
+    {
+      "path": "ribbons/ribbonchampiongalar.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonchampiongalar.png",
+      "gitBlob": "dff08fd3c57c9c2d4c5d09f34e349d443ad405c9",
+      "sha256": "29234e178aba2bd3fd74d184ce6c952b7bb2b5b37af12c91a01b34ee92dae9bc"
+    },
+    {
+      "path": "ribbons/ribbonchampionkalos.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonchampionkalos.png",
+      "gitBlob": "8d684de2272e2a938bff294b2afc950ad3fec0a5",
+      "sha256": "614784eb9750cd500a0fa911f9cc7436dfa9f3bf708fbdb0826c279181c98a8a"
+    },
+    {
+      "path": "ribbons/ribbonchampionnational.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonchampionnational.png",
+      "gitBlob": "376ea30f005ebd6c7d69071b1a40ad053fbe4b8f",
+      "sha256": "961e2ccaf8a72943b913f8cacace5b4eb3e127d2f0f3c1761aca5e54f39571a0"
+    },
+    {
+      "path": "ribbons/ribbonchampionpaldea.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonchampionpaldea.png",
+      "gitBlob": "02bfbfa0b74497bb867972e53de8b7351ed49618",
+      "sha256": "6ceec9e0e8e274a3ebc494a15feea37af8f71eee1c916711cb7cd0a62423da9f"
+    },
+    {
+      "path": "ribbons/ribbonchampionsinnoh.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonchampionsinnoh.png",
+      "gitBlob": "968d0c3843d1bbd9338d2adba83c851845e95a31",
+      "sha256": "1e6886ee990b205911b55642be113a42e607b4007e1b826912d2c5a9ff11d69a"
+    },
+    {
+      "path": "ribbons/ribbonclassic.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonclassic.png",
+      "gitBlob": "17b45b1c20e5471de199e49d2a57ab372a07ae29",
+      "sha256": "5b417a3862d8c540392daa5bd245f5b1a19a2378227f0c66707f705225729b94"
+    },
+    {
+      "path": "ribbons/ribbong4smartgreat.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbong4smartgreat.png",
+      "gitBlob": "d3a04a5f035feecc5e6b7b3e8c58f41cf2f78fc2",
+      "sha256": "149034b5f2fe7933f2d39968b117f9b6f047987f9d964dbfc47dd4bbfbe164f1"
+    },
+    {
+      "path": "ribbons/ribbong4smartmaster.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbong4smartmaster.png",
+      "gitBlob": "f23ab8538b0b7684613bb484992cf91d3b221daf",
+      "sha256": "59fed845d1c6e4e75ce3ed36bae86857e49402f3fef90181c40e38c9b91e90b5"
+    },
+    {
+      "path": "ribbons/ribbong4smartultra.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbong4smartultra.png",
+      "gitBlob": "5772836dfa8d6c59de557c68a6186fa8574d1367",
+      "sha256": "c42675968165cf7ec63bc2dc01503cca4c4e483c89ece9344f5fbad0cc8c36a0"
+    },
+    {
+      "path": "ribbons/ribbonlegend.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonlegend.png",
+      "gitBlob": "d75b5b7a918de978f9573dd439a09ee8596cc812",
+      "sha256": "dd07c401c90690d03d6049e02964add20b5fdedac16caeb715b0f33efe8ec5db"
+    },
+    {
+      "path": "ribbons/ribbonmasterrank.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonmasterrank.png",
+      "gitBlob": "afa145af28f63031d62df911822a95e89293184d",
+      "sha256": "a6b44951f6505ce9626db8835c16eeafe299a7b2dd0dd3cd3f7601d6f62f3826"
+    },
+    {
+      "path": "ribbons/ribbonnational.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonnational.png",
+      "gitBlob": "c23c5466d0e39b2601a8b8da54e742fbfff2184a",
+      "sha256": "0205439896e0549455a5141acd90b9daca38b9398ada8d5db308b699732144f5"
+    },
+    {
+      "path": "ribbons/ribbonpartner.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonpartner.png",
+      "gitBlob": "7b6c5566c6f6dd81b135a72ea2887c3f0b68848a",
+      "sha256": "c856c7fa5060c8419631dcdf34825695b130ba5d9638264a7446d5464b2ed82c"
+    },
+    {
+      "path": "ribbons/ribbonrecord.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonrecord.png",
+      "gitBlob": "9e82d4997686d8c9eaf4eb277dc2aff86af18fbf",
+      "sha256": "4fbaed9ae6712c0276411f408db6c8b5d6a94e7fec1f4cf7011b54a3cd4bf5ea"
+    },
+    {
+      "path": "ribbons/ribbontowermaster.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbontowermaster.png",
+      "gitBlob": "b61cbb3f64f6670518b0b6c7f37b4ee93e854c25",
+      "sha256": "ca97eaefb112d9620cfcaa1987aa74fcc10b46fa1e6332d2a939db4804b1f071"
+    },
+    {
+      "path": "ribbons/ribbontraining.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbontraining.png",
+      "gitBlob": "eafd34a7475b3173291a5f9bfdefb4cb65aab60a",
+      "sha256": "eea53342aecf7c4bfb0d52289c450301f7fc241aa203b52886ce79ae4a6138ac"
+    },
+    {
+      "path": "ribbons/ribbontwinklingstar.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbontwinklingstar.png",
+      "gitBlob": "45b8cc35ebf5f80a116bd46d97031e04b115c1b3",
+      "sha256": "5dec7092a35f210fc07dfffd84d7ea2ff9893dd007e28e9c4324b337c10d95d6"
+    },
+    {
+      "path": "ribbons/ribbonvictory.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonvictory.png",
+      "gitBlob": "fdcdfc0068b817e1895a47863ede78ff8d306297",
+      "sha256": "cae867760589bf7eac33e7fb708d007ca6e75884f92e4be268b1e0612be096bb"
+    },
+    {
+      "path": "ribbons/ribbonwinning.png",
+      "url": "https://raw.githubusercontent.com/kwsch/PKHeX/0660d1e1f4924b8478daec73281bb8071a82ad19/PKHeX.Drawing.Misc/Resources/img/ribbons/ribbonwinning.png",
+      "gitBlob": "395a1de7b8f49aa62078066538ba30991ac429e1",
+      "sha256": "3148a89932281e3f585130ed4128a57444f3fe7ee7d52dde0fe5e2c50c5ccb43"
     },
     {
       "path": "types/generation-viii/brilliant-diamond-shining-pearl/1.png",
@@ -90833,5 +91434,10 @@
       107,
       "9afae238425470c34e00f000e2c7053a66e3e5e3f95caa3c8914e6a47656d6b5"
     ]
+  },
+  "achievementSources": {
+    "badgesCommit": "1b3b7c0a538dd2226ae08d0d2f8955125075bbd4",
+    "ribbonsCommit": "0660d1e1f4924b8478daec73281bb8071a82ad19",
+    "ribbonFolder": "PKHeX.Drawing.Misc/Resources/img/ribbons"
   }
 }

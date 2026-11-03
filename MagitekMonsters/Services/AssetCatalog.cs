@@ -20,6 +20,8 @@ public sealed class AssetCatalog
     private readonly Dictionary<string, (SpriteRegion Region, int Width, int Height)> spriteRegions = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<(string Species, bool Shiny), PokemonAsset> pokemonLookups = new();
     private readonly ConcurrentDictionary<string, string> itemLookups = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> achievementPaths = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, string> achievementLookups = new(StringComparer.Ordinal);
     private sealed record PokemonAsset(string Path, bool Exact, string? Animation, string? SpriteId);
 
     public AssetCatalog(string assemblyDirectory) : this(assemblyDirectory, useBinarySnapshot: true) { }
@@ -30,6 +32,12 @@ public sealed class AssetCatalog
         graphicsRoot = Path.GetFullPath(Path.Combine(assemblyDirectory, "Graphics"));
         pokemonRoot = Path.Combine(graphicsRoot, "pokemon") + Path.DirectorySeparatorChar;
         IsAvailable = Directory.Exists(graphicsRoot);
+        foreach (var folder in new[] { "badges", "ribbons" })
+        {
+            var directory = Path.Combine(graphicsRoot, folder);
+            if (Directory.Exists(directory))
+                foreach (var file in Directory.EnumerateFiles(directory, "*.png")) achievementPaths[folder + "/" + Path.GetFileName(file)] = file;
+        }
         string[] types = ["Normal", "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost", "Steel", "Fire", "Water", "Grass", "Electric", "Psychic", "Ice", "Dragon", "Dark", "Fairy"];
         for (var index = 0; index < types.Length; index++)
         {
@@ -97,6 +105,15 @@ public sealed class AssetCatalog
     public bool HasItem(string itemId) => ResolveItem(itemId) is not null;
     public string Item(string itemId) => ResolveItem(itemId) ?? string.Empty;
     public string TypeBadge(string type) => typePaths.GetValueOrDefault(type, string.Empty);
+    public string Achievement(string id)
+    {
+        if (achievementLookups.TryGetValue(id, out var cached)) return cached;
+        var relative = AchievementArtwork.RelativePath(id);
+        var path = relative.StartsWith("items/", StringComparison.Ordinal) ? Item(Path.GetFileNameWithoutExtension(relative))
+            : achievementPaths.GetValueOrDefault(relative, string.Empty);
+        if (achievementLookups.Count < 512) achievementLookups.TryAdd(id, path);
+        return path;
+    }
     public string PokemonFront(string species, bool shiny) => Pokemon(species, shiny).Path;
     private PokemonAsset Pokemon(string species, bool shiny)
     {

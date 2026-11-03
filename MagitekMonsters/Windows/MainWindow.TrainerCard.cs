@@ -21,7 +21,7 @@ public sealed partial class MainWindow
         if (!ImGui.BeginTabBar("TrainerCardTabs")) return;
         if (ImGui.BeginTabItem("Your card"))
         {
-            var card = TrainerCard.Resolve(trainer, trainer.Collection.TrainerCard ?? preferences);
+            var card = TrainerCard.Resolve(trainer, trainer.Collection.TrainerCard ?? preferences, regionalLeagues);
             DrawTrainerCardPreview(card);
             ImGui.Spacing();
             if (DrawAccentSmallButton("Copy card summary", CompanionAccent))
@@ -43,7 +43,7 @@ public sealed partial class MainWindow
         }
         if (ImGui.BeginTabItem("Customise"))
         {
-            var card = TrainerCard.Resolve(trainer, preferences);
+            var card = TrainerCard.Resolve(trainer, preferences, regionalLeagues);
             DrawTrainerCardPreview(card);
             ImGui.Spacing();
             ImGui.BeginDisabled(busy);
@@ -99,7 +99,7 @@ public sealed partial class MainWindow
         var badgeRows = Math.Max(1, (card.Badges.Count + badgeColumns - 1) / badgeColumns);
         var headerHeight = Math.Max(112 * scale, 5 * line + 6 * gap);
         var height = 36 * scale + headerHeight + (4 / columns) * (2 * line + 3 * gap)
-            + 2 * line + 6 * gap + badgeRows * (Math.Max(28 * scale, line) + gap);
+            + 2 * line + 6 * gap + badgeRows * (Math.Max(36 * scale, line) + gap);
         var accent = TrainerCardColor(card.Color);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(18, 16) * scale);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Lerp(CompanionSurface, accent, 0.08f));
@@ -121,7 +121,7 @@ public sealed partial class MainWindow
                 draw.PopClipRect();
                 ImGui.Dummy(nameSize);
                 if (ImGui.IsItemHovered() && ImGui.CalcTextSize(card.DisplayName).X * 1.35f > nameSize.X) ImGui.SetTooltip(card.DisplayName);
-                DrawClippedText(card.Title, ImGui.GetContentRegionAvail().X, accent);
+                DrawTrainerTitle(card.Title, card.TitleId, ImGui.GetContentRegionAvail().X, accent);
                 DrawClippedText(card.VanityCode is null ? card.TrainerId : $"{card.VanityCode} / {card.TrainerId}", ImGui.GetContentRegionAvail().X, CompanionMuted);
                 DrawClippedText(partner is null ? "No partner selected" : TrainerCard.PartnerLabel(partner), ImGui.GetContentRegionAvail().X, CompanionMuted);
                 ImGui.TableNextColumn();
@@ -147,7 +147,7 @@ public sealed partial class MainWindow
                 foreach (var badge in card.Badges)
                 {
                     ImGui.TableNextColumn();
-                    DrawTrainerCardBadge(badge, accent);
+                    DrawTrainerCardBadge(badge);
                 }
                 ImGui.EndTable();
             }
@@ -162,18 +162,15 @@ public sealed partial class MainWindow
         }
     }
 
-    private static void DrawTrainerCardBadge(TrainerCardBadge badge, Vector4 accent)
+    private void DrawTrainerCardBadge(TrainerCardBadge badge)
     {
         var scale = CompanionScale;
-        var size = Math.Max(28 * scale, ImGui.GetTextLineHeight());
+        var size = Math.Max(36 * scale, ImGui.GetTextLineHeight());
         var width = ImGui.GetContentRegionAvail().X;
         var min = ImGui.GetCursorScreenPos();
-        var draw = ImGui.GetWindowDrawList();
         ImGui.BeginGroup();
         ImGui.Dummy(new Vector2(size));
-        draw.AddCircleFilled(min + new Vector2(size / 2), size / 2, ImGui.GetColorU32(accent with { W = 0.2f }));
-        draw.AddCircle(min + new Vector2(size / 2), size / 2 - 1, ImGui.GetColorU32(accent));
-        draw.AddText(min + (new Vector2(size) - ImGui.CalcTextSize(badge.Mark)) / 2, ImGui.GetColorU32(accent), badge.Mark);
+        DrawAchievementIconAt(badge.Id, min, new Vector2(size));
         ImGui.SameLine(0, 6 * scale);
         DrawClippedText(badge.Name, Math.Max(1, width - size - 6 * scale), ImGui.GetStyle().Colors[(int)ImGuiCol.Text]);
         ImGui.EndGroup();
@@ -182,7 +179,7 @@ public sealed partial class MainWindow
 
     private void DrawTrainerCardEditor(TrainerCardPreferences preferences, TrainerCardView card)
     {
-        ImGui.TextWrapped("Appearance saves for this trainer on this device. Titles and badges unlock through your progress.");
+        ImGui.TextWrapped("Appearance saves to your trainer account. Titles and badges unlock through progress or special awards.");
         ImGui.TextUnformatted("Featured Pokémon");
         ImGui.SetNextItemWidth(-1);
         if (ImGui.BeginCombo("##TrainerCardPartner", card.Partner is null ? "Choose a partner" : TrainerCard.PartnerLabel(card.Partner)))
@@ -215,7 +212,7 @@ public sealed partial class MainWindow
         ImGui.SetNextItemWidth(-1);
         if (ImGui.BeginCombo("##TrainerCardTitle", card.Title.Name))
         {
-            foreach (var title in TrainerCard.Titles(trainer!))
+            foreach (var title in TrainerCard.Titles(trainer!, regionalLeagues))
             {
                 ImGui.BeginDisabled(!title.Unlocked);
                 if (ImGui.Selectable($"{title.Name}{(title.Unlocked ? "" : " (locked)")}", card.Title.Id == title.Id))
@@ -249,6 +246,10 @@ public sealed partial class MainWindow
         ImGui.BeginChild("TrainerCardBadgePicker", new Vector2(0, 150 * CompanionScale), true);
         foreach (var badge in card.EarnedBadges)
         {
+            var icon = ImGui.GetCursorScreenPos();
+            ImGui.Dummy(new Vector2(24 * CompanionScale));
+            DrawAchievementIconAt(badge.Id, icon, new Vector2(24 * CompanionScale));
+            ImGui.SameLine();
             var active = selected.Contains(badge.Id);
             ImGui.BeginDisabled(!active && selected.Count >= TrainerCard.MaximumBadges);
             if (ImGui.Checkbox($"{badge.Name}##CardBadge{badge.Id}", ref active))
@@ -269,12 +270,7 @@ public sealed partial class MainWindow
     {
         if (trainer is null) return;
         DrawFrontierProfile();
-        if (ImGui.CollapsingHeader("Gym badge case", ImGuiTreeNodeFlags.DefaultOpen))
-        {
-            for (var index = 0; index < 8; index++)
-                ImGui.TextColored(index < trainer.Pokedex.Badges.Count ? PokemonYellow : CompanionMuted,
-                    index < trainer.Pokedex.Badges.Count ? trainer.Pokedex.Badges[index] : $"Badge {index + 1}: locked");
-        }
+        if (ImGui.CollapsingHeader("Regional badge case", ImGuiTreeNodeFlags.DefaultOpen)) DrawRegionalBadgeCase();
         if (ImGui.CollapsingHeader($"Challenge medals ({trainer.PveProgress.Medals.Count})", ImGuiTreeNodeFlags.DefaultOpen))
         {
             foreach (var group in trainer.PveProgress.Medals.GroupBy(entry => entry.OpponentId))

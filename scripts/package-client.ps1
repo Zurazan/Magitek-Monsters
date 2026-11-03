@@ -58,7 +58,7 @@ foreach ($variants in $assets.pokemon.PSObject.Properties.Value) {
     }
 }
 foreach ($asset in $assets.files) {
-    if ($asset.path -notmatch '^(items/(gen\d+/)?[^/]+\.png|pokemon/(shiny/)?[^/]+\.png|overrides/items/[^/]+\.png|types/generation-viii/brilliant-diamond-shining-pearl/\d+\.png|licenses/[^/]+\.txt)$') { throw 'Unexpected graphics path.' }
+    if ($asset.path -notmatch '^(items/(gen\d+/)?[^/]+\.png|pokemon/(shiny/)?[^/]+\.png|overrides/items/[^/]+\.png|types/generation-viii/brilliant-diamond-shining-pearl/\d+\.png|badges/\d+\.png|ribbons/ribbon[a-z0-9]+\.png)$') { throw 'Unexpected graphics path.' }
     $name = 'Graphics/' + $asset.path
     $source = Join-Path $release $name
     if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $asset.sha256) { throw "Asset hash mismatch: $name" }
@@ -91,15 +91,18 @@ $zip = Join-Path $output $zipName
 $temporary = $zip + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
 $utf8 = [Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.IO.Compression
+try {
 $archive = [IO.Compression.ZipFile]::Open($temporary, [IO.Compression.ZipArchiveMode]::Create)
 try {
     foreach ($name in $files.Keys | Sort-Object) {
         $entry = $archive.CreateEntry($name, [IO.Compression.CompressionLevel]::Optimal)
         $entry.LastWriteTime = $builtAt
         $sourceStream = [IO.File]::OpenRead($files[$name])
-        $zipStream = $entry.Open()
-        try { $sourceStream.CopyTo($zipStream) }
-        finally { $zipStream.Dispose(); $sourceStream.Dispose() }
+        try {
+            $zipStream = $entry.Open()
+            try { $sourceStream.CopyTo($zipStream) }
+            finally { $zipStream.Dispose() }
+        } finally { $sourceStream.Dispose() }
     }
     $entry = $archive.CreateEntry('MagitekMonsters.json'); $entry.LastWriteTime = $builtAt
     $writer = [IO.StreamWriter]::new($entry.Open(), $utf8)
@@ -107,6 +110,7 @@ try {
 }
 finally { $archive.Dispose() }
 Move-Item -LiteralPath $temporary -Destination $zip -Force
+} finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force } }
 [IO.File]::WriteAllText((Join-Path $output 'repo.json'), (ConvertTo-Json -InputObject @($store) -Depth 10), $utf8)
 Copy-Item -LiteralPath (Join-Path $root 'icon.png') -Destination (Join-Path $output 'icon.png') -Force
 $record = @{ kind='magitekmonsters-client-upload'; status='ready'; version=$version; repository=$repositoryUrl; repoBranch='repo'; contentBranch='main'; repoUrl="https://raw.githubusercontent.com/$Repository/repo/repo.json"; downloadUrl=$downloadUrl; apiLevel=$manifest.DalamudApiLevel; builtAt=$builtAt.ToString('O'); zipFile=$zipName; assetName=$assetName; zipEntries=$files.Count+1; zipBytes=(Get-Item -LiteralPath $zip).Length; sha256=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant(); sourceCommit=$SourceCommit }

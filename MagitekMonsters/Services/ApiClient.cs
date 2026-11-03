@@ -16,6 +16,14 @@ namespace MagitekMonsters.Services;
 
 public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
 {
+    public Task<TradingSnapshotDto> GetTrades(CancellationToken token = default) => Send<TradingSnapshotDto>(HttpMethod.Get, "/api/trades", null, true, token);
+    public Task<TradingSnapshotDto> CreateTrade(string trainer, string pokemon, string request) => Send<TradingSnapshotDto>(HttpMethod.Post, "/api/trades", new TradeCreateRequest(trainer, pokemon, request), true, default);
+    public Task<TradingSnapshotDto> OfferTrade(string id, string pokemon, int revision) => Send<TradingSnapshotDto>(HttpMethod.Post, $"/api/trades/{id}/offer", new TradeOfferRequest(pokemon, revision), true, default);
+    public Task<TradingSnapshotDto> ConfirmTrade(string id, int revision) => Send<TradingSnapshotDto>(HttpMethod.Post, $"/api/trades/{id}/confirm", new TradeConfirmRequest(revision), true, default);
+    public Task<TradingSnapshotDto> CancelTrade(string id) => Send<TradingSnapshotDto>(HttpMethod.Post, $"/api/trades/{id}/cancel", EmptyRequest.Instance, true, default);
+    public Task<TradingSnapshotDto> DepositWonder(string pokemon, string request) => Send<TradingSnapshotDto>(HttpMethod.Post, "/api/trades/wonder", new WonderDepositRequest(pokemon, request), true, default);
+    public Task<TradingSnapshotDto> WithdrawWonder(string id) => Send<TradingSnapshotDto>(HttpMethod.Post, $"/api/trades/wonder/{id}/withdraw", EmptyRequest.Instance, true, default);
+    public Task<TradingSnapshotDto> ReadTradeReceipt(string id) => Send<TradingSnapshotDto>(HttpMethod.Post, $"/api/trades/receipts/{id}/seen", EmptyRequest.Instance, true, default);
     private readonly Configuration configuration;
     private readonly ProtectedTokenStore tokenStore;
     private readonly HttpClient http = CreateHttpClient();
@@ -24,6 +32,7 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     private readonly JsonSerializerOptions json = new(JsonSerializerDefaults.Web);
     private readonly ConditionalWeakTable<TrainerSnapshotDto, SnapshotChange> snapshotChanges = new();
     private readonly TrainerRosterCache rosterCache = new();
+    private readonly TradingSnapshotCache tradingCache = new();
     private sealed record SnapshotChange(string Id);
     public ClientUpdateState Update { get; } = new();
     public CatalogVersions Catalogs { get; } = new();
@@ -341,14 +350,14 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     public Task<PvpStatusDto> DismissPvpBattle(CancellationToken cancellationToken = default) =>
         Send<PvpStatusDto>(HttpMethod.Delete, "/api/pvp/battle", null, true, cancellationToken);
 
-    public void SaveSession(SessionDto session) { tokenStore.Write(session.AccessToken); rosterCache.Reset(); }
+    public void SaveSession(SessionDto session) { tokenStore.Write(session.AccessToken); rosterCache.Reset(); tradingCache.Reset(); }
 
     public Task<TrainerSnapshotDto> RestParty(CancellationToken cancellationToken = default) =>
         Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/trainer/rest", EmptyRequest.Instance, true, cancellationToken);
 
-    public void Logout() { tokenStore.Clear(); rosterCache.Reset(); Catalogs.Reset(); }
+    public void Logout() { tokenStore.Clear(); rosterCache.Reset(); tradingCache.Reset(); Catalogs.Reset(); }
 
-    public void Dispose() { rosterCache.Reset(); http.Dispose(); }
+    public void Dispose() { rosterCache.Reset(); tradingCache.Reset(); http.Dispose(); }
 
     private async Task<T> Send<T>(HttpMethod method, string path, IClientRequest? body, bool authenticated, CancellationToken cancellationToken, bool changesState = true, bool fullRoster = false, TrainerRosterCache.Request? recoveryOf = null)
     {
@@ -357,16 +366,25 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
             throw new InvalidOperationException("The request does not match its API contract.");
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         var serverTiming = "unavailable";
+        var transport = "HTTP";
+        var statusCode = 0;
+        double setupMs = -1, requestMs = -1, parseMs = -1;
         var dispatched = false;
         var catalogRequest = Catalogs.BeginRequest();
         TrainerRosterCache.Request? rosterRequest = null;
+        TradingSnapshotCache.Request? tradingRequest = null;
         string? requestToken = null;
         try
         {
             if (authenticated && Live is { CanInvoke: true } live && ServerConnection.Command(method, path, body) is { } command)
             {
+                transport = "SignalR";
+                setupMs = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                var sent = System.Diagnostics.Stopwatch.GetTimestamp();
                 dispatched = true;
                 var reply = await live.Invoke(command, cancellationToken).ConfigureAwait(false);
+                requestMs = System.Diagnostics.Stopwatch.GetElapsedTime(sent).TotalMilliseconds;
+                parseMs = 0;
                 object? value = typeof(T) == typeof(BattleSnapshotDto) ? reply.Battle : typeof(T) == typeof(RaidRoomDto) ? reply.Raid : reply.Pvp;
                 return value is T liveResult ? liveResult : throw new HttpRequestException("The live response was incomplete.");
             }
@@ -380,6 +398,11 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
                 if (string.IsNullOrWhiteSpace(token))
                     throw new ApiException(401, "Log in before using this feature.");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                if (typeof(T) == typeof(TradingSnapshotDto))
+                {
+                    tradingRequest = tradingCache.Begin(token);
+                    if (method == HttpMethod.Get && tradingRequest.Basis is { } basis) request.Headers.IfNoneMatch.Add(new EntityTagHeaderValue(basis.ETag));
+                }
                 if (typeof(T) == typeof(TrainerSnapshotDto))
                 {
                     requestToken = token;
@@ -390,14 +413,19 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
             if (body is not null)
                 request.Content = JsonContent.Create(body, body.GetType(), options: json);
 
+            setupMs = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
             dispatched = true;
             using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            var requestMs = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            requestMs = System.Diagnostics.Stopwatch.GetElapsedTime(sentAt).TotalMilliseconds;
+            statusCode = (int)response.StatusCode;
             if (response.Headers.TryGetValues("Server-Timing", out var timings)) serverTiming = string.Join(",", timings);
             if (await Update.Observe(response, cancellationToken).ConfigureAwait(false))
                 throw new ApiException(426, Update.Message, "client_update_required");
             var catalogVersion = response.Headers.TryGetValues(ProtocolInfo.CatalogHeader, out var versions) ? string.Join(",", versions) : null;
             Catalogs.Observe(catalogVersion, catalogRequest);
+            if (response.StatusCode == HttpStatusCode.NotModified && method == HttpMethod.Get && tradingRequest is not null)
+                return (T)(object)tradingCache.Reuse(tradingRequest, response.Headers.ETag?.Tag);
             if (!response.IsSuccessStatusCode)
             {
                 ApiErrorDto? payload = null;
@@ -416,6 +444,11 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
             var parseStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             var result = await response.Content.ReadFromJsonAsync<T>(json, cancellationToken).ConfigureAwait(false)
                 ?? throw new ApiException((int)response.StatusCode, "The server returned an empty response.");
+            if (result is TradingSnapshotDto trades && tradingRequest is not null)
+            {
+                if (method == HttpMethod.Get) tradingCache.Complete(tradingRequest, response.Headers.ETag is { IsWeak: false } tag ? tag.Tag : null, trades);
+                else tradingCache.Invalidate(tradingRequest);
+            }
             if (result is TrainerSnapshotDto roster && rosterRequest is not null)
             {
                 try { rosterCache.Complete(rosterRequest, roster); }
@@ -437,7 +470,7 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
                 Catalogs.Observe(catalogVersion, catalogRequest);
             }
             if (!typeof(T).IsValueType) Catalogs.Record(result, catalogVersion, catalogRequest);
-            var parseMs = System.Diagnostics.Stopwatch.GetElapsedTime(parseStarted).TotalMilliseconds;
+            parseMs = System.Diagnostics.Stopwatch.GetElapsedTime(parseStarted).TotalMilliseconds;
             if (result is TrainerSnapshotDto snapshot)
             {
                 if (response.Headers.TryGetValues(ProtocolInfo.ChangeHeader, out var changes)
@@ -452,6 +485,9 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
             && !cancellationToken.IsCancellationRequested && (exception is HttpRequestException or OperationCanceledException
                 or ApiException { StatusCode: 408 or 502 or 503 or 504 }))
         {
+            Plugin.Log.Warning(exception, "Magitek Monsters action outcome unknown: {Method} {Route} / {Transport} / HTTP {StatusCode} / {ElapsedMs:F0} ms / server {ServerTiming}",
+                method.Method, DiagnosticRoute(method, path), transport, exception is ApiException error ? error.StatusCode : statusCode,
+                System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds, serverTiming);
             throw new UnconfirmedActionException(exception);
         }
         finally
@@ -459,10 +495,14 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
             var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             if (elapsed >= 500 && !cancellationToken.IsCancellationRequested
                 && (path.StartsWith("/api/battles/", StringComparison.Ordinal) || path.StartsWith("/api/pvp/", StringComparison.Ordinal) || path == "/api/me"))
-                Plugin.Log.Information("Slow Magitek Monsters request: {Method} {Route} took {ElapsedMs:F0} ms / server {ServerTiming}", method.Method,
-                    path.StartsWith("/api/battles/", StringComparison.Ordinal) ? path.EndsWith("/choose", StringComparison.Ordinal) ? "/api/battles/{id}/choose" : "/api/battles/{id}" : path.StartsWith("/api/pvp/battles/", StringComparison.Ordinal) ? "/api/pvp/battles/{id}" : path, elapsed, serverTiming);
+                Plugin.Log.Information("Slow Magitek Monsters request: {Method} {Route} took {ElapsedMs:F0} ms / {Transport} / HTTP {StatusCode} / setup {SetupMs:F1} ms / request {RequestMs:F1} ms / parse {ParseMs:F1} ms / server {ServerTiming}",
+                    method.Method, DiagnosticRoute(method, path), elapsed, transport, statusCode, setupMs, requestMs, parseMs, serverTiming);
         }
     }
+
+    private static string DiagnosticRoute(HttpMethod method, string path) => ApiRequestContracts.Find(method.Method, path)?.Path
+        ?? (path == "/api/me" ? path : path.StartsWith("/api/battles/", StringComparison.Ordinal) ? "/api/battles/{battleId}"
+            : path.StartsWith("/api/pvp/battles/", StringComparison.Ordinal) ? "/api/pvp/battles/{battleId}" : "/api");
 
     private Uri BuildUri(string path)
     {

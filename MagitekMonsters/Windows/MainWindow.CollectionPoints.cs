@@ -47,9 +47,18 @@ public sealed partial class MainWindow
         if (objectives.Count == 0) ImGui.TextDisabled("No objectives match these filters.");
         foreach (var objective in objectives.Skip(objectivePage * 8).Take(8))
         {
-            ImGui.PushStyleColor(ImGuiCol.Text, objective.Completed ? PokemonGreen : CompanionAccent);
-            ImGui.TextWrapped(objective.Name);
-            ImGui.PopStyleColor();
+            if (ImGui.BeginTable("CollectionRibbon##" + objective.Id, 2, ImGuiTableFlags.SizingStretchProp))
+            {
+                ImGui.TableSetupColumn("Ribbon", ImGuiTableColumnFlags.WidthFixed, 36 * CompanionScale);
+                ImGui.TableSetupColumn("Objective", ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableNextColumn();
+                var icon = ImGui.GetCursorScreenPos(); ImGui.Dummy(new Vector2(32 * CompanionScale));
+                DrawAchievementIconAt("collection:" + objective.Id, icon, new Vector2(32 * CompanionScale), objective.Completed);
+                ImGui.TableNextColumn();
+                ImGui.PushStyleColor(ImGuiCol.Text, objective.Completed ? PokemonGreen : CompanionAccent);
+                ImGui.TextWrapped(objective.Name); ImGui.PopStyleColor();
+                ImGui.EndTable();
+            }
             DrawWishlistPin("objective", objective.Id);
             ImGui.SameLine(); ImGui.TextDisabled(objective.Completed ? $"+{objective.Points} CP awarded" : $"Reward: {objective.Points} CP");
             DrawProgressBar((float)objective.Progress / Math.Max(1, objective.Target), new Vector2(-1, 19),

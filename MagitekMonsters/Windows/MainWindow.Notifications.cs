@@ -7,7 +7,7 @@ namespace MagitekMonsters.Windows;
 public sealed partial class MainWindow
 {
     private readonly GameNotificationFeed notificationFeed = new();
-    private CompanionNotice? deliveredFeedback;
+    private Func<GameNotice, bool>? notificationVisibility;
     private string notificationOwner = "";
     private long notificationSession = -1;
     private string notificationScope = "";
@@ -28,16 +28,20 @@ public sealed partial class MainWindow
     private void UpdateNotifications()
     {
         var batch = notificationFeed.Observe(trainer?.User.Id ?? "", sessionResponses.Generation, trainer?.Gifts, pvpStatus, raidRoom,
-            plugin.Connection.State, plugin.Api.Update.Required ? plugin.Api.Update.Message : null);
-        plugin.Notifications?.Update(batch, plugin.Configuration.NotificationsEnabled);
-        if (batch.Reset) deliveredFeedback = headerFeedback.Current;
-        var feedback = headerFeedback.Current;
-        if (ReferenceEquals(deliveredFeedback, feedback) || feedback is null || busy) return;
-        deliveredFeedback = feedback;
-        if (!feedback.IsError && (battle?.Status == "active" || pvpStatus?.Battle?.Status == "active" || raidRoom?.Status == "active"
-            || feedback.Message is "Raid action saved." or "Searching for another Trainer..." or "PvP status synchronized.")) return;
-        plugin.Notifications?.Feedback(feedback.Message, feedback.IsError);
+            plugin.Connection.State, plugin.Api.Update.Required ? plugin.Api.Update.Message : null, trading);
+        plugin.Notifications?.Update(batch, plugin.Configuration.NotificationsEnabled, notificationVisibility ??= IsNotificationVisible);
     }
+
+    private bool IsNotificationVisible(GameNotice notice) => IsOpen && (notice.Target switch
+    {
+        GameNoticeTarget.Gifts => mainSection == 13,
+        GameNoticeTarget.Trades => mainSection == 16 && tradingTab == (notice.Kind == GameNoticeKind.Success ? 2 : 0),
+        GameNoticeTarget.Challenge => mainSection == 4 && onlineView == 2,
+        GameNoticeTarget.Match => mainSection == 4 && pvpStatus?.Battle?.Id == notice.Subject,
+        GameNoticeTarget.RaidReady or GameNoticeTarget.RaidBattle or GameNoticeTarget.RaidCapture => mainSection == 12 && raidRoom?.Id == notice.Subject,
+        GameNoticeTarget.Connection => true,
+        _ => false
+    });
 
     internal void OpenNotification(GameNotice notice)
     {
@@ -45,6 +49,7 @@ public sealed partial class MainWindow
         IsOpen = true;
         switch (notice.Target)
         {
+            case GameNoticeTarget.Trades: if (trainer is not null) { mainSection = 16; requestTradingTab = notice.Kind == GameNoticeKind.Success ? 2 : 0; tradeRefreshRequested = true; } break;
             case GameNoticeTarget.Gifts: if (trainer is not null) { mainSection = 13; giftPage = 0; } break;
             case GameNoticeTarget.Challenge:
                 if (pvpStatus?.Challenges.Any(invite => invite.Id == notice.Subject && invite.ToUserId == trainer?.User.Id

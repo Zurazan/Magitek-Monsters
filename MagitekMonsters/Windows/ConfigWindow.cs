@@ -32,7 +32,7 @@ public sealed class ConfigWindow : Window, IDisposable
         ImGui.Spacing();
         var notifications = configuration.NotificationsEnabled;
         if (ImGui.Checkbox("Dalamud notifications", ref notifications)) { configuration.NotificationsEnabled = notifications; configuration.Save(); }
-        ImGui.TextWrapped("Invitations, gifts, raids and connection alerts. No notification sounds.");
+        ImGui.TextWrapped("Invitations, gifts, trades and battles needing your attention. Routine actions stay quiet. No notification sounds.");
         ImGui.Spacing();
         var typeHints = configuration.MoveTypeHintsEnabled;
         if (ImGui.Checkbox("Move type effectiveness badges", ref typeHints)) { configuration.MoveTypeHintsEnabled = typeHints; configuration.Save(); }

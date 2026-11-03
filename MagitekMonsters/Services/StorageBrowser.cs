@@ -18,7 +18,7 @@ public static class StorageBrowser
         .GroupBy(Variant, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
     public static int IvTotal(PokemonDto pokemon) => Stats.Sum(stat => pokemon.Ivs.GetValueOrDefault(stat));
     public static int PerfectIvs(PokemonDto pokemon) => Stats.Count(stat => pokemon.Ivs.GetValueOrDefault(stat) == 31);
-    public static bool ReleaseProtected(PokemonDto pokemon) => pokemon.Favorite || pokemon.FusionHostId.Length > 0 || pokemon.Fusion is not null;
+    public static bool ReleaseProtected(PokemonDto pokemon) => pokemon.Favorite || pokemon.FusionHostId.Length > 0 || pokemon.Fusion is not null || pokemon.TradeLockId is not null;
 
     public static PokemonDto?[] BoxSlots(IEnumerable<PokemonDto> pokemon, bool preserveSlots = true)
     {
@@ -57,13 +57,13 @@ public static class StorageBrowser
 
     public static void Synchronize(HashSet<string> selected, IEnumerable<PokemonDto> storage)
     {
-        var eligible = storage.Where(pokemon => pokemon.PartySlot is null && pokemon.FusionHostId.Length == 0).Select(pokemon => pokemon.Id).ToHashSet();
+        var eligible = storage.Where(pokemon => pokemon.PartySlot is null && pokemon.FusionHostId.Length == 0 && pokemon.TradeLockId is null).Select(pokemon => pokemon.Id).ToHashSet();
         selected.IntersectWith(eligible);
     }
 
     public static void Select(HashSet<string> selected, IEnumerable<PokemonDto> candidates)
     {
-        foreach (var pokemon in candidates.Where(pokemon => pokemon.PartySlot is null && pokemon.FusionHostId.Length == 0))
+        foreach (var pokemon in candidates.Where(pokemon => pokemon.PartySlot is null && pokemon.FusionHostId.Length == 0 && pokemon.TradeLockId is null))
         {
             if (selected.Count >= StorageLimits.MaximumBatch) break;
             selected.Add(pokemon.Id);

@@ -1,3 +1,2 @@
 * text=auto eol=lf
 *.png -text
-Graphics/licenses/*.txt -text

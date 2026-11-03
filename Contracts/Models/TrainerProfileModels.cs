@@ -8,6 +8,7 @@ public sealed class TrainerProfileDto
     public string TrainerId { get; set; } = string.Empty;
     public string? VanityCode { get; set; }
     public string DisplayName { get; set; } = string.Empty;
+    public string TitleId { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public int Color { get; set; }
     public TrainerProfilePartnerDto? Partner { get; set; }

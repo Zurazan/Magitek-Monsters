@@ -19,7 +19,11 @@ public static class ApiRequestContracts
     };
     public static readonly IReadOnlyList<ApiRequestContract> All = new ApiRequestContract[]
     {
-        Post<EmptyRequest>("/api/auth/xivauth/start", true), Post<LoginPollRequest>("/api/auth/xivauth/poll"), Post<DevelopmentLoginRequest>("/api/auth/development"),
+        Post<TradeCreateRequest>("/api/trades"), Post<TradeOfferRequest>("/api/trades/{tradeId}/offer"),
+        Post<TradeConfirmRequest>("/api/trades/{tradeId}/confirm"), Post<EmptyRequest>("/api/trades/{tradeId}/cancel", true),
+        Post<WonderDepositRequest>("/api/trades/wonder"), Post<EmptyRequest>("/api/trades/wonder/{depositId}/withdraw", true),
+        Post<EmptyRequest>("/api/trades/receipts/{receiptId}/seen", true),
+        Post<EmptyRequest>("/api/auth/xivauth/start", true), Post<LoginPollRequest>("/api/auth/xivauth/poll"),
         new("PUT", "/api/trainer/card", typeof(TrainerCardSaveRequest)), Post<EmptyRequest>("/api/gifts/{receiptId}/seen", true),
         Post<TrainerUidChoiceRequest>("/api/trainer/uid"), new("PUT", "/api/trainer/vanity", typeof(TrainerVanityRequest)),
         Post<SpeciesRequest>("/api/trainer/starter"), Post<EmptyRequest>("/api/trainer/rest"), Post<SpeciesRequest>("/api/prize-exchange/redeem"),

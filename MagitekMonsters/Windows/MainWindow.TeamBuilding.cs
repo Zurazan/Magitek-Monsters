@@ -41,6 +41,7 @@ public sealed partial class MainWindow
 
     private PokemonBuildDto? GetPokemonBuild(PokemonDto pokemon)
     {
+        if (pokemon.TradeLockId is not null) return null;
         var stamps = pokemonBuildStamps ??= new();
         if (!stamps.TryGetValue(pokemon, out var saved)) saved = stamps.GetValue(pokemon, static value => new(JsonSerializer.Serialize(value)));
         var stamp = saved.Value;
@@ -65,6 +66,7 @@ public sealed partial class MainWindow
 
     private void DrawTeamBuildingSummary(PokemonDto pokemon)
     {
+        if (pokemon.TradeLockId is not null) { ImGui.TextWrapped("This Pokémon is reserved for trading. Review its details in Trading."); return; }
         var build = GetPokemonBuild(pokemon);
         if (build is null)
         {

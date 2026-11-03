@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
@@ -19,6 +20,7 @@ public sealed partial class MainWindow
 
     private void ResetTrainerProfiles()
     {
+        badgeCaseRegionId = "";
         identityDraftOwner = uidPromptOwner = string.Empty;
         requestUidPrompt = false;
         trainerProfiles.Clear();
@@ -47,7 +49,14 @@ public sealed partial class MainWindow
 
     private async Task PublishTrainerCard()
     {
-        var saved = await InSession(plugin.Api.SaveTrainerCard(trainerCardDraft!.Copy()));
+        var choice = trainerCardDraft!.Copy();
+        if (regionalLeagues.Count > 0)
+        {
+            var resolved = TrainerCard.Resolve(trainer!, choice, regionalLeagues);
+            choice.TitleId = resolved.Title.Id;
+            if (choice.BadgeIds is not null) choice.BadgeIds = resolved.Badges.Select(badge => badge.Id).ToList();
+        }
+        var saved = await InSession(plugin.Api.SaveTrainerCard(choice));
         trainer!.Collection.TrainerCard = saved;
         plugin.Configuration.TrainerCards[trainer.User.Id] = saved.Copy();
         plugin.Configuration.Save();

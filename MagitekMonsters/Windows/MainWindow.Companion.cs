@@ -235,7 +235,8 @@ public sealed partial class MainWindow
         if (pokemon is null) { ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return; }
         ImGui.PushID(pokemon.Id);
         DrawSectionHeader($"{pokemon.Nickname} / Lv. {pokemon.Level}", "Held items, training and permanent collection changes");
-        var locked = CollectionLocked || pokemon.FusionHostId.Length > 0;
+        var locked = CollectionLocked || pokemon.FusionHostId.Length > 0 || pokemon.TradeLockId is not null;
+        if (pokemon.TradeLockId is not null) ImGui.TextColored(PokemonOrange, "Reserved for trading. Cancel or withdraw it from Trading to make changes.");
         if (locked) ImGui.TextWrapped("Finish your battle or run, or unfuse this Pokémon, before making changes.");
         if (ImGui.BeginTabBar("PokemonManagementTabs", ImGuiTabBarFlags.FittingPolicyResizeDown))
         {

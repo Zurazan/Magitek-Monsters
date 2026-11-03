@@ -26,15 +26,15 @@ public static class TrainerCard
 {
     public const int MaximumBadges = 3;
 
-    public static TrainerProfileDto Profile(TrainerSnapshotDto trainer, TrainerCardPreferences preferences)
+    public static TrainerProfileDto Profile(TrainerSnapshotDto trainer, TrainerCardPreferences preferences, IReadOnlyList<RegionalLeagueDto>? regions = null)
     {
-        return Profile(trainer, Resolve(trainer, preferences));
+        return Profile(trainer, Resolve(trainer, preferences, regions));
     }
 
     public static TrainerProfileDto Profile(TrainerSnapshotDto trainer, TrainerCardView card)
     {
         return new() { TrainerId = trainer.User.TrainerId, VanityCode = trainer.User.VanityCode, DisplayName = trainer.User.DisplayName,
-            Title = card.Title.Name, Color = card.Color, Badges = card.Badges.ToList(),
+            TitleId = card.Title.Id, Title = card.Title.Name, Color = card.Color, Badges = card.Badges.ToList(),
             Partner = card.Partner is null ? null : new() { Species = card.Partner.Species, Form = card.Partner.Form,
                 Nickname = card.Partner.Nickname, Level = card.Partner.Level, Shiny = card.Partner.Shiny },
             RegisteredSpecies = trainer.CollectionPoints.RegisteredSpecies, ShinySpecies = trainer.Pokedex.ShinyCaught,
@@ -46,14 +46,15 @@ public static class TrainerCard
         && first.Shared == second.Shared && (first.BadgeIds is null ? second.BadgeIds is null
             : second.BadgeIds is not null && first.BadgeIds.SequenceEqual(second.BadgeIds, StringComparer.Ordinal));
 
-    public static bool Valid(TrainerSnapshotDto trainer, TrainerCardPreferences preferences)
+    public static bool Valid(TrainerSnapshotDto trainer, TrainerCardPreferences preferences, IReadOnlyList<RegionalLeagueDto>? regions = null)
     {
-        var card = Resolve(trainer, preferences);
+        var card = Resolve(trainer, preferences, regions);
+        var badges = preferences.BadgeIds?.Select(id => TrainerLeagueRecords.BadgeId(id, regions ?? [])).ToArray() ?? [];
         return preferences.Color is >= 0 and <= 3 && card.Title.Id == preferences.TitleId
             && (preferences.FeaturedPokemonId.Length == 0 || card.Partner?.Id == preferences.FeaturedPokemonId)
             && (preferences.BadgeIds is null || preferences.BadgeIds.Count <= MaximumBadges
-                && preferences.BadgeIds.Distinct(StringComparer.Ordinal).Count() == preferences.BadgeIds.Count
-                && preferences.BadgeIds.All(id => card.EarnedBadges.Any(badge => badge.Id == id)));
+                && badges.Distinct(StringComparer.Ordinal).Count() == badges.Length
+                && badges.All(id => card.EarnedBadges.Any(badge => badge.Id == id)));
     }
 
     public static TrainerCardPreferences Preferences(IDictionary<string, TrainerCardPreferences> cards, string trainerId)
@@ -65,8 +66,11 @@ public static class TrainerCard
         return preferences;
     }
 
-    public static IReadOnlyList<TrainerCardTitle> Titles(TrainerSnapshotDto trainer) =>
-    [
+    public static IReadOnlyList<TrainerCardTitle> Titles(TrainerSnapshotDto trainer, IReadOnlyList<RegionalLeagueDto>? regions = null)
+    {
+        var leagues = TrainerLeagueRecords.Resolve(trainer, regions ?? []);
+        var titles = new List<TrainerCardTitle>
+        {
         new("trainer", "Pokémon Trainer", "Choose your first partner.", true),
         new("collector", "Pokémon Collector", "Register 50 different species.", trainer.CollectionPoints.RegisteredSpecies >= 50),
         new("researcher", "Pokédex Researcher", "Register 250 different species.", trainer.CollectionPoints.RegisteredSpecies >= 250),
@@ -74,19 +78,34 @@ public static class TrainerCard
         new("ace", "Ace Trainer", "Win 25 trainer battles.", trainer.PveProgress.TotalWins >= 25),
         new("challenger", "Frontier Challenger", "Win 25 Frontier battles.", trainer.Frontier.LifetimeWins >= 25),
         new("veteran", "Frontier Veteran", "Reach a Standard Frontier streak of 21.", trainer.Frontier.BestStandard >= 21),
-        new("badges", "Badge Collector", "Earn all eight Gym badges.", trainer.Pokedex.Badges.Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.Ordinal).Count() >= 8)
-    ];
+        new("badges", "Badge Collector", "Earn every Gym badge required by one regional League lineup.", leagues.Any(league => league.CompletedChallenge(badgesOnly: true))),
+        new("island-challenger", "Island Challenger", "Complete an Alola lineup's trials and grand trials.", leagues.Any(league => league.Region.Format == "trials" && league.CompletedChallenge())),
+        new("developer", "Developer", "Awarded to the developer of Magitek Monsters.", trainer.TitleIds.Contains("developer", StringComparer.Ordinal)),
+        new("beta-tester", "Beta Tester", "Joined Magitek Monsters during beta testing.", trainer.TitleIds.Contains("beta-tester", StringComparer.Ordinal))
+        };
+        titles.AddRange(leagues.Select(league => new TrainerCardTitle("champion:" + league.Region.Id,
+            league.Region.Id == "blueberry" ? "Blueberry Champion" : league.Region.Name + " Champion",
+            "Complete a full " + league.Region.Name + " League lineup. Exhibition battles do not count.", league.Champion)));
+        titles.Add(new("league-master", "League Master", "Complete a full League lineup in every region, including Blueberry Academy.", leagues.Count > 0 && leagues.All(league => league.Champion)));
+        return titles;
+    }
 
-    public static TrainerCardView Resolve(TrainerSnapshotDto trainer, TrainerCardPreferences preferences)
+    public static TrainerCardView Resolve(TrainerSnapshotDto trainer, TrainerCardPreferences preferences, IReadOnlyList<RegionalLeagueDto>? regions = null)
     {
         var owned = trainer.Party.Concat(trainer.Storage).ToList();
         var partner = owned.FirstOrDefault(entry => entry.Id == preferences.FeaturedPokemonId)
             ?? trainer.Party.OrderBy(entry => entry.PartySlot).FirstOrDefault() ?? owned.FirstOrDefault();
-        var titles = Titles(trainer);
+        var titles = Titles(trainer, regions);
         var title = titles.FirstOrDefault(entry => entry.Id == preferences.TitleId && entry.Unlocked) ?? titles[0];
         var earned = new List<TrainerCardBadge>();
-        foreach (var name in trainer.Pokedex.Badges.Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.Ordinal))
-            earned.Add(new("gym:" + name, name, "Gym badge earned through trainer battles.", (earned.Count + 1).ToString()));
+        foreach (var league in TrainerLeagueRecords.Resolve(trainer, regions ?? []))
+        {
+            if (league.Champion) earned.Add(new("champion:" + league.Region.Id, league.Region.Name + " Champion", "Completed a full regional League lineup.", "C"));
+            foreach (var slot in league.Milestones.Where(slot => slot.Earned))
+                earned.Add(new("league:" + slot.Definition.Id, league.Region.Name + " / " + slot.Definition.Name,
+                    (slot.Definition.Kind switch { "trial" => "Island trial", "grand-trial" => "Grand trial", _ => "Gym badge" }) + " earned in " + league.Region.Name + ".",
+                    slot.Definition.Kind switch { "trial" => "T", "grand-trial" => "K", _ => "G" }));
+        }
         foreach (var achievement in trainer.Frontier.Achievements.Where(entry => entry.Completed))
             earned.Add(new("frontier:" + achievement.Id, achievement.Name, "Frontier achievement", "F"));
         foreach (var objective in trainer.CollectionPoints.Objectives.Where(entry => entry.Completed))
@@ -94,7 +113,7 @@ public static class TrainerCard
         if (trainer.StarterChosen) earned.Add(new("partner", "First partner", "Your journey began with your first Pokémon.", "P"));
         earned = earned.DistinctBy(entry => entry.Id).ToList();
         var selected = preferences.BadgeIds is null ? earned.Take(MaximumBadges)
-            : preferences.BadgeIds.Distinct(StringComparer.Ordinal).Select(id => earned.FirstOrDefault(entry => entry.Id == id))
+            : preferences.BadgeIds.Select(id => TrainerLeagueRecords.BadgeId(id, regions ?? [])).Distinct(StringComparer.Ordinal).Select(id => earned.FirstOrDefault(entry => entry.Id == id))
                 .OfType<TrainerCardBadge>().Take(MaximumBadges);
         return new(partner, title, Math.Clamp(preferences.Color, 0, 3), selected.ToList(), earned);
     }

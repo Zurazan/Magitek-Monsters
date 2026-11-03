@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window, IDisposable
         get => trainerState;
         set
         {
-            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetBrowseCaches(); }
+            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetTrading(); ResetBrowseCaches(); }
             ObserveTrainerActivity(trainerState, value);
             navigationAlertTrainer = null;
             trainerState = value;
@@ -353,6 +353,8 @@ public sealed partial class MainWindow : Window, IDisposable
             }
             else if (IsOpen && mainSection == 5 && shopRefreshRequested)
                 Run(RefreshShop, "Refreshing shop...");
+            else if (plugin.Connection.State == ServerConnectionState.Connected && (tradeRefreshRequested || DateTimeOffset.UtcNow >= nextTradePollAt))
+                BackgroundTrading();
             else if (DateTimeOffset.UtcNow >= nextGiftRefreshAt && battle?.Status != "active" && pvpStatus?.Battle?.Status != "active" && raidRoom?.Status != "active")
                 BackgroundGifts();
         }
@@ -423,6 +425,7 @@ public sealed partial class MainWindow : Window, IDisposable
             DrawNavigationItem("Pokédex", 6, 32 * scale);
             DrawNavigationItem("Collection goals", 7, 32 * scale);
             DrawNavigationItem("Events", 10, 32 * scale);
+            DrawNavigationItem($"Trading{(trading?.Unread > 0 ? $" [{trading.Unread}]" : "")}", 16, 32 * scale);
             DrawNavigationItem($"Mystery Gifts{(trainer.Gifts.Unread > 0 ? $" [{trainer.Gifts.Unread}]" : "")}", 13, 32 * scale);
         }
         ImGui.EndChild();
@@ -456,6 +459,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 case 13: DrawMysteryGifts(); break;
                 case 14: DrawTrainerCard(); break;
                 case 15: DrawCurrencies(); break;
+                case 16: DrawTrading(); break;
                 default: mainSection = 0; DrawAdventure(); break;
             }
         }
@@ -1504,6 +1508,7 @@ public sealed partial class MainWindow : Window, IDisposable
         habitat = null;
         battle = null;
         eventBattleId = string.Empty;
+        ResetTrading();
         pvpStatus = null;
         raidRoom = null; raidBoard = null; raidPokemonId = ""; raidJoinCode = ""; raidRefreshRequested = false;
         pendingRaidChoice = null; raidCaptureRequest = null; raidTargetMove = null;
@@ -1680,6 +1685,7 @@ public sealed partial class MainWindow : Window, IDisposable
             QueueConnectionSync();
         }
         if (eventName == "raid.updated") raidRefreshRequested = true;
+        if (eventName == "trades.updated") tradeRefreshRequested = true;
         if (eventName is "trainer.updated" or "encounter.updated" or "battle.updated")
         {
             try

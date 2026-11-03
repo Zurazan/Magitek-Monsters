@@ -24,6 +24,7 @@ public sealed class UserDto
 
 public sealed class TrainerSnapshotDto
 {
+    public List<string> TitleIds { get; set; } = [];
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public TrainerRosterCacheDto? RosterCache { get; set; }
     public GiftInboxDto Gifts { get; set; } = new();
@@ -245,6 +246,9 @@ public sealed class PokedexDto
 
 public sealed class PokemonDto
 {
+    public string? TradeLockId { get; set; }
+    public string OriginalTrainerUid { get; set; } = "";
+    public string OriginalTrainerName { get; set; } = "";
     public LeagueVitalDto? Vitals { get; set; }
     public string FusionHostId { get; set; } = string.Empty;
     public FusionOptionDto? Fusion { get; set; }
@@ -369,14 +373,6 @@ public sealed class EncounterDto
     public string Status { get; set; } = string.Empty;
     public int Attempts { get; set; }
     public string ExpiresAt { get; set; } = string.Empty;
-}
-
-public sealed class CaptureResultDto
-{
-    public bool Caught { get; set; }
-    public PokemonDto? Pokemon { get; set; }
-    public int BallsRemaining { get; set; }
-    public EncounterDto Encounter { get; set; } = new();
 }
 
 public sealed class StarterCatalogDto

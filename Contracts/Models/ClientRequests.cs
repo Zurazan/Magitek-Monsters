@@ -6,12 +6,15 @@ using MagitekMonsters.Services;
 namespace MagitekMonsters.Contracts;
 
 public interface IClientRequest;
+public sealed record TradeCreateRequest(string TrainerId, string PokemonId, string RequestId) : IClientRequest;
+public sealed record TradeOfferRequest(string PokemonId, int Revision) : IClientRequest;
+public sealed record TradeConfirmRequest(int Revision) : IClientRequest;
+public sealed record WonderDepositRequest(string PokemonId, string RequestId) : IClientRequest;
 public sealed record EmptyRequest : IClientRequest
 {
     public static readonly EmptyRequest Instance = new();
 }
 public sealed record LoginPollRequest(string? LoginId) : IClientRequest;
-public sealed record DevelopmentLoginRequest(string? CharacterName, string? HomeWorld) : IClientRequest;
 public sealed record TrainerCardSaveRequest(TrainerCardPreferences Card, bool OnlyIfMissing = false) : IClientRequest;
 public sealed record TrainerUidChoiceRequest(string? Uid, bool KeepGenerated, bool Confirmed) : IClientRequest;
 public sealed record TrainerVanityRequest([property: JsonRequired] string? Code) : IClientRequest;

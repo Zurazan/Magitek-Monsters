@@ -2,6 +2,7 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
 
+    <AllowedReferenceRelatedFileExtensions>.xml;.pri;.dll.config;.exe.config</AllowedReferenceRelatedFileExtensions>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Author>Zura</Author>
     <Name>Magitek Monsters</Name>
@@ -13,10 +14,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="..\Graphics\badges\*.png">
+      <Link>Graphics\badges\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="..\Graphics\ribbons\*.png">
+      <Link>Graphics\ribbons\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
     <EmbeddedResource Include="Data\starter-previews.json" LogicalName="MagitekMonsters.StarterPreviews.json" />
     <EmbeddedResource Include="Data\species-display.json" LogicalName="MagitekMonsters.SpeciesDisplay.json" />
     <ProjectReference Include="..\Contracts\MagitekMonsters.Contracts.csproj" />
-    <ProjectReference Include="..\Tools\AssetCatalogCompiler\AssetCatalogCompiler.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" GlobalPropertiesToRemove="TargetFramework;RuntimeIdentifier;SelfContained;Platform" />
+    <ProjectReference Include="..\Tools\AssetCatalogCompiler\AssetCatalogCompiler.csproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" GlobalPropertiesToRemove="TargetFramework;RuntimeIdentifier;SelfContained;Platform" />
     <PackageReference Include="SixLabors.ImageSharp" Version="4.1.3" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="4.4.0" />
@@ -51,11 +62,6 @@
     </Content>
     <Content Include="..\Graphics\overrides\items\*.png">
       <Link>Graphics\overrides\items\%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Visible>false</Visible>
-    </Content>
-    <Content Include="..\Graphics\licenses\*.txt">
-      <Link>Graphics\licenses\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>

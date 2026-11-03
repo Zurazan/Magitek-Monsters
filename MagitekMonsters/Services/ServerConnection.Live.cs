@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Http;
+using System.Net.WebSockets;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -81,7 +82,7 @@ public sealed partial class ServerConnection
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token); deadline.CancelAfter(TimeSpan.FromSeconds(15));
         LiveReply reply;
         try { reply = await hub.InvokeCoreAsync<LiveReply>("Execute", [command], deadline.Token).ConfigureAwait(false); }
-        catch (Exception error) when (error is HubException or InvalidOperationException or System.IO.IOException)
+        catch (Exception error) when (error is HubException or InvalidOperationException or System.IO.IOException or WebSocketException)
         { throw new HttpRequestException("The live action could not be confirmed.", error); }
         if (reply.Error is { } failure)
         {

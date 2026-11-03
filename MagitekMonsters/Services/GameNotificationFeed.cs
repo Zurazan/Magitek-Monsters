@@ -6,7 +6,7 @@ using MagitekMonsters.Models;
 namespace MagitekMonsters.Services;
 
 public enum GameNoticeKind { Info, Success, Warning, Error }
-public enum GameNoticeTarget { None, Gifts, Challenge, Match, RaidReady, RaidBattle, RaidCapture, Connection, Login, Update }
+public enum GameNoticeTarget { None, Gifts, Challenge, Match, RaidReady, RaidBattle, RaidCapture, Connection, Login, Update, Trades }
 public sealed record GameNotice(string Key, string Title, string Content, GameNoticeKind Kind = GameNoticeKind.Info,
     GameNoticeTarget Target = GameNoticeTarget.None, string? Subject = null, string? ActionLabel = null, DateTimeOffset? ExpiresAt = null);
 public sealed record GameNoticeBatch(bool Reset, IReadOnlyList<GameNotice> New, IReadOnlySet<string> ActiveKeys);
@@ -26,6 +26,7 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
     private (string Id, string? SeenAt)[] giftInputs = [];
     private ChallengeInputs[] challengeInputs = [];
     private GameNoticeBatch? idleBatch;
+    private TradingSnapshotDto? tradingInput;
     private DateTimeOffset observedAt;
     private DateTimeOffset refreshAt = DateTimeOffset.MinValue;
 
@@ -66,10 +67,11 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
     }
 
     public GameNoticeBatch Observe(string owner, long session, GiftInboxDto? gifts, PvpStatusDto? pvp, RaidRoomDto? raid,
-        ServerConnectionState connection, string? requiredUpdate = null)
+        ServerConnectionState connection, string? requiredUpdate = null, TradingSnapshotDto? trading = null)
     {
         var now = clock.GetUtcNow();
-        var changed = InputsChanged(owner, session, gifts, pvp, raid, connection, requiredUpdate);
+        var changed = InputsChanged(owner, session, gifts, pvp, raid, connection, requiredUpdate) || !ReferenceEquals(tradingInput, trading);
+        tradingInput = trading;
         if (!changed && idleBatch is not null && now >= observedAt && now < refreshAt) return idleBatch;
         observedAt = now; refreshAt = DateTimeOffset.MaxValue;
         var reset = ownerScope != owner || sessionScope != session;
@@ -94,6 +96,29 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
         }
         if (owner.Length > 0)
         {
+            if (trading?.Active is { } trade && DateTimeOffset.TryParse(trade.ExpiresAt, out var tradeExpiry) && tradeExpiry > now)
+            {
+                if (tradeExpiry < refreshAt) refreshAt = tradeExpiry;
+                if (!trade.YouAreSender && trade.YourPokemon is null || trade.TheyConfirmed && !trade.YouConfirmed)
+                    Add(new("trade:" + trade.Id, trade.YourPokemon is null ? "Trade invitation" : "Trade ready for review",
+                        $"{trade.PartnerName} is trading with you. Review the Pokémon in Trading.", Target: GameNoticeTarget.Trades,
+                        Subject: trade.Id, ActionLabel: "Review trade", ExpiresAt: tradeExpiry), "trade:" + trade.Id + ":" + (trade.TheyConfirmed ? "confirmed" : "invited"));
+            }
+            var receipts = trading?.Receipts.Where(receipt => receipt.SeenAt is null).ToArray() ?? [];
+            if (receipts.Length > 0)
+            {
+                active.Add("trade-receipts");
+                var received = false;
+                foreach (var receipt in receipts) received |= Remember("trade-receipt:" + receipt.Id);
+                if (received)
+                {
+                    var receipt = receipts[0];
+                    notices.Add(new("trade-receipts", receipts.Length > 1 ? "Trades complete" : receipt.Kind == "wonder" ? "Wonder Trade complete" : "Trade complete",
+                        receipts.Length > 1 ? $"{receipts.Length:N0} completed trades. Your received Pokémon are in PC storage."
+                            : $"Received {(receipt.Received.Shiny ? "shiny " : "")}{receipt.Received.DisplaySpecies} from {receipt.PartnerName}. Your Pokémon is in PC storage.",
+                        GameNoticeKind.Success, GameNoticeTarget.Trades, receipts.Length == 1 ? receipt.Id : null, "View trades"));
+                }
+            }
             if (gifts is { Unread: > 0 })
             {
                 active.Add("gifts");
@@ -136,10 +161,10 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
         else if (connection is ServerConnectionState.Reconnecting or ServerConnectionState.Syncing && wasConnected)
         {
             if (interruptedAt is null) { interruptedAt = now; interruption++; }
-            if (now - interruptedAt >= TimeSpan.FromSeconds(5))
+            if (now - interruptedAt >= TimeSpan.FromSeconds(30))
                 Add(new("connection", "Connection interrupted", "Reconnecting to Magitek Monsters. Your progress stays on the server.",
                     GameNoticeKind.Warning, GameNoticeTarget.Connection, ActionLabel: "Open plugin"), "connection:" + interruption);
-            else if (interruptedAt.Value.AddSeconds(5) < refreshAt) refreshAt = interruptedAt.Value.AddSeconds(5);
+            else if (interruptedAt.Value.AddSeconds(30) < refreshAt) refreshAt = interruptedAt.Value.AddSeconds(30);
         }
         else interruptedAt = null;
         if (connection == ServerConnectionState.Unauthorized)
