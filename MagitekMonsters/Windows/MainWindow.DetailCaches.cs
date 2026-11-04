@@ -92,6 +92,8 @@ public sealed partial class MainWindow
     private void ResetDetailCaches()
     {
         ResetBattleItemCaches();
+        leagueTargetId = leagueMoveId = string.Empty;
+        leagueItemId = "potion"; leaguePocket = "Healing"; leagueItemPage = 0;
         ResetEvolutionReadiness();
         evolutionOptionIndex = null; formOptionIndex = null; fusionOptionIndex = null;
         discoveredFormSource = defeatedOpponentSource = null; discoveredForms = defeatedOpponents = null;

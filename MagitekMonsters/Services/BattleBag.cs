@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using MagitekMonsters.Models;
 
@@ -43,7 +44,6 @@ public static class BattleBag
     public static string Pocket(ShopItemDto item) => item.BattleEffect switch
     {
         "pp-restore" or "pp-restore-all" => "PP",
-        "full-heal" => "Status",
         _ => "Healing"
     };
 
@@ -59,12 +59,19 @@ public static class BattleBag
     };
 
     public static string Reason(ShopItemDto item, BattleSidePokemonDto pokemon)
+        => Reason(item, Health(pokemon.Condition), pokemon.PpMoves);
+
+    public static BattleHealth Health(LeagueVitalDto pokemon) => new(pokemon.Hp, pokemon.MaxHp, pokemon.Status, pokemon.Hp == 0);
+
+    public static string Reason(ShopItemDto item, LeagueVitalDto pokemon)
+        => Reason(item, Health(pokemon), pokemon.Moves);
+
+    private static string Reason(ShopItemDto item, BattleHealth hp, IReadOnlyList<LeagueMoveDto> moves)
     {
-        var hp = Health(pokemon.Condition);
         if (item.BattleEffect is "revive" or "max-revive") return hp.Fainted ? "" : "Not fainted";
         if (hp.Fainted) return "Needs a Revive";
         if (item.BattleEffect is "pp-restore" or "pp-restore-all")
-            return pokemon.PpMoves.Any(move => move.Pp < move.MaxPp) ? "" : "PP full";
+            return moves.Any(move => move.Pp < move.MaxPp) ? "" : "PP full";
         if (item.BattleEffect is not ("heal" or "full-heal")) return "Cannot use in battle";
         if (hp.MaxHp == 0) return "HP unavailable";
         return hp.Hp < hp.MaxHp || item.BattleEffect == "full-heal" && hp.Status.Length > 0 ? ""
@@ -78,17 +85,22 @@ public static class BattleBag
     }
 
     public static string Preview(ShopItemDto item, BattleSidePokemonDto pokemon, int moveSlot)
+        => Preview(item, Health(pokemon.Condition), pokemon.PpMoves, moveSlot);
+
+    public static string Preview(ShopItemDto item, LeagueVitalDto pokemon, string moveId)
+        => Preview(item, Health(pokemon), pokemon.Moves, pokemon.Moves.FindIndex(move => move.Id == moveId));
+
+    private static string Preview(ShopItemDto item, BattleHealth hp, IReadOnlyList<LeagueMoveDto> moves, int moveSlot)
     {
-        var reason = Reason(item, pokemon);
+        var reason = Reason(item, hp, moves);
         if (reason.Length > 0) return reason;
-        var hp = Health(pokemon.Condition);
         if (item.BattleEffect == "revive") return "Revive with half HP";
         if (item.BattleEffect == "max-revive") return "Revive with full HP";
         if (item.BattleEffect == "pp-restore-all") return item.Id == "elixir" ? "+10 PP to each move, up to its maximum" : "Fully restore every move's PP";
         if (item.BattleEffect == "pp-restore")
         {
-            if (moveSlot < 0 || moveSlot >= pokemon.PpMoves.Count) return "Choose a move";
-            var move = pokemon.PpMoves[moveSlot];
+            if (moveSlot < 0 || moveSlot >= moves.Count) return "Choose a move";
+            var move = moves[moveSlot];
             var after = (int)Math.Min(move.MaxPp, (long)move.Pp + (item.Id == "ether" ? 10 : 999));
             return $"{move.Name}: PP {move.Pp} > {after}/{move.MaxPp}";
         }

@@ -12,9 +12,6 @@ namespace MagitekMonsters.Windows;
 public sealed partial class MainWindow
 {
     private bool LeagueBusy => trainer?.LeagueRun?.Status is "active" or "between";
-    private string leagueTargetId = string.Empty;
-    private string leagueItemId = "potion";
-    private string leagueMoveId = string.Empty;
     private bool leagueRematch;
     private string? leagueEntryCircuitId;
 
@@ -114,59 +111,23 @@ public sealed partial class MainWindow
         var scale = CompanionScale;
         DrawSectionHeader("League checkpoint", $"{run.RegionName ?? "Previous League"} / {(run.Rematch ? "Level-100 rematch" : run.CircuitName ?? "League run")} / {run.Stage}/{run.OpponentIds.Count} victories saved");
         DrawLeagueStages(run.OpponentIds.ToArray(), run.Stage);
-        ImGui.BeginChild("LeagueCheckpointBody", new Vector2(0, Math.Max(180 * scale, ImGui.GetContentRegionAvail().Y - 58 * scale)), false);
         var next = opponents.FirstOrDefault(entry => entry.Id == run.OpponentIds.ElementAtOrDefault(run.Stage));
-        ImGui.TextColored(CompanionAccent, $"NEXT: {next?.Name ?? "League opponent"}");
-        if (next is not null)
-        {
-            ImGui.TextWrapped(next.TacticalHint);
-            DrawPveTeamStrip(next.TeamSpecies.ToArray(), ImGui.GetContentRegionAvail().X);
-        }
-        ImGui.TextWrapped("No free healing. Medicine uses real inventory and the preceding fight's remaining actions. Leaving the window or disconnecting preserves this checkpoint.");
-        if (!run.Vitals.Any(entry => entry.PokemonId == leagueTargetId)) leagueTargetId = run.Vitals.FirstOrDefault()?.PokemonId ?? string.Empty;
-        ImGui.Spacing(); ImGui.TextColored(CompanionMuted, "CARRIED TEAM / Click a Pokémon to target medicine");
-        DrawLeagueHealthCards(run);
-        var target = run.Vitals.FirstOrDefault(entry => entry.PokemonId == leagueTargetId);
-        if (target is not null && ImGui.CollapsingHeader($"All move PP / {target.Name}###LeagueTargetPP"))
-            foreach (var move in target.Moves) ImGui.TextColored(move.Pp == 0 ? PokemonOrange : CompanionMuted, $"{move.Name} / {move.Pp}/{move.MaxPp} PP");
-        ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
-        ImGui.TextColored(PokemonOrange, $"CHECKPOINT MEDICINE / {Math.Max(0, 3 - run.CheckpointActions)} of 3 actions remaining");
-        ImGui.SetNextItemWidth(Math.Min(260 * scale, ImGui.GetContentRegionAvail().X * 0.6f));
-        if (ImGui.BeginCombo("Medicine target", target?.Name ?? "Choose Pokémon"))
-        {
-            foreach (var pokemon in run.Vitals) if (ImGui.Selectable(pokemon.Name, pokemon.PokemonId == leagueTargetId)) { leagueTargetId = pokemon.PokemonId; leagueMoveId = string.Empty; }
-            ImGui.EndCombo();
-        }
-        target = run.Vitals.FirstOrDefault(entry => entry.PokemonId == leagueTargetId);
-        var medicine = shop.Where(entry => entry.BattleEffect is not null || entry.Id is "ether" or "maxether" or "elixir" or "maxelixir").Where(entry => InventoryCount(entry.Id) > 0).ToList();
-        if (!medicine.Any(entry => entry.Id == leagueItemId)) leagueItemId = medicine.FirstOrDefault()?.Id ?? string.Empty;
-        ImGui.SetNextItemWidth(Math.Min(260 * scale, ImGui.GetContentRegionAvail().X * 0.6f));
-        if (ImGui.BeginCombo("Item", medicine.FirstOrDefault(entry => entry.Id == leagueItemId)?.Name ?? "No medicine owned"))
-        {
-            foreach (var item in medicine) if (ImGui.Selectable($"{item.Name} x{InventoryCount(item.Id)}", item.Id == leagueItemId)) leagueItemId = item.Id;
-            ImGui.EndCombo();
-        }
-        var singleMove = leagueItemId is "ether" or "maxether";
-        if (singleMove && target is not null)
-        {
-            if (!target.Moves.Any(move => move.Id == leagueMoveId)) leagueMoveId = target.Moves.FirstOrDefault()?.Id ?? string.Empty;
-            ImGui.SetNextItemWidth(Math.Min(260 * scale, ImGui.GetContentRegionAvail().X * 0.6f));
-            if (ImGui.BeginCombo("Restore PP", target.Moves.FirstOrDefault(move => move.Id == leagueMoveId)?.Name ?? "Choose move"))
-            {
-                foreach (var move in target.Moves) if (ImGui.Selectable($"{move.Name} {move.Pp}/{move.MaxPp}", move.Id == leagueMoveId)) leagueMoveId = move.Id;
-                ImGui.EndCombo();
-            }
-        }
-        ImGui.BeginDisabled(busy || run.CheckpointActions >= 3 || target is null || medicine.Count == 0 || (singleMove && leagueMoveId.Length == 0));
-        if (DrawAccentButton("Use medicine", new Vector2(170, 32) * scale, PokemonGreen))
-            Run(() => HealLeague(singleMove), "Using checkpoint medicine...");
-        ImGui.EndDisabled();
-        ImGui.EndChild(); ImGui.Spacing();
+        var buttonHeight = Math.Max(32 * scale, ImGui.GetFrameHeight());
+        var inline = ImGui.GetContentRegionAvail().X >= 380 * scale;
+        var footerHeight = buttonHeight * (inline ? 1 : 2) + ImGui.GetTextLineHeightWithSpacing() * 2 + 18 * scale;
+        ImGui.BeginChild("LeagueCheckpointBody", new Vector2(0, Math.Max(1, ImGui.GetContentRegionAvail().Y - footerHeight)), false);
+        DrawLeagueNextOpponent(next, run);
+        ImGui.Spacing();
+        DrawLeagueCheckpointBag(run);
+        ImGui.EndChild(); ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
         ImGui.BeginDisabled(busy || !run.Vitals.Any(entry => entry.Hp > 0));
-        if (DrawAccentButton("Continue next fight", new Vector2(220, 36) * scale, CompanionAccent)) Run(NextLeague, "Continuing the League run...");
+        if (DrawAccentButton($"Continue to {next?.Name ?? "next fight"}", new Vector2(inline ? 230 * scale : -1, buttonHeight), CompanionAccent)) Run(NextLeague, "Continuing the League run...");
         ImGui.EndDisabled();
-        if (ImGui.GetContentRegionAvail().X >= ImGui.CalcTextSize("Abandon run").X + 240 * scale) ImGui.SameLine();
+        if (inline) ImGui.SameLine();
+        ImGui.BeginDisabled(busy);
         if (DrawAccentSmallButton("Abandon run", PokemonOrange)) ImGui.OpenPopup("Abandon League run?");
+        ImGui.EndDisabled();
+        DrawClippedText("No automatic healing. Close and resume later.", ImGui.GetContentRegionAvail().X, CompanionMuted);
         if (BeginConfirmationModal("Abandon League run?"))
         {
             ImGui.TextWrapped("End this run? Cleared-fight rewards stay saved. Used supplies are not refunded. Your next run starts from Elite Four I.");
@@ -197,43 +158,6 @@ public sealed partial class MainWindow
             ImGui.Dummy(new Vector2(0, 9 * scale));
         }
         ImGui.EndTable();
-    }
-
-    private void DrawLeagueHealthCards(LeagueRunDto run)
-    {
-        var scale = CompanionScale;
-        var columns = Math.Clamp((int)(ImGui.GetContentRegionAvail().X / (240 * scale)), 1, 3);
-        ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(4, 4) * scale);
-        if (ImGui.BeginTable("LeagueCarriedTeam", columns, ImGuiTableFlags.SizingStretchSame))
-        {
-            foreach (var pokemon in run.Vitals)
-            {
-                ImGui.TableNextColumn();
-                if (DrawPveCardSurface($"LeagueHealth##{pokemon.PokemonId}", 45 * scale + 4 * ImGui.GetTextLineHeight(),
-                    pokemon.PokemonId == leagueTargetId, out var min, out var max, out var after))
-                { leagueTargetId = pokemon.PokemonId; leagueMoveId = string.Empty; }
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip(string.Join("\n", pokemon.Moves.Select(move => $"{move.Name} / {move.Pp}/{move.MaxPp} PP")));
-                var width = Math.Max(1, max.X - min.X - 72 * scale);
-                ImGui.SetCursorScreenPos(min + new Vector2(10, 10) * scale);
-                DrawPokemonIcon(pokemon.Species, pokemon.Shiny, new Vector2(44 * scale));
-                ImGui.SetCursorScreenPos(min + new Vector2(62, 10) * scale);
-                ImGui.BeginGroup();
-                DrawClippedText(pokemon.Name, width, CompanionAccent);
-                DrawClippedText(SpeciesDisplayCatalog.Name(pokemon.Species), width, CompanionMuted);
-                ImGui.EndGroup();
-                ImGui.SetCursorScreenPos(min + new Vector2(10, 58) * scale);
-                ImGui.BeginGroup();
-                var fullWidth = Math.Max(1, max.X - min.X - 20 * scale);
-                DrawClippedText($"HP {pokemon.Hp}/{pokemon.MaxHp}{HealthStatus(pokemon)}", fullWidth, pokemon.Hp == 0 ? PokemonOrange : CompanionMuted);
-                DrawProgressBar(pokemon.Hp / (float)Math.Max(1, pokemon.MaxHp), new Vector2(fullWidth, 6 * scale), "", HpBarRed);
-                var lowest = pokemon.Moves.OrderBy(move => move.Pp / (float)Math.Max(1, move.MaxPp)).FirstOrDefault();
-                DrawClippedText(lowest is null ? "No move PP available" : $"Lowest PP: {lowest.Name} {lowest.Pp}/{lowest.MaxPp}", fullWidth, CompanionMuted);
-                ImGui.EndGroup();
-                ImGui.SetCursorScreenPos(after);
-            }
-            ImGui.EndTable();
-        }
-        ImGui.PopStyleVar();
     }
 
     private void DrawTrainerForfeit()

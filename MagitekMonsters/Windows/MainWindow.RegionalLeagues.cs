@@ -109,7 +109,8 @@ public sealed partial class MainWindow
     private void DrawRegionalGymBoard(RegionalLeagueDto region, RegionalCircuitDto circuit, RegionalMilestoneDto[] slots, HashSet<string> clears)
     {
         var scale = CompanionScale;
-        var selectedSlot = slots.FirstOrDefault(slot => slot.LeaderIds.Contains(regionalLeaderId));
+        var selectedSlot = circuit.PreferredLeaderIds.Contains(regionalLeaderId)
+            ? slots.FirstOrDefault(slot => slot.LeaderIds.Contains(regionalLeaderId)) : null;
         if (selectedSlot is null)
         {
             selectedSlot = slots.FirstOrDefault(slot => !RegionalLeaguePresentation.Earned(slot, clears)) ?? slots[0];
@@ -143,20 +144,6 @@ public sealed partial class MainWindow
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(14, 12) * scale);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, CompanionSurface);
         ImGui.BeginChild("RegionalGymDetail", new Vector2(detailWidth, sideBySide ? Math.Max(1, available.Y) : 310 * scale), true);
-        if (selectedSlot.LeaderIds.Count > 1)
-        {
-            var selected = opponents.FirstOrDefault(entry => entry.Id == regionalLeaderId);
-            ImGui.SetNextItemWidth(-1);
-            if (ImGui.BeginCombo("##AlternateGymLeader", selected?.Name ?? "Choose leader"))
-            {
-                foreach (var id in selectedSlot.LeaderIds)
-                {
-                    var choice = opponents.FirstOrDefault(entry => entry.Id == id);
-                    if (choice is not null && ImGui.Selectable(choice.Name, id == regionalLeaderId)) regionalLeaderId = id;
-                }
-                ImGui.EndCombo();
-            }
-        }
         var opponent = opponents.FirstOrDefault(entry => entry.Id == (leagueRematch ? "rematch-" + regionalLeaderId : regionalLeaderId));
         if (opponent is not null)
         {

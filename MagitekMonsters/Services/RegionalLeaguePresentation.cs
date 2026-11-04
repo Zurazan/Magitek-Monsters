@@ -55,6 +55,7 @@ public static class RegionalLeaguePresentation
         var slots = Milestones(region, circuit);
         var index = Array.FindIndex(slots, slot => slot.Id == opponent.MilestoneId);
         if (index < 0) return "Choose a lineup containing this Gym or trial.";
+        if (!circuit.PreferredLeaderIds.Contains(original)) return "Choose this trainer's League lineup.";
         var missing = slots.Take(index).Where(slot => !Earned(slot, clears)).ToArray();
         return missing.Length == 0 ? null : "Earn " + string.Join(", ", missing.Select(slot => slot.Name)) + " first.";
     }
