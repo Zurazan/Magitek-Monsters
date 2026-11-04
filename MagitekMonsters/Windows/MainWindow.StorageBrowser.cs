@@ -444,21 +444,7 @@ public sealed partial class MainWindow
                 }
                 if (DrawAccentButton("Summary & moves", new Vector2(-1, 28 * scale), CompanionAccent))
                 { storageSummaryPokemon = pokemon.Id; requestStorageSummary = true; }
-                if (DrawAccentButton("More actions", new Vector2(-1, 28 * scale), CompanionMuted)) ImGui.OpenPopup("StoragePokemonActions");
-                if (ImGui.BeginPopup("StoragePokemonActions"))
-                {
-                    if (DrawAccentButton(storageComparePin == pokemon.Id ? "Unpin comparison" : "Compare", Vector2.Zero, CompanionAccent))
-                    {
-                        if (storageComparePin == pokemon.Id) storageComparePin = string.Empty;
-                        else if (storageComparePin.Length == 0) storageComparePin = pokemon.Id;
-                        else OpenStorageComparison(storageComparePin, pokemon.Id);
-                        ImGui.CloseCurrentPopup();
-                    }
-                    ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || StorageBrowser.ReleaseProtected(pokemon) || pokemon.TradeLockId is not null);
-                    if (DrawAccentButton("Release...", Vector2.Zero, PokemonRed))
-                    { releasePokemonId = pokemon.Id; requestRelease = true; ImGui.CloseCurrentPopup(); }
-                    ImGui.EndDisabled(); ImGui.EndPopup();
-                }
+                DrawStoragePokemonActions(pokemon);
                 if (pokemon.FusionHostId.Length > 0) ImGui.TextWrapped("Fusion partner / Unfuse the host to manage this Pokémon.");
                 if (pokemon.TradeLockId is not null)
                 {
@@ -470,6 +456,26 @@ public sealed partial class MainWindow
             }
         }
         ImGui.EndChild(); ImGui.PopStyleColor(); ImGui.PopStyleVar();
+    }
+
+    private void DrawStoragePokemonActions(PokemonDto pokemon)
+    {
+        var compareLabel = storageComparePin == pokemon.Id ? "Unpin" : "Compare";
+        var width = Math.Max(1, (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) / 2);
+        var labelWidth = Math.Max(ImGui.CalcTextSize(compareLabel).X, ImGui.CalcTextSize("Release...").X);
+        var stacked = width < labelWidth + ImGui.GetStyle().FramePadding.X * 2;
+        var size = new Vector2(stacked ? -1 : width, 28 * CompanionScale);
+        if (DrawAccentButton(compareLabel, size, CompanionAccent))
+        {
+            if (storageComparePin == pokemon.Id) storageComparePin = string.Empty;
+            else if (storageComparePin.Length == 0) storageComparePin = pokemon.Id;
+            else OpenStorageComparison(storageComparePin, pokemon.Id);
+        }
+        if (!stacked) ImGui.SameLine();
+        ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || StorageBrowser.ReleaseProtected(pokemon));
+        if (DrawAccentButton("Release...", size, PokemonRed))
+        { releasePokemonId = pokemon.Id; requestRelease = true; }
+        ImGui.EndDisabled();
     }
 
     private void DrawStorageMovePicker(string id, List<PokemonDto> selected)

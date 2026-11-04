@@ -209,7 +209,9 @@ public sealed partial class MainWindow : Window, IDisposable
         if (size.X == 0)
         {
             var visibleLabel = label.Split("##", StringSplitOptions.None)[0];
-            size.X = Math.Max(1, Math.Min(ImGui.CalcTextSize(visibleLabel).X + ImGui.GetStyle().FramePadding.X * 2, ImGui.GetContentRegionAvail().X));
+            size.X = ImGui.CalcTextSize(visibleLabel).X + ImGui.GetStyle().FramePadding.X * 2;
+            if ((ImGui.GetCurrentContext().CurrentWindow.Flags & ImGuiWindowFlags.AlwaysAutoResize) == 0)
+                size.X = Math.Max(1, Math.Min(size.X, ImGui.GetContentRegionAvail().X));
         }
         var pressed = ImGui.Button(label, size);
         ImGui.PopStyleVar();
