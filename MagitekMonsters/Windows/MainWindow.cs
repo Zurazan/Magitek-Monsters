@@ -383,7 +383,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (trainer is null)
             DrawLogin();
         else if (!trainer.StarterChosen)
-            DrawStarterSelection();
+            DrawStarterOnboarding();
         else
             DrawGameShell();
         ImGui.EndChild();
@@ -444,8 +444,8 @@ public sealed partial class MainWindow : Window, IDisposable
             switch (mainSection)
             {
                 case 0: DrawAdventure(); break;
-                case 1: DrawParty(); break;
-                case 2: DrawStorage(); break;
+                case 1: DrawCompanionParty(); break;
+                case 2: DrawStorageBrowser(); break;
                 case 3: DrawPve(); break;
                 case 4: DrawPvp(); break;
                 case 5: DrawShop(); break;
@@ -549,11 +549,6 @@ public sealed partial class MainWindow : Window, IDisposable
         ImGui.PopStyleColor();
     }
 
-    private void DrawStarterSelection()
-    {
-        DrawStarterOnboarding();
-    }
-
     private void DrawAdventure()
     {
         if (LeagueBusy || FrontierBusy || battle is { Kind: "trainer", Status: "active" })
@@ -565,7 +560,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         if (battle?.Kind == "wild")
         {
-            DrawWildBattle(battle);
+            DrawBattleConsole(battle);
             return;
         }
         if (trainer?.ActiveEncounter is { Status: "active" } activeEncounter)
@@ -595,18 +590,6 @@ public sealed partial class MainWindow : Window, IDisposable
         if (DrawAccentButton("Resume wild battle", new Vector2(180, 32), PokemonBlue))
             Run(() => ResumeWildBattle(encounter.Id), "Resuming the wild battle...");
         ImGui.EndGroup();
-    }
-
-    private void DrawWildBattle(BattleSnapshotDto current) => DrawBattleConsole(current);
-
-    private void DrawParty()
-    {
-        DrawCompanionParty();
-    }
-
-    private void DrawStorage()
-    {
-        DrawStorageBrowser();
     }
 
     private void DrawPve()
@@ -654,7 +637,7 @@ public sealed partial class MainWindow : Window, IDisposable
         var season = profile.Season;
         if (pvpStatus.Battle is not null)
         {
-            DrawPvpBattle(pvpStatus.Battle);
+            DrawBattleConsole(pvpStatus.Battle, true);
             return;
         }
         DrawOnlineLobbyHeader(profile);
@@ -671,8 +654,6 @@ public sealed partial class MainWindow : Window, IDisposable
 
         DrawOnlineLobby(season);
     }
-
-    private void DrawPvpBattle(BattleSnapshotDto current) => DrawBattleConsole(current, true);
 
     private void DrawShop()
     {
@@ -694,7 +675,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (ImGui.BeginTabItem("Items", requestedShopTab == "Items" ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
         {
             shopExchange = 0;
-            DrawItemShop();
+            DrawCompanionItemShop(rankTokensOnly: false);
             ImGui.EndTabItem();
         }
         if (ImGui.BeginTabItem("Rank Token Exchange", requestedShopTab == "Rank Token Exchange" ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
@@ -702,7 +683,7 @@ public sealed partial class MainWindow : Window, IDisposable
             shopExchange = 1;
             ImGui.TextWrapped("Spend ranked-season tokens on guaranteed captures. Master Balls do not skip Sanctuary boss fights or unlock requirements.");
             ImGui.Spacing();
-            DrawItemShop(true);
+            DrawCompanionItemShop(true);
             ImGui.EndTabItem();
         }
         if (ImGui.BeginTabItem("Prize Exchange", requestedShopTab == "Prize Exchange" ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
@@ -721,11 +702,6 @@ public sealed partial class MainWindow : Window, IDisposable
         requestedShopTab = null;
         ImGui.EndTabBar();
         DrawPurchaseConfirmation();
-    }
-
-    private void DrawItemShop(bool rankTokensOnly = false)
-    {
-        DrawCompanionItemShop(rankTokensOnly);
     }
 
     private void DrawPrizeExchange()
@@ -804,8 +780,9 @@ public sealed partial class MainWindow : Window, IDisposable
     private void DrawReadyEvolutionActions(PokemonDto pokemon)
     {
         if (trainer is null) return;
-        foreach (var evolution in trainer.EvolutionOptions.Where(entry => entry.PokemonId == pokemon.Id && entry.Ready))
+        foreach (var evolution in GetEvolutionOptions(pokemon.Id))
         {
+            if (!evolution.Ready) continue;
             ImGui.Spacing();
             ImGui.TextColored(CompanionAccent, "Evolution available");
             DrawEvolutionButton(pokemon, evolution);
@@ -1257,10 +1234,7 @@ public sealed partial class MainWindow : Window, IDisposable
         SetStatus(forgetMove is null ? $"Relearned {move}." : $"Forgot {forgetMove} and relearned {move}.");
     }
 
-    private Task StartBattle(string opponentId, string challenge, string? monotype, string[] pokemonIds) =>
-        StartPreparedBattle(opponentId, challenge, monotype, pokemonIds, null);
-
-    private async Task StartPreparedBattle(string opponentId, string challenge, string? monotype, string[] pokemonIds, string? circuitId)
+    private async Task StartBattle(string opponentId, string challenge, string? monotype, string[] pokemonIds, string? circuitId = null)
     {
         var current = await InSession(plugin.Api.StartBattle(opponentId, challenge, monotype, pokemonIds, circuitId: circuitId));
         ApplyBattleResponse(current);

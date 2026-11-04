@@ -49,8 +49,8 @@ public sealed partial class MainWindow
                 if (ImGui.Selectable(ShopExchanges[index], shopExchange == index)) shopExchange = index;
             ImGui.EndCombo();
         }
-        if (shopExchange == 0) DrawItemShop();
-        else if (shopExchange == 1) DrawItemShop(true);
+        if (shopExchange == 0) DrawCompanionItemShop(rankTokensOnly: false);
+        else if (shopExchange == 1) DrawCompanionItemShop(true);
         else if (shopExchange == 2) DrawPrizeExchange();
         else DrawCollectionExchange();
         DrawPurchaseConfirmation();

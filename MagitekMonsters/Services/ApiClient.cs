@@ -24,7 +24,6 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     public Task<TradingSnapshotDto> DepositWonder(string pokemon, string request) => Send<TradingSnapshotDto>(HttpMethod.Post, "/api/trades/wonder", new WonderDepositRequest(pokemon, request), true, default);
     public Task<TradingSnapshotDto> WithdrawWonder(string id) => Send<TradingSnapshotDto>(HttpMethod.Post, $"/api/trades/wonder/{id}/withdraw", EmptyRequest.Instance, true, default);
     public Task<TradingSnapshotDto> ReadTradeReceipt(string id) => Send<TradingSnapshotDto>(HttpMethod.Post, $"/api/trades/receipts/{id}/seen", EmptyRequest.Instance, true, default);
-    private readonly Configuration configuration;
     private readonly ProtectedTokenStore tokenStore;
     private readonly HttpClient http = CreateHttpClient();
     private static HttpClient CreateHttpClient() => new(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip })
@@ -38,9 +37,8 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     public CatalogVersions Catalogs { get; } = new();
     public ServerConnection? Live { get; set; }
 
-    public ApiClient(Configuration configuration, ProtectedTokenStore tokenStore)
+    public ApiClient(ProtectedTokenStore tokenStore)
     {
-        this.configuration = configuration;
         this.tokenStore = tokenStore;
     }
 

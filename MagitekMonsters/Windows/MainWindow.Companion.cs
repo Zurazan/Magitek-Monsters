@@ -348,7 +348,7 @@ public sealed partial class MainWindow
 
     private void DrawCompanionEvolutionRoutes(PokemonDto pokemon)
     {
-        var options = trainer!.EvolutionOptions.Where(entry => entry.PokemonId == pokemon.Id).ToArray();
+        var options = GetEvolutionOptions(pokemon.Id);
         ImGui.TextColored(CompanionAccent, "Evolution routes");
         if (pokemon.HeldItem.Equals("everstone", StringComparison.OrdinalIgnoreCase))
         {

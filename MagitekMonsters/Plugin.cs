@@ -44,7 +44,7 @@ public sealed class Plugin : IDalamudPlugin
                                 ?? Path.GetDirectoryName(PluginInterface.AssemblyLocation.FullName)
                                 ?? string.Empty;
         var tokenStore = new ProtectedTokenStore(Configuration);
-        Api = new ApiClient(Configuration, tokenStore);
+        Api = new ApiClient(tokenStore);
         Connection = new ServerConnection(tokenStore.Read, Api.Update, new Uri(Configuration.OfficialServerUrl + "/api/events"),
             exception => Log.Warning(exception, "Magitek Monsters server event connection was interrupted."));
         Api.Live = Connection;

@@ -1,7 +1,6 @@
 <Project>
   <PropertyGroup>
     <MakePluginZip>false</MakePluginZip>
-    <MakePluginZip Condition="'$(Configuration)' == 'Release'">true</MakePluginZip>
   </PropertyGroup>
 
   <Target Name="PackageMagitekMonsters" AfterTargets="Build">

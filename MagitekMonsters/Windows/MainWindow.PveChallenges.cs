@@ -101,7 +101,7 @@ public sealed partial class MainWindow
             var ids = chosen.Select(pokemon => pokemon.Id).ToArray();
             var circuitId = pveSetupCircuitId;
             ImGui.CloseCurrentPopup();
-            Run(() => StartPreparedBattle(id, mode, type, ids, circuitId), $"Challenging {opponent.Name}...");
+            Run(() => StartBattle(id, mode, type, ids, circuitId), $"Challenging {opponent.Name}...");
         }
         ImGui.EndDisabled();
         ImGui.SameLine();

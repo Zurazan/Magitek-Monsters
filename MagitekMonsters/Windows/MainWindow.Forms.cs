@@ -10,8 +10,8 @@ public sealed partial class MainWindow
 {
     private void DrawPokemonForms(PokemonDto pokemon)
     {
-        var options = trainer!.FormOptions.Where(option => option.PokemonId == pokemon.Id).ToList();
-        if (options.Count == 0 || !ImGui.TreeNode($"Forms##Forms{pokemon.Id}")) return;
+        var options = GetFormOptions(pokemon.Id);
+        if (options.Length == 0 || !ImGui.TreeNode($"Forms##Forms{pokemon.Id}")) return;
         ImGui.TextColored(PokemonBlue, $"Current form: {pokemon.DisplaySpecies}");
         ImGui.TextWrapped("Form changes keep this Pokémon's training, shiny status and history. Held-item forms follow equipment. Battle-only transformations are not selectable here.");
         if (ImGui.BeginTable($"FormChoices{pokemon.Id}", 2, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))

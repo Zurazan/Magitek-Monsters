@@ -317,7 +317,7 @@ public sealed partial class MainWindow
         if (!BeginConfirmationModal("Evolve battle partner")) return;
         var pokemon = trainer?.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == resultEvolutionPokemon);
         if (pokemon is null) { ImGui.CloseCurrentPopup(); EndConfirmationModal(); return; }
-        var routes = trainer!.EvolutionOptions.Where(option => option.PokemonId == pokemon.Id && option.Ready).ToArray();
+        var routes = GetEvolutionOptions(pokemon.Id).Where(option => option.Ready).ToArray();
         var route = routes.FirstOrDefault(option => option.TargetSpecies == resultEvolutionTarget) ?? routes.FirstOrDefault();
         ImGui.TextColored(PokemonYellow, $"Evolve {pokemon.Nickname}?");
         ImGui.TextWrapped("Evolution is optional. You can keep your partner as it is and decide later.");

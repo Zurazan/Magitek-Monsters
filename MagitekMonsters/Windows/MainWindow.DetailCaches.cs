@@ -93,6 +93,7 @@ public sealed partial class MainWindow
     {
         ResetBattleItemCaches();
         ResetEvolutionReadiness();
+        evolutionOptionIndex = null; formOptionIndex = null; fusionOptionIndex = null;
         discoveredFormSource = defeatedOpponentSource = null; discoveredForms = defeatedOpponents = null;
         circuitOpponentSource = null; circuitOpponents = null;
         teachingBuild = null; teachingTrainer = cardPartnerTrainer = null;

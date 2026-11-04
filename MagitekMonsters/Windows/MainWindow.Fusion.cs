@@ -10,8 +10,8 @@ public sealed partial class MainWindow
 {
     private void DrawPokemonFusion(PokemonDto pokemon)
     {
-        var options = trainer!.FusionOptions.Where(option => option.PokemonId == pokemon.Id).ToList();
-        if (options.Count == 0 && pokemon.Fusion is null || !ImGui.TreeNode($"Fusion##Fusion{pokemon.Id}")) return;
+        var options = GetFusionOptions(pokemon.Id);
+        if (options.Length == 0 && pokemon.Fusion is null || !ImGui.TreeNode($"Fusion##Fusion{pokemon.Id}")) return;
         ImGui.TextWrapped("Fusion keeps the host's training and shiny status. The partner stays locked in its PC slot until you unfuse. Tools are reusable, with one active fusion per tool.");
         if (pokemon.Fusion is { } active)
         {
@@ -44,7 +44,7 @@ public sealed partial class MainWindow
             ImGui.TextColored(PokemonBlue, option.TargetSpecies);
             ImGui.TextDisabled($"{option.ItemName} + {option.PartnerSpecies}");
             ImGui.EndGroup();
-            var partners = trainer.Storage.Where(partner => partner.DisplaySpecies == option.PartnerSpecies
+            var partners = trainer!.Storage.Where(partner => partner.DisplaySpecies == option.PartnerSpecies
                 && partner.FusionHostId.Length == 0 && partner.Fusion is null).ToList();
             if (!option.Available) ImGui.TextColored(PokemonOrange, "Buy this tool from the Poké Mart, or unfuse its current host first.");
             if (partners.Count == 0) ImGui.TextDisabled($"Send an unfused {option.PartnerSpecies} to PC storage first.");

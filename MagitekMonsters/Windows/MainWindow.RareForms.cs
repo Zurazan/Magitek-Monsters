@@ -22,7 +22,7 @@ public sealed partial class MainWindow
         }
         else if (pokemon.Species is "Tandemaus" or "Dunsparce")
         {
-            var option = trainer?.EvolutionOptions.FirstOrDefault(entry => entry.PokemonId == pokemon.Id);
+            var option = GetEvolutionOptions(pokemon.Id).FirstOrDefault();
             if (option is null) return;
             ImGui.TextColored(PokemonBlue, $"Fixed evolution: {EvolutionLabel(option.TargetSpecies)}");
             ImGui.TextWrapped("Rare forms occur in 1% of Pokémon. This Pokémon's outcome cannot be rerolled by waiting, training or reconnecting.");
