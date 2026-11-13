@@ -77,7 +77,6 @@ public sealed partial class MainWindow : Window, IDisposable
     private string? selectedPokedexSpecies;
     private string storageSearch = string.Empty;
     private readonly HashSet<string> pvpTeamIds = [];
-    private bool megaEvolveSelected;
     private volatile int onlineTrainers = -1;
     private uint loadedTerritory = uint.MaxValue;
     private string? catalogError;
@@ -1150,7 +1149,6 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         ApplyBattleResponse(await InSession(plugin.Api.StartWildBattle(encounterId)));
         if (fromEvent && battle is not null) eventBattleId = battle.Id;
-        megaEvolveSelected = false;
         nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1);
         SetStatus("Wild battle ready. Choose your action.");
     }
@@ -1240,7 +1238,6 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         var current = await InSession(plugin.Api.StartBattle(opponentId, challenge, monotype, pokemonIds, circuitId: circuitId));
         ApplyBattleResponse(current);
-        megaEvolveSelected = false;
         nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1);
         SetStatus(current.Request is not null && current.Request.Wait != true ? "Battle started. Choose your move." : "Battle started. Preparing the field...");
     }
@@ -1259,7 +1256,6 @@ public sealed partial class MainWindow : Window, IDisposable
             refreshState.Trainer();
             throw;
         }
-        megaEvolveSelected = false;
         nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1);
         SetStatus(battle.Status == "lost" && battle.CurrencyLost > 0 ? $"Defeat. Lost ¥ {battle.CurrencyLost:N0}."
             : battle.Status != "active" ? $"Battle ended: {battle.Status}."
@@ -1323,7 +1319,6 @@ public sealed partial class MainWindow : Window, IDisposable
             SetStatus("The battle changed. Choose from the current actions."); return;
         }
         ObserveRecentBattle(pvpStatus.Battle, true, true);
-        megaEvolveSelected = false;
         nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(1);
         if (pvpStatus.Battle.Status != "active")
             await InSession(RefreshPvp());
@@ -1505,7 +1500,6 @@ public sealed partial class MainWindow : Window, IDisposable
         serverPvpRefreshRequested = false;
         authorizationFlow = null;
         onlineTrainers = -1;
-        megaEvolveSelected = false;
         trainerIdCopiedUntil = DateTimeOffset.MinValue;
         SetStatus("Disconnected from Magitek Monsters.");
     }
@@ -1539,6 +1533,8 @@ public sealed partial class MainWindow : Window, IDisposable
             "-burst" when parts.Length > 3 => $"{BattleActor(parts[2])} transformed into {parts[3]}!",
             "-terastallize" when parts.Length > 3 => $"{BattleActor(parts[2])} Terastallized into the {parts[3]} type!",
             "-zpower" when parts.Length > 2 => $"{BattleActor(parts[2])} is using its Z-Power!",
+            "-start" when parts.Length > 3 && parts[3] == "Dynamax" => $"{BattleActor(parts[2])} {(parts.Contains("Gmax") ? "Gigantamaxed" : "Dynamaxed")}!",
+            "-end" when parts.Length > 3 && parts[3] == "Dynamax" => $"{BattleActor(parts[2])} returned to normal size.",
             "-weather" when parts.Length > 2 => parts[2] == "none" ? "The weather cleared." : $"Weather: {parts[2]}. {WeatherHint(parts[2])}",
             "-sidestart" when parts.Length > 3 => $"{CleanIdent(parts[2])}: {parts[3]} started. {FieldHint(parts[3])}",
             "-sideend" when parts.Length > 3 => $"{CleanIdent(parts[2])}: {parts[3]} ended.",

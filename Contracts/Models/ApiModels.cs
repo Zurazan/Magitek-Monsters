@@ -219,6 +219,7 @@ public sealed class EvolutionEnvironmentRouteDto
 
 public sealed class EvolutionProgressDto
 {
+    public bool Gigantamax { get; set; }
     public string AlcremieDecoration { get; set; } = string.Empty;
     public int Friendship { get; set; }
     public double Travelled { get; set; }
@@ -305,6 +306,7 @@ public sealed class PokedexCatalogDto
 
 public sealed class PokemonBuildDto
 {
+    public bool CanGigantamax { get; set; }
     public List<string> Types { get; set; } = [];
     public string TeraType { get; set; } = string.Empty;
     public List<string> AllowedTeraTypes { get; set; } = [];
@@ -545,6 +547,7 @@ public sealed class BattleSnapshotDto
 
 public sealed class BattleCombatantDto
 {
+    public string TeraType { get; set; } = string.Empty;
     public string Ident { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Species { get; set; } = string.Empty;
@@ -571,6 +574,8 @@ public sealed class BattleActiveDto
     public bool PassRequired { get; set; }
     public bool CanMegaEvo { get; set; }
     public bool CanUltraBurst { get; set; }
+    public bool CanDynamax { get; set; }
+    public BattleMaxMovesDto? MaxMoves { get; set; }
     public string? CanTerastallize { get; set; }
     public List<BattleZMoveDto?>? CanZMove { get; set; }
     public List<BattleMoveDto> Moves { get; set; } = [];
@@ -578,10 +583,17 @@ public sealed class BattleActiveDto
 
 public sealed class BattleZMoveDto
 {
+    public bool Disabled { get; set; }
     public MoveTypeHintsDto? TypeHints { get; set; }
     public List<int> LegalTargets { get; set; } = [];
     public string Move { get; set; } = string.Empty;
     public string Target { get; set; } = string.Empty;
+}
+
+public sealed class BattleMaxMovesDto
+{
+    public string? Gigantamax { get; set; }
+    public List<BattleZMoveDto> MaxMoves { get; set; } = [];
 }
 
 public sealed class BattleMoveDto

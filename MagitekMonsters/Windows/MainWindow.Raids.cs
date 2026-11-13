@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -210,7 +211,7 @@ public sealed partial class MainWindow
     {
         DrawSectionHeader($"{room.Den.Species.ToUpperInvariant()} DEN / {room.Den.Stars} STARS", $"Battle Lv. {room.Den.Level} / {(room.Private ? "Private" : "Public")} lobby / {room.Players.Count}/4 trainers");
         if (DrawAccentSmallButton($"Copy code: {room.Code}", PokemonBlue)) ImGui.SetClipboardText(room.Code);
-        ImGui.TextWrapped("One shared boss. No bag items or switching. Three cheers each. The team shares one Mega Evolution and one Terastallization. NPCs fill empty slots at start.");
+        ImGui.TextWrapped("One shared boss. One Pokémon and three cheers per trainer. Each trainer gets one transformation and one Z-Move with their own equipment. No bag items or switching. NPCs fill empty slots at start.");
         for (var slot = 0; slot < 4; slot++)
         {
             var player = room.Players.FirstOrDefault(entry => entry.Slot == slot);
@@ -253,22 +254,22 @@ public sealed partial class MainWindow
         var own = battleState.Allies.FirstOrDefault(entry => entry.Slot == room.OwnSlot);
         if (own is null) return;
         ImGui.BeginDisabled(busy || !room.CanAct);
-        if (own.CanMega || own.CanTera)
-        {
-            if (own.CanMega && DrawAccentSmallButton(raidModifier == "mega" ? "Mega selected" : "Mega Evolve", PokemonOrange)) raidModifier = raidModifier == "mega" ? "" : "mega";
-            if (own.CanTera) { if (own.CanMega) ImGui.SameLine(); if (DrawAccentSmallButton(raidModifier == "terastallize" ? "Tera selected" : "Terastallize", PokemonBlue)) raidModifier = raidModifier == "terastallize" ? "" : "terastallize"; }
-        }
+        DrawRaidModifier(own);
         if (ImGui.BeginTable("RaidMoves", 2, ImGuiTableFlags.SizingStretchSame))
         {
             foreach (var move in own.Moves)
             {
-                ImGui.TableNextColumn(); ImGui.BeginDisabled(move.Disabled || move.Pp == 0 || move.LegalTargets.Count == 0);
+                var powered = raidModifier == "zmove" ? own.ZMoves?.ElementAtOrDefault(move.Index - 1)
+                    : raidModifier == "dynamax" ? own.MaxMoves?.MaxMoves.ElementAtOrDefault(move.Index - 1) : null;
+                var shown = powered is null ? move : new RaidMoveDto { Index = move.Index, Move = powered.Move, TypeHints = powered.TypeHints,
+                    LegalTargets = powered.LegalTargets, Pp = move.Pp, Maxpp = move.Maxpp, Disabled = powered.Disabled };
+                ImGui.TableNextColumn(); ImGui.BeginDisabled(shown.Disabled || move.Pp == 0 || shown.LegalTargets.Count == 0 || (raidModifier is "zmove" or "dynamax") && powered is null);
                 var buttonMove = new BattleMoveDto { Id = BattleLayout.MoveLabel(move.Move).Name, Move = move.Move, Pp = move.Pp, Maxpp = move.Maxpp, Disabled = move.Disabled };
-                if (DrawTypedMoveButton($"RaidMove{move.Index}", move.Move, buttonMove, (compact ? 38 : 44) * scale, false,
-                    move.TypeHints, raidModifier, move.LegalTargets.Count == 1 ? move.LegalTargets[0] : 0))
+                if (DrawTypedMoveButton($"RaidMove{move.Index}", shown.Move, buttonMove, (compact ? 38 : 44) * scale, false,
+                    shown.TypeHints, powered is null ? raidModifier : "", shown.LegalTargets.Count == 1 ? shown.LegalTargets[0] : 0))
                 {
-                    if (move.LegalTargets.Count == 1) SubmitRaidMove(move, move.LegalTargets[0]);
-                    else { raidTargetMove = move; raidTargetOpen = true; }
+                    if (shown.LegalTargets.Count == 1) SubmitRaidMove(shown, shown.LegalTargets[0]);
+                    else { raidTargetMove = shown; raidTargetOpen = true; }
                 }
                 ImGui.EndDisabled();
             }
@@ -291,6 +292,36 @@ public sealed partial class MainWindow
             ImGui.SameLine(); if (DrawAccentSmallButton("Retry saved action", PokemonBlue)) Run(() => RaidAction("choose", pendingRaidChoice), "Retrying raid action...");
         }
     }
+    private void DrawRaidModifier(RaidActorDto own)
+    {
+        if (own.DynamaxTurns > 0)
+        {
+            raidModifier = "dynamax";
+            ImGui.TextColored(PokemonYellow, $"{(own.Species.EndsWith("-Gmax", StringComparison.Ordinal) ? "Gigantamax" : "Dynamax")} / {own.DynamaxTurns} rounds remaining");
+            return;
+        }
+        var options = new List<(string Id, string Label)> { ("", "Normal move") };
+        if (own.CanMega) options.Add(("mega", "Mega Evolve"));
+        if (own.CanUltra) options.Add(("ultra", "Ultra Burst"));
+        if (own.CanTera) options.Add(("terastallize", "Terastallize"));
+        if (own.CanDynamax) options.Add(("dynamax", own.MaxMoves?.Gigantamax is { Length: > 0 } ? "Gigantamax" : "Dynamax"));
+        if (own.ZMoves?.Any(move => move is not null) == true) options.Add(("zmove", "Use Z-Move"));
+        if (!options.Any(option => option.Id == raidModifier)) raidModifier = "";
+        if (options.Count > 1)
+        {
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.BeginCombo("##RaidModifier", options.First(option => option.Id == raidModifier).Label))
+            {
+                foreach (var option in options) if (ImGui.Selectable(option.Label, raidModifier == option.Id)) raidModifier = option.Id;
+                ImGui.EndCombo();
+            }
+        }
+        var spent = own.Transformation.Length > 0 ? $"{RaidTransformationLabel(own.Transformation)} used" : "Transformation unused";
+        DrawClippedText($"{spent} / Z-Move {(own.ZMoveUsed ? "used" : "unused")}", ImGui.GetContentRegionAvail().X, CompanionMuted);
+    }
+    private static string RaidTransformationLabel(string value) => value switch {
+        "mega" => "Mega", "ultra" => "Ultra Burst", "terastallize" => "Tera", "dynamax" => "Dynamax", _ => value
+    };
     private void DrawRaidActor(RaidActorDto actor, string heading, float height)
     {
         var scale = CompanionScale; var min = ImGui.GetCursorScreenPos(); var width = Math.Max(1, ImGui.GetContentRegionAvail().X);
@@ -301,7 +332,9 @@ public sealed partial class MainWindow
         draw.AddRect(min, max, ImGui.GetColorU32(heading == "YOU" ? PokemonBlue : CompanionMuted with { W = 0.3f }), 4 * scale);
         draw.PushClipRect(min + new Vector2(4 * scale), max - new Vector2(4 * scale), true);
         ImGui.SetCursorScreenPos(min + new Vector2(8, 5) * scale);
-        DrawClippedText($"{heading} / Lv. {actor.Level}", width - 16 * scale, heading == "YOU" ? PokemonBlue : CompanionMuted);
+        var gimmick = actor.DynamaxTurns > 0 ? $"MAX {actor.DynamaxTurns}" : RaidTransformationLabel(actor.Transformation);
+        var badge = gimmick.Length > 0 ? gimmick : $"Lv. {actor.Level}";
+        DrawClippedText($"{heading} / {badge}{(actor.ZMoveUsed ? " / Z used" : "")}", width - 16 * scale, heading == "YOU" ? PokemonBlue : CompanionMuted);
         ImGui.SetCursorScreenPos(min + new Vector2(8, 23) * scale); DrawClippedText(actor.Species, width - 16 * scale, Vector4.One);
         ImGui.SetCursorScreenPos(min + new Vector2(8, 41) * scale); DrawPokemonIcon(actor.Species, actor.Shiny, new Vector2(Math.Min(34 * scale, height - 69 * scale)));
         ImGui.SetCursorScreenPos(min + new Vector2(46, 45) * scale);
@@ -311,7 +344,7 @@ public sealed partial class MainWindow
         ImGui.SetCursorScreenPos(new Vector2(min.X + 8 * scale, max.Y - 9 * scale));
         DrawProgressBar(actor.Hp / (float)Math.Max(1, actor.MaxHp), new Vector2(width - 16 * scale, 5 * scale), "", HpBarRed);
         draw.PopClipRect(); ImGui.SetCursorScreenPos(after); ImGui.PopID();
-        if (hovered) ImGui.SetTooltip($"{actor.TrainerName}\n{actor.Species} / {string.Join(" / ", actor.Types)}\n{actor.Hp:N0}/{actor.MaxHp:N0} HP / {actor.Status}");
+        if (hovered) ImGui.SetTooltip($"{actor.TrainerName}\n{actor.Species} / Lv. {actor.Level} / {string.Join(" / ", actor.Types)}\n{actor.Hp:N0}/{actor.MaxHp:N0} HP / {actor.Status}\n{(gimmick.Length > 0 ? gimmick : "No transformation used")} / Z-Move {(actor.ZMoveUsed ? "used" : "unused")}");
     }
     private void SubmitRaidMove(RaidMoveDto move, int target)
     {

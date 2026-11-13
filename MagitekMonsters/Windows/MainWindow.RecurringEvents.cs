@@ -75,7 +75,7 @@ public sealed partial class MainWindow
                         var occurrence = active.OccurrenceId; var boss = active.BossId; var ids = trainer.Party.Select(item => item.Id).ToArray();
                         Run(async () =>
                         {
-                            if (sanctuary) { battle = await InSession(plugin.Api.StartEventSanctuary(boss, occurrence, ids)); eventBattleId = battle.Id; megaEvolveSelected = false; nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1); }
+                            if (sanctuary) { battle = await InSession(plugin.Api.StartEventSanctuary(boss, occurrence, ids)); eventBattleId = battle.Id; nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1); }
                             else
                             {
                                 var key = occurrence + ":" + species; var request = eventRequests.GetOrAdd(key, _ => Guid.NewGuid().ToString());

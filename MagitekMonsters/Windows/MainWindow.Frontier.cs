@@ -310,7 +310,7 @@ public sealed partial class MainWindow
     private async Task EnterFrontier(string bracket, string mode, string rentalId, string[] ids)
     {
         var refresh = true;
-        try { battle = await InSession(plugin.Api.StartFrontier(bracket, mode, rentalId, ids)); megaEvolveSelected = false; }
+        try { battle = await InSession(plugin.Api.StartFrontier(bracket, mode, rentalId, ids)); }
         catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
         finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
         SetStatus("Frontier run saved. Choose your action.");
@@ -319,7 +319,7 @@ public sealed partial class MainWindow
     {
         var run = trainer!.FrontierRun!;
         var refresh = true;
-        try { battle = await InSession(plugin.Api.NextFrontier(run.Id, run.Revision)); megaEvolveSelected = false; }
+        try { battle = await InSession(plugin.Api.NextFrontier(run.Id, run.Revision)); }
         catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
         finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
         SetStatus("Next Frontier fight ready. Your team has been fully healed.");

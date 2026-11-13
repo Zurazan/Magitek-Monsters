@@ -24,7 +24,6 @@ public sealed partial class MainWindow
         var forced = current.Request?.ForceSwitch?.Any(value => value) == true;
         var stamp = $"{current.Id}:{current.Turn}:{current.PlayerActive?.Ident}";
         battleMenu = BattleLayout.NextMenu(battleMenu, battleMenuBattleId != current.Id, battleMenuStamp != stamp, forced, current.Kind == "wild");
-        if (battleMenuStamp != stamp) megaEvolveSelected = false;
         battleMenuStamp = stamp;
         battleMenuBattleId = current.Id;
         var scale = CompanionScale;
@@ -155,6 +154,7 @@ public sealed partial class MainWindow
         {
             var line = ImGui.GetTextLineHeight();
             var types = SpeciesDisplayCatalog.Get(pokemon.Species)?.Types ?? [];
+            if (pokemon.TeraType is { Length: > 0 } tera && tera != "Stellar") types = [tera];
             var badges = BattleLayout.Types(width, CompanionScale, types.Length);
             var nameHeight = badges.Stacked ? line + badges.Height + 2 * CompanionScale : Math.Max(line, badges.Height);
             var art = Math.Max(1, Math.Min(width, ImGui.GetContentRegionAvail().Y - nameHeight - line - 6 * CompanionScale - 4 * ImGui.GetStyle().ItemSpacing.Y));
@@ -279,24 +279,23 @@ public sealed partial class MainWindow
     private void DrawConsoleMoves(BattleSnapshotDto current, bool pvp)
     {
         var active = current.Request?.Active?.FirstOrDefault();
-        if (pvp) DrawPvpModifier(current, active);
-        else if (active?.CanMegaEvo == true) ImGui.Checkbox("Mega Evolve", ref megaEvolveSelected);
-        else megaEvolveSelected = false;
+        DrawBattleModifier(current, active, pvp);
         var cardHeight = Math.Clamp((ImGui.GetContentRegionAvail().Y - 36 * CompanionScale) / 2, 35 * CompanionScale, 52 * CompanionScale);
         if (active is null || !ImGui.BeginTable("ConsoleMoves", 2, ImGuiTableFlags.SizingStretchSame)) return;
         for (var index = 0; index < active.Moves.Count; index++)
         {
             ImGui.TableNextColumn();
             var move = active.Moves[index];
-            var zSelected = pvp && pvpModifier == "zmove";
+            var zSelected = battleModifier == "zmove";
             var zMove = zSelected ? active.CanZMove?.ElementAtOrDefault(index) : null;
-            ImGui.BeginDisabled(!BattleLayout.CanMove(move, zSelected, zMove));
-            if (DrawTypedMoveButton($"SingleMove{index}", zMove?.Move ?? move.Move, move, cardHeight, false,
-                zSelected ? zMove?.TypeHints : move.TypeHints, zSelected ? "" : pvp ? pvpModifier : megaEvolveSelected ? "mega" : "", 1))
+            var maxMove = !pvp && battleModifier == "dynamax" ? active.MaxMoves?.MaxMoves.ElementAtOrDefault(index) : null;
+            ImGui.BeginDisabled(maxMove is not null ? !BattleLayout.HasUsablePp(move) || maxMove.Disabled : battleModifier == "dynamax" || !BattleLayout.CanMove(move, zSelected, zMove));
+            if (DrawTypedMoveButton($"SingleMove{index}", maxMove?.Move ?? zMove?.Move ?? move.Move, move, cardHeight, false,
+                maxMove?.TypeHints ?? (zSelected ? zMove?.TypeHints : move.TypeHints), zSelected || maxMove is not null ? "" : battleModifier, 1))
             {
-                var suffix = pvp ? PvpModifierSuffix(active, index) : megaEvolveSelected ? " mega" : "";
+                var suffix = BattleModifierSuffix(active, index);
                 var command = $"move {index + 1}{suffix}";
-                Run(() => pvp ? ChoosePvpBattle(command) : ChooseBattle(command), $"Using {BattleLayout.MoveLabel(zMove?.Move ?? move.Move).Name}...");
+                Run(() => pvp ? ChoosePvpBattle(command) : ChooseBattle(command), $"Using {BattleLayout.MoveLabel(maxMove?.Move ?? zMove?.Move ?? move.Move).Name}...");
             }
             ImGui.EndDisabled();
         }

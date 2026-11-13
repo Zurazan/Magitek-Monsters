@@ -64,6 +64,18 @@ public sealed class RaidMoveDto
     public bool Disabled { get; set; }
     public List<int> LegalTargets { get; set; } = [];
 }
+public sealed class RaidPoweredMoveDto
+{
+    public string Move { get; set; } = "";
+    public bool Disabled { get; set; }
+    public List<int> LegalTargets { get; set; } = [];
+    public MoveTypeHintsDto? TypeHints { get; set; }
+}
+public sealed class RaidMaxMovesDto
+{
+    public string? Gigantamax { get; set; }
+    public List<RaidPoweredMoveDto?> MaxMoves { get; set; } = [];
+}
 public sealed class RaidActorDto
 {
     public string Species { get; set; } = "";
@@ -82,6 +94,13 @@ public sealed class RaidActorDto
     public bool CanCheer { get; set; }
     public bool CanMega { get; set; }
     public bool CanTera { get; set; }
+    public bool CanUltra { get; set; }
+    public bool CanDynamax { get; set; }
+    public string Transformation { get; set; } = "";
+    public bool ZMoveUsed { get; set; }
+    public int DynamaxTurns { get; set; }
+    public List<RaidPoweredMoveDto?>? ZMoves { get; set; }
+    public RaidMaxMovesDto? MaxMoves { get; set; }
     public List<RaidMoveDto> Moves { get; set; } = [];
 }
 public sealed class RaidSnapshotDto

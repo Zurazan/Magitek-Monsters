@@ -16,7 +16,7 @@ public sealed partial class MainWindow
     private List<BattleSidePokemonDto> previewRoster = [];
     private int previewChosenCount;
     private string modifierRequest = string.Empty;
-    private string pvpModifier = string.Empty;
+    private string battleModifier = string.Empty;
     private string pvpTeamError = string.Empty;
 
     private PvpFormatDto? DrawPvpFormats(PvpSeasonDto season)
@@ -144,28 +144,31 @@ public sealed partial class MainWindow
         ImGui.EndTable();
     }
 
-    private void DrawPvpModifier(BattleSnapshotDto current, BattleActiveDto? active)
+    private void DrawBattleModifier(BattleSnapshotDto current, BattleActiveDto? active, bool pvp)
     {
         var stamp = $"{current.Id}:{current.Turn}:{current.PlayerActive?.Ident}";
-        if (modifierRequest != stamp) { modifierRequest = stamp; pvpModifier = string.Empty; }
+        if (modifierRequest != stamp) { modifierRequest = stamp; battleModifier = string.Empty; }
         var options = new List<(string Id, string Label)> { (string.Empty, "Normal move") };
         if (active?.CanMegaEvo == true) options.Add(("mega", "Mega Evolve"));
         if (active?.CanUltraBurst == true) options.Add(("ultra", "Ultra Burst"));
         if (!string.IsNullOrWhiteSpace(active?.CanTerastallize)) options.Add(("terastallize", $"Terastallize: {active.CanTerastallize}"));
         if (active?.CanZMove?.Any(move => move is not null) == true) options.Add(("zmove", "Use Z-Move"));
-        if (!options.Any(option => option.Id == pvpModifier)) pvpModifier = string.Empty;
+        if (!pvp && (active?.CanDynamax == true || active?.MaxMoves is not null))
+            options.Add(("dynamax", active.MaxMoves?.Gigantamax is { Length: > 0 } ? "Gigantamax" : "Dynamax"));
+        if (!pvp && active?.MaxMoves is not null && !active.CanDynamax) battleModifier = "dynamax";
+        if (!options.Any(option => option.Id == battleModifier)) battleModifier = string.Empty;
         if (options.Count < 2) return;
         ImGui.SetNextItemWidth(-1);
-        if (ImGui.BeginCombo("##BattleModifier", options.First(option => option.Id == pvpModifier).Label))
+        if (ImGui.BeginCombo("##BattleModifier", options.First(option => option.Id == battleModifier).Label))
         {
-            foreach (var option in options) if (ImGui.Selectable(option.Label, pvpModifier == option.Id)) pvpModifier = option.Id;
+            foreach (var option in options) if (ImGui.Selectable(option.Label, battleModifier == option.Id)) battleModifier = option.Id;
             ImGui.EndCombo();
         }
     }
 
-    private string PvpModifierSuffix(BattleActiveDto? active, int move)
+    private string BattleModifierSuffix(BattleActiveDto? active, int move)
     {
-        if (pvpModifier == "zmove" && (active?.CanZMove is not { } zMoves || move >= zMoves.Count || zMoves[move] is null)) return string.Empty;
-        return pvpModifier.Length == 0 ? string.Empty : " " + pvpModifier;
+        if (battleModifier == "zmove" && (active?.CanZMove is not { } zMoves || move >= zMoves.Count || zMoves[move] is null)) return string.Empty;
+        return battleModifier.Length == 0 ? string.Empty : " " + battleModifier;
     }
 }

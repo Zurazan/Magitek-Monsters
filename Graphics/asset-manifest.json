@@ -10,7 +10,42 @@
     "resistfeather": "resist-wing",
     "geniusfeather": "genius-wing",
     "cleverfeather": "clever-wing",
-    "swiftfeather": "swift-wing"
+    "swiftfeather": "swift-wing",
+    "aloraichiumz": "aloraichium-z--held",
+    "buginiumz": "buginium-z--held",
+    "darkiniumz": "darkinium-z--held",
+    "decidiumz": "decidium-z--held",
+    "dragoniumz": "dragonium-z--held",
+    "eeviumz": "eevium-z--held",
+    "electriumz": "electrium-z--held",
+    "fairiumz": "fairium-z--held",
+    "fightiniumz": "fightinium-z--held",
+    "firiumz": "firium-z--held",
+    "flyiniumz": "flyinium-z--held",
+    "ghostiumz": "ghostium-z--held",
+    "grassiumz": "grassium-z--held",
+    "groundiumz": "groundium-z--held",
+    "iciumz": "icium-z--held",
+    "inciniumz": "incinium-z--held",
+    "kommoniumz": "kommonium-z--held",
+    "lunaliumz": "lunalium-z--held",
+    "lycaniumz": "lycanium-z--held",
+    "marshadiumz": "marshadium-z--held",
+    "mewniumz": "mewnium-z--held",
+    "mimikiumz": "mimikium-z--held",
+    "normaliumz": "normalium-z--held",
+    "pikaniumz": "pikanium-z--held",
+    "pikashuniumz": "pikashunium-z--held",
+    "poisoniumz": "poisonium-z--held",
+    "primariumz": "primarium-z--held",
+    "psychiumz": "psychium-z--held",
+    "rockiumz": "rockium-z--held",
+    "snorliumz": "snorlium-z--held",
+    "solganiumz": "solganium-z--held",
+    "steeliumz": "steelium-z--held",
+    "tapuniumz": "tapunium-z--held",
+    "ultranecroziumz": "ultranecrozium-z--held",
+    "wateriumz": "waterium-z--held"
   },
   "pokemon": {
     "BULBASAUR": {
@@ -7991,6 +8026,12 @@
       "sha256": "a61afc1d5fcf1bc25f70a3b496ce2efdc37ee77fc386d2cf14c7442763693637"
     },
     {
+      "path": "items/dynamax-band.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/items/dynamax-band.png",
+      "gitBlob": "d6d0831bc9b66be1e7126f6014093c491266b912",
+      "sha256": "007cb4c212cc15da35237755761ab931984c0da8bd0d72623864cc6949a8d8c4"
+    },
+    {
       "path": "items/earth-plate.png",
       "url": "https://raw.githubusercontent.com/PokeAPI/sprites/8491ffde1b247e4de574d4bb8e24b7bd9fa876fa/sprites/items/earth-plate.png",
       "gitBlob": "6ce9b4d210029f81852c776994b04022f5fff3f2",
@@ -13504,6 +13545,12 @@
       "sha256": "b2b2f86e00b5e7b080e44305b9faf6ce9be242662046e689f128c2f0cec9e960"
     },
     {
+      "path": "items/max-mushrooms.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/items/max-mushrooms.png",
+      "gitBlob": "e8c46b2484c13514e50a71eda9fa0f0b80d4c434",
+      "sha256": "465adb533416c0bc175085b08b3ff291558d7cdcc1e04894af55cdd37a212957"
+    },
+    {
       "path": "items/max-potion.png",
       "url": "https://raw.githubusercontent.com/PokeAPI/sprites/8491ffde1b247e4de574d4bb8e24b7bd9fa876fa/sprites/items/max-potion.png",
       "gitBlob": "3d163c4c8947bfb87ae7e9a4e0629313180871ac",
@@ -15470,6 +15517,12 @@
       "url": "https://raw.githubusercontent.com/PokeAPI/sprites/8491ffde1b247e4de574d4bb8e24b7bd9fa876fa/sprites/items/teachy-tv.png",
       "gitBlob": "09a567d34975ec141541fd8642ff846c7cba6789",
       "sha256": "8d6d9996a06b4f6a2c775b08f741a881dac2a53a287049291e5b0100cb85d9c0"
+    },
+    {
+      "path": "items/tera-orb.png",
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/1b3b7c0a538dd2226ae08d0d2f8955125075bbd4/sprites/items/tera-orb.png",
+      "gitBlob": "b6b0a2862922fcdf1678c46028c187a11eb11cea",
+      "sha256": "46ebd89d5a0e48cd7146999682f6427f26a0bb258d366823e748dee2e0a32377"
     },
     {
       "path": "items/terrain-extender.png",

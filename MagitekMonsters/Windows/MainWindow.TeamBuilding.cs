@@ -117,6 +117,27 @@ public sealed partial class MainWindow
         }
     }
 
+    private void DrawGigantamaxTraining(PokemonDto pokemon)
+    {
+        if (GetPokemonBuild(pokemon)?.CanGigantamax != true) return;
+        var enabled = pokemon.EvolutionProgress?.Gigantamax == true;
+        if (!ImGui.TreeNode($"Gigantamax Factor: {(enabled ? "Enabled" : "Disabled")}##Gmax{pokemon.Id}")) return;
+        ImGui.TextWrapped("Three Max Mushrooms add or remove this Pokémon's Gigantamax Factor. A Dynamax Band is still required for PvE battles.");
+        ImGui.TextDisabled($"Max Mushrooms owned: {InventoryCount("maxmushrooms")} / Three required / ¥35,000 each");
+        ImGui.BeginDisabled(InventoryCount("maxmushrooms") < 3);
+        if (DrawAccentButton(enabled ? "Remove Gigantamax Factor" : "Add Gigantamax Factor", Vector2.Zero, PokemonBlue))
+            ImGui.OpenPopup($"Use Max Mushrooms?##{pokemon.Id}");
+        ImGui.EndDisabled();
+        if (BeginConfirmationModal($"Use Max Mushrooms?##{pokemon.Id}"))
+        {
+            ImGui.TextWrapped($"{(enabled ? "Remove" : "Add")} the Gigantamax Factor for {pokemon.Nickname}? This consumes three Max Mushrooms.");
+            if (DrawConfirmationActions("Use Max Mushrooms", PokemonBlue, busy || CollectionLocked))
+            { ImGui.CloseCurrentPopup(); Run(() => UseTrainingItem(pokemon.Id, "maxmushrooms", null, 3), "Applying Max Mushrooms..."); }
+            EndConfirmationModal();
+        }
+        ImGui.TreePop();
+    }
+
     private void DrawTeraTraining(PokemonDto pokemon)
     {
         var build = GetPokemonBuild(pokemon);

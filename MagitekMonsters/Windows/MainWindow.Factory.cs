@@ -152,7 +152,7 @@ public sealed partial class MainWindow
     {
         var run = trainer!.FrontierRun!;
         var refresh = true;
-        try { battle = await InSession(plugin.Api.PickFactory(run.Id, run.Revision, ids)); megaEvolveSelected = false; }
+        try { battle = await InSession(plugin.Api.PickFactory(run.Id, run.Revision, ids)); }
         catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
         finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
         SetStatus("Factory team saved. Your first fight is ready.");
@@ -161,7 +161,7 @@ public sealed partial class MainWindow
     {
         var run = trainer!.FrontierRun!;
         var refresh = true;
-        try { battle = await InSession(plugin.Api.NextFrontier(run.Id, run.Revision, outgoing, incoming)); megaEvolveSelected = false; }
+        try { battle = await InSession(plugin.Api.NextFrontier(run.Id, run.Revision, outgoing, incoming)); }
         catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
         finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
         SetStatus("Rental swap saved. Your team is fully healed.");

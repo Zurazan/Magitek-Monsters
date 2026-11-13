@@ -252,7 +252,7 @@ public sealed partial class MainWindow
                 DrawEvTraining(pokemon);
                 ImGui.Separator();
                 DrawRareCandyTraining(pokemon); DrawIvTraining(pokemon);
-                DrawNatureAndAbilityTraining(pokemon); DrawTeraTraining(pokemon);
+                DrawNatureAndAbilityTraining(pokemon); DrawTeraTraining(pokemon); DrawGigantamaxTraining(pokemon);
                 ImGui.EndDisabled();
                 DrawEvTrainingConfirmation(pokemon);
                 ImGui.EndTabItem();

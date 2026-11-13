@@ -129,6 +129,11 @@ public sealed partial class MainWindow
             ImGui.TextColored(PokemonGreen, "Active while owned");
             ImGui.TextWrapped("This key item works automatically. It does not need to be used or equipped.");
         }
+        else if (action == BagAction.BattleEquipment)
+        {
+            ImGui.TextColored(CompanionAccent, "Permanent battle equipment");
+            ImGui.TextWrapped("Keep this in your Bag. Select its mechanic from Fight when the battle allows it. It is not held by a Pokémon or consumed on use.");
+        }
         else if (action is BagAction.Medicine or BagAction.Catch)
         {
             var catchItem = action == BagAction.Catch;

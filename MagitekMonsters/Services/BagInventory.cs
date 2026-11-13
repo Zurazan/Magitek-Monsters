@@ -5,7 +5,7 @@ using MagitekMonsters.Models;
 
 namespace MagitekMonsters.Services;
 
-public enum BagAction { None, Medicine, Catch, Training, Evolution, HeldItem, Moves, Passive }
+public enum BagAction { None, Medicine, Catch, Training, Evolution, HeldItem, Moves, Passive, BattleEquipment }
 public sealed record BagEntry(ShopItemDto Item, int Quantity, bool Known);
 
 public static class BagInventory
@@ -54,6 +54,7 @@ public static class BagInventory
     public static BagAction Action(ShopItemDto item)
     {
         if (item.Id is "expshare" or "shinycharm") return BagAction.Passive;
+        if (item.Id is "megabracelet" or "zring" or "teraorb" or "dynamaxband") return BagAction.BattleEquipment;
         if (item.Id is "rotomcatalog" or "meteorite" or "revealglass" or "gracidea" or "prisonbottle"
             or "zygardecube" or "dnasplicers" or "nsolarizer" or "nlunarizer" or "reinsofunity") return BagAction.Evolution;
         return Pocket(item) switch
