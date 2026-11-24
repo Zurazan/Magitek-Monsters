@@ -21,7 +21,8 @@ public sealed partial class MainWindow
         if (!ImGui.BeginTabBar("TrainerCardTabs")) return;
         if (ImGui.BeginTabItem("Your card"))
         {
-            var card = TrainerCard.Resolve(trainer, trainer.Collection.TrainerCard ?? preferences, regionalLeagues);
+            var card = TrainerCard.Resolve(trainer, trainerCardDirty ? preferences : trainer.Collection.TrainerCard ?? preferences, regionalLeagues);
+            if (trainerCardDirty) ImGui.TextDisabled("Previewing unsaved changes.");
             DrawTrainerCardPreview(card);
             ImGui.Spacing();
             if (DrawAccentSmallButton("Copy card summary", CompanionAccent))
@@ -43,23 +44,7 @@ public sealed partial class MainWindow
         }
         if (ImGui.BeginTabItem("Customise"))
         {
-            var card = TrainerCard.Resolve(trainer, preferences, regionalLeagues);
-            DrawTrainerCardPreview(card);
-            ImGui.Spacing();
-            ImGui.BeginDisabled(busy);
-            DrawTrainerCardEditor(preferences, card);
-            ImGui.Checkbox("Share my card with other trainers", ref trainerCardShared);
-            if (preferences.Shared != trainerCardShared) { preferences.Shared = trainerCardShared; SaveTrainerCard(); }
-            ImGui.TextWrapped("Shared cards show your partner, title, showcase and the four stats above to logged-in trainers.");
-            ImGui.BeginDisabled(!trainerCardDirty && trainer.Collection.TrainerCard is not null);
-            if (DrawAccentSmallButton("Save card", CompanionAccent)) Run(PublishTrainerCard, "Saving trainer card...");
-            ImGui.EndDisabled();
-            ImGui.SameLine();
-            if (DrawAccentSmallButton("Reset changes", CompanionMuted)) { trainerCardDirty = false; trainerCardDraft = null; }
-            ImGui.EndDisabled();
-            ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
-            ImGui.TextColored(CompanionAccent, "TRAINER IDENTITY");
-            DrawTrainerIdentity();
+            DrawTrainerCardCustomise(preferences);
             ImGui.EndTabItem();
         }
         var flags = openTrainerProfileTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
@@ -70,6 +55,37 @@ public sealed partial class MainWindow
             ImGui.EndTabItem();
         }
         ImGui.EndTabBar();
+    }
+
+    private void DrawTrainerCardCustomise(TrainerCardPreferences preferences)
+    {
+        var card = TrainerCard.Resolve(trainer, preferences, regionalLeagues);
+        if (ImGui.CollapsingHeader("Card preview", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            DrawTrainerCardPreview(card);
+            ImGui.Spacing();
+        }
+        if (ImGui.CollapsingHeader("Card appearance & identity"))
+        {
+            ImGui.BeginDisabled(busy);
+            DrawTrainerCardEditor(preferences, card);
+            ImGui.Checkbox("Share my card with other trainers", ref trainerCardShared);
+            if (preferences.Shared != trainerCardShared) { preferences.Shared = trainerCardShared; SaveTrainerCard(); }
+            ImGui.TextWrapped("Shared cards show your partner, title, showcase, Pokédex totals and battle wins.");
+            ImGui.EndDisabled();
+            ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
+            DrawTrainerIdentity();
+            ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
+        }
+        if (ImGui.CollapsingHeader("Showcase badges")) DrawShowcaseCatalog(preferences, card);
+        ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
+        ImGui.BeginDisabled(busy);
+        ImGui.BeginDisabled(!trainerCardDirty && trainer.Collection.TrainerCard is not null);
+        if (DrawAccentSmallButton("Save card", CompanionAccent)) Run(PublishTrainerCard, "Saving trainer card...");
+        ImGui.EndDisabled();
+        ImGui.SameLine();
+        if (DrawAccentSmallButton("Reset changes", CompanionMuted)) { trainerCardDirty = false; trainerCardDraft = null; }
+        ImGui.EndDisabled();
     }
 
     private static Vector4 TrainerCardColor(int color) => color switch
@@ -244,34 +260,6 @@ public sealed partial class MainWindow
             }
             ImGui.EndCombo();
         }
-        ImGui.Spacing();
-        ImGui.Text($"Showcase badges / {card.Badges.Count}/{TrainerCard.MaximumBadges} selected");
-        if (DrawAccentSmallButton("Use automatic showcase", CompanionMuted))
-        {
-            preferences.BadgeIds = null;
-            SaveTrainerCard();
-        }
-        if (card.EarnedBadges.Count == 0) { ImGui.TextWrapped("Earn Gym badges, Frontier achievements or collection objectives to unlock showcase badges."); return; }
-        var selected = card.Badges.Select(entry => entry.Id).ToHashSet(StringComparer.Ordinal);
-        ImGui.BeginChild("TrainerCardBadgePicker", new Vector2(0, 150 * CompanionScale), true);
-        foreach (var badge in card.EarnedBadges)
-        {
-            var icon = ImGui.GetCursorScreenPos();
-            ImGui.Dummy(new Vector2(24 * CompanionScale));
-            DrawAchievementIconAt(badge.Id, icon, new Vector2(24 * CompanionScale));
-            ImGui.SameLine();
-            var active = selected.Contains(badge.Id);
-            ImGui.BeginDisabled(!active && selected.Count >= TrainerCard.MaximumBadges);
-            if (ImGui.Checkbox($"{badge.Name}##CardBadge{badge.Id}", ref active))
-            {
-                if (active) selected.Add(badge.Id); else selected.Remove(badge.Id);
-                preferences.BadgeIds = card.EarnedBadges.Where(entry => selected.Contains(entry.Id)).Select(entry => entry.Id).ToList();
-                SaveTrainerCard();
-            }
-            ImGui.EndDisabled();
-            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(!active && selected.Count >= TrainerCard.MaximumBadges ? "Remove a showcase badge to make room." : badge.Detail);
-        }
-        ImGui.EndChild();
     }
 
     private void SaveTrainerCard() => trainerCardDirty = true;

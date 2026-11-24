@@ -20,6 +20,7 @@ public sealed partial class MainWindow
 
     private void ResetTrainerProfiles()
     {
+        ResetShowcase();
         badgeCaseRegionId = "";
         identityDraftOwner = uidPromptOwner = string.Empty;
         requestUidPrompt = false;
