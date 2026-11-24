@@ -16,6 +16,18 @@ namespace MagitekMonsters.Services;
 
 public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
 {
+    public Task<FriendPageDto> GetFriends(string group, string search, int offset, string? selected = null, CancellationToken token = default) =>
+        Send<FriendPageDto>(HttpMethod.Get, $"/api/friends?group={Uri.EscapeDataString(group)}&search={Uri.EscapeDataString(search.Trim())}&offset={offset}&limit=50" + (selected is null ? "" : "&selected=" + Uri.EscapeDataString(selected)), null, true, token);
+    public Task<FriendMutationDto> AddFriend(string trainerId) => Send<FriendMutationDto>(HttpMethod.Post, "/api/friends", new FriendAddRequest(trainerId), true, default);
+    public Task<FriendMutationDto> RemoveFriend(string userId) => Send<FriendMutationDto>(HttpMethod.Post, $"/api/friends/{userId}/remove", EmptyRequest.Instance, true, default);
+    public Task<FriendMutationDto> BlockFriend(string userId) => Send<FriendMutationDto>(HttpMethod.Post, $"/api/friends/{userId}/block", EmptyRequest.Instance, true, default);
+    public Task<FriendMutationDto> UnblockFriend(string userId) => Send<FriendMutationDto>(HttpMethod.Post, $"/api/friends/{userId}/unblock", EmptyRequest.Instance, true, default);
+    public Task<FriendMutationDto> AcceptFriendRequest(string requestId) => Send<FriendMutationDto>(HttpMethod.Post, $"/api/friends/requests/{requestId}/accept", EmptyRequest.Instance, true, default);
+    public Task<FriendMutationDto> DeclineFriendRequest(string requestId) => Send<FriendMutationDto>(HttpMethod.Post, $"/api/friends/requests/{requestId}/decline", EmptyRequest.Instance, true, default);
+    public Task<FriendMutationDto> CancelFriendRequest(string requestId) => Send<FriendMutationDto>(HttpMethod.Post, $"/api/friends/requests/{requestId}/cancel", EmptyRequest.Instance, true, default);
+    public Task<FriendMutationDto> InviteFriendToDen(string userId, string roomId) => Send<FriendMutationDto>(HttpMethod.Post, "/api/friends/den-invites", new FriendDenRequest(userId, roomId), true, default);
+    public Task<FriendDenInviteDto> ReviewDenInvitation(string inviteId) => Send<FriendDenInviteDto>(HttpMethod.Post, $"/api/friends/den-invites/{inviteId}/accept", EmptyRequest.Instance, true, default);
+    public Task<FriendDenInviteDto> DeclineDenInvitation(string inviteId) => Send<FriendDenInviteDto>(HttpMethod.Post, $"/api/friends/den-invites/{inviteId}/decline", EmptyRequest.Instance, true, default);
     public Task<TradingSnapshotDto> GetTrades(CancellationToken token = default) => Send<TradingSnapshotDto>(HttpMethod.Get, "/api/trades", null, true, token);
     public Task<TradingSnapshotDto> CreateTrade(string trainer, string pokemon, string request) => Send<TradingSnapshotDto>(HttpMethod.Post, "/api/trades", new TradeCreateRequest(trainer, pokemon, request), true, default);
     public Task<TradingSnapshotDto> OfferTrade(string id, string pokemon, int revision) => Send<TradingSnapshotDto>(HttpMethod.Post, $"/api/trades/{id}/offer", new TradeOfferRequest(pokemon, revision), true, default);

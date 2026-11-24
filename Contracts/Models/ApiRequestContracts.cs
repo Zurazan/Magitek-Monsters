@@ -19,6 +19,11 @@ public static class ApiRequestContracts
     };
     public static readonly IReadOnlyList<ApiRequestContract> All = new ApiRequestContract[]
     {
+        Post<FriendAddRequest>("/api/friends"), Post<EmptyRequest>("/api/friends/{userId}/remove", true),
+        Post<EmptyRequest>("/api/friends/{userId}/block", true), Post<EmptyRequest>("/api/friends/{userId}/unblock", true),
+        Post<EmptyRequest>("/api/friends/requests/{requestId}/accept", true), Post<EmptyRequest>("/api/friends/requests/{requestId}/decline", true),
+        Post<EmptyRequest>("/api/friends/requests/{requestId}/cancel", true), Post<FriendDenRequest>("/api/friends/den-invites"),
+        Post<EmptyRequest>("/api/friends/den-invites/{inviteId}/accept", true), Post<EmptyRequest>("/api/friends/den-invites/{inviteId}/decline", true),
         Post<TradeCreateRequest>("/api/trades"), Post<TradeOfferRequest>("/api/trades/{tradeId}/offer"),
         Post<TradeConfirmRequest>("/api/trades/{tradeId}/confirm"), Post<EmptyRequest>("/api/trades/{tradeId}/cancel", true),
         Post<WonderDepositRequest>("/api/trades/wonder"), Post<EmptyRequest>("/api/trades/wonder/{depositId}/withdraw", true),

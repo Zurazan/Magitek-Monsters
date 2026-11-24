@@ -147,6 +147,7 @@ public sealed partial class MainWindow
             ImGui.TextWrapped("Evolution stays optional. Trade evolutions still use the Linking Cord.");
             ImGui.SetNextItemWidth(Math.Min(300 * CompanionScale, ImGui.GetContentRegionAvail().X));
             ImGui.InputTextWithHint("##TradeTrainer", "Trainer UID or vanity code", ref tradeTrainerCode, 32);
+            if (DrawAccentSmallButton("Choose friend##Trade", CompanionAccent)) OpenFriendPicker("trade");
             DrawTradingChoice(false);
             var selected = TradingSelection(false);
             ImGui.BeginDisabled(busy || CollectionLocked || selected is null || !CanOfferPokemon(selected) || string.IsNullOrWhiteSpace(tradeTrainerCode)

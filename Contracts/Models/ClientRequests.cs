@@ -6,6 +6,8 @@ using MagitekMonsters.Services;
 namespace MagitekMonsters.Contracts;
 
 public interface IClientRequest;
+public sealed record FriendAddRequest(string TrainerId) : IClientRequest;
+public sealed record FriendDenRequest(string UserId, string RoomId) : IClientRequest;
 public sealed record TradeCreateRequest(string TrainerId, string PokemonId, string RequestId) : IClientRequest;
 public sealed record TradeOfferRequest(string PokemonId, int Revision) : IClientRequest;
 public sealed record TradeConfirmRequest(int Revision) : IClientRequest;

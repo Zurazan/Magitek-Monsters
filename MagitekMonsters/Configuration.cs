@@ -21,6 +21,7 @@ public sealed class Configuration : IPluginConfiguration
     public Dictionary<string, CollectionWishlistPreferences> CollectionWishlists { get; set; } = new();
     public Dictionary<string, RecentActivityPreferences> RecentActivities { get; set; } = new();
     public Dictionary<string, StorageSearchPreferences> StorageSearches { get; set; } = new();
+    public Dictionary<string, Dictionary<string, bool>> FriendGroups { get; set; } = new();
 
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
 }

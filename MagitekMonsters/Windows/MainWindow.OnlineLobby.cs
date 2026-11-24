@@ -50,7 +50,7 @@ public sealed partial class MainWindow
             {
                 ImGui.TableNextColumn();
                 var accent = index == 1 ? PokemonYellow : index == 2 ? new Vector4(0.75f, 0.62f, 0.95f, 1) : PokemonBlue;
-                var label = index == 0 ? "Casual" : index == 1 ? "Ranked" : incoming.Count > 0 ? $"Friends ({incoming.Count})" : "Friends";
+                var label = index == 0 ? "Casual" : index == 1 ? "Ranked" : incoming.Count > 0 ? $"Friendly matches ({incoming.Count})" : "Friendly matches";
                 if (DrawAccentButton(label, new Vector2(-1, 36 * scale), onlineView == index ? accent : CompanionMuted))
                 {
                     onlineView = index;
@@ -185,6 +185,7 @@ public sealed partial class MainWindow
         else
         {
             ImGui.SetNextItemWidth(-1); ImGui.InputTextWithHint("##ChallengeTrainer", "Trainer UID or vanity code", ref challengeTrainerId, 40);
+            if (DrawAccentSmallButton("Choose friend##Battle", CompanionAccent)) OpenFriendPicker("battle");
             if (!friendlyFormats.Any(option => option.Id == friendlyFormatId)) friendlyFormatId = friendlyFormats[0].Id;
             format = DrawOnlineFormatCombo(friendlyFormats, ref friendlyFormatId, "FriendlyFormat");
         }

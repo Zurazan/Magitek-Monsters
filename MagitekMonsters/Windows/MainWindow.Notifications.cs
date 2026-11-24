@@ -28,7 +28,7 @@ public sealed partial class MainWindow
     private void UpdateNotifications()
     {
         var batch = notificationFeed.Observe(trainer?.User.Id ?? "", sessionResponses.Generation, trainer?.Gifts, pvpStatus, raidRoom,
-            plugin.Connection.State, plugin.Api.Update.Required ? plugin.Api.Update.Message : null, trading);
+            plugin.Connection.State, plugin.Api.Update.Required ? plugin.Api.Update.Message : null, trading, friendInbox);
         plugin.Notifications?.Update(batch, plugin.Configuration.NotificationsEnabled, notificationVisibility ??= IsNotificationVisible);
     }
 
@@ -40,6 +40,7 @@ public sealed partial class MainWindow
         GameNoticeTarget.Match => mainSection == 4 && pvpStatus?.Battle?.Id == notice.Subject,
         GameNoticeTarget.RaidReady or GameNoticeTarget.RaidBattle or GameNoticeTarget.RaidCapture => mainSection == 12 && raidRoom?.Id == notice.Subject,
         GameNoticeTarget.Connection => true,
+        GameNoticeTarget.Friends or GameNoticeTarget.DenInvitation => mainSection == 17 && friendsTab == 1,
         _ => false
     });
 
@@ -49,6 +50,11 @@ public sealed partial class MainWindow
         IsOpen = true;
         switch (notice.Target)
         {
+            case GameNoticeTarget.Friends: if (trainer is not null) { mainSection = 17; friendsTab = 1; friendsRefreshRequested = true; } break;
+            case GameNoticeTarget.DenInvitation:
+                if (notice.Subject is { } invite && friendInbox?.Dens.Any(entry => entry.RequestId == invite && entry.ExpiresAt > DateTimeOffset.UtcNow) == true && !busy) ReviewFriendDen(invite);
+                else if (trainer is not null) { mainSection = 17; friendsTab = 1; }
+                break;
             case GameNoticeTarget.Trades: if (trainer is not null) { mainSection = 16; requestTradingTab = notice.Kind == GameNoticeKind.Success ? 2 : 0; tradeRefreshRequested = true; } break;
             case GameNoticeTarget.Gifts: if (trainer is not null) { mainSection = 13; giftPage = 0; } break;
             case GameNoticeTarget.Challenge:
@@ -63,5 +69,19 @@ public sealed partial class MainWindow
             case GameNoticeTarget.Update: Plugin.CommandManager.ProcessCommand("/xlplugins"); break;
             case GameNoticeTarget.Login: if (trainer is not null) Disconnect(false); break;
         }
+    }
+    internal void NotificationAction(GameNotice notice, string action)
+    {
+        if (disposeCancellation.IsCancellationRequested || trainer is null) return;
+        if (busy) { OpenNotification(new("friends-review", "Friends", "", Target: GameNoticeTarget.Friends)); return; }
+        var id = notice.Subject;
+        if (id is null) return;
+        if (notice.Target == GameNoticeTarget.Friends && friendInbox?.Incoming.Any(entry => entry.RequestId == id && entry.ExpiresAt > DateTimeOffset.UtcNow) == true)
+        {
+            if (action == "accept") ChangeFriend(() => plugin.Api.AcceptFriendRequest(id), "Accepting request...");
+            else if (action == "decline") ChangeFriend(() => plugin.Api.DeclineFriendRequest(id), "Declining request...");
+        }
+        else if (notice.Target == GameNoticeTarget.DenInvitation && action == "decline" && friendInbox?.Dens.Any(entry => entry.RequestId == id && entry.ExpiresAt > DateTimeOffset.UtcNow) == true)
+            Run(async () => { await InSession(plugin.Api.DeclineDenInvitation(id)); friendsRefreshRequested = true; SetStatus("Den invitation declined."); }, "Declining invitation...");
     }
 }

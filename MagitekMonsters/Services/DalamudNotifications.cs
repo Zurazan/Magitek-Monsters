@@ -7,7 +7,7 @@ using Dalamud.Plugin.Services;
 
 namespace MagitekMonsters.Services;
 
-public sealed class DalamudNotifications(INotificationManager manager, Action<GameNotice> open, Func<string> readScope) : IDisposable
+public sealed class DalamudNotifications(INotificationManager manager, Action<GameNotice> open, Func<string> readScope, Action<GameNotice, string>? act = null) : IDisposable
 {
     private readonly Dictionary<string, (GameNotice Notice, IActiveNotification Active)> active = new(StringComparer.Ordinal);
     private readonly List<string> expired = [];
@@ -57,6 +57,13 @@ public sealed class DalamudNotifications(INotificationManager manager, Action<Ga
                 if (ImGui.Button(notice.ActionLabel))
                 {
                     if (notice.ExpiresAt is null || notice.ExpiresAt > DateTimeOffset.UtcNow) open(notice);
+                    args.Notification.DismissNow();
+                }
+                if (act is not null) foreach (var action in notice.Actions)
+                {
+                    ImGui.SameLine();
+                    if (!ImGui.Button(action.Label)) continue;
+                    if (notice.ExpiresAt is null || notice.ExpiresAt > DateTimeOffset.UtcNow) act(notice, action.Id);
                     args.Notification.DismissNow();
                 }
             };

@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window, IDisposable
         get => trainerState;
         set
         {
-            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetTrading(); ResetBrowseCaches(); }
+            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetTrading(); ResetFriends(); ResetBrowseCaches(); }
             ObserveTrainerActivity(trainerState, value);
             navigationAlertTrainer = null;
             trainerState = value;
@@ -356,6 +356,8 @@ public sealed partial class MainWindow : Window, IDisposable
                 Run(RefreshShop, "Refreshing shop...");
             else if (plugin.Connection.State == ServerConnectionState.Connected && (tradeRefreshRequested || DateTimeOffset.UtcNow >= nextTradePollAt))
                 BackgroundTrading();
+            else if (plugin.Connection.State == ServerConnectionState.Connected && (friendsRefreshRequested || friendPages.HasPending || DateTimeOffset.UtcNow >= nextFriendsPollAt))
+                BackgroundFriends();
             else if (DateTimeOffset.UtcNow >= nextGiftRefreshAt && battle?.Status != "active" && pvpStatus?.Battle?.Status != "active" && raidRoom?.Status != "active")
                 BackgroundGifts();
         }
@@ -411,6 +413,7 @@ public sealed partial class MainWindow : Window, IDisposable
             DrawNavigationItem("Trainer Card", 14, 32 * scale);
             DrawNavigationItem($"Party {trainer.Party.Count}/6{NavigationAlert(partyAlerts)}", 1, 32 * scale);
             DrawNavigationItem($"PC Storage{NavigationAlert(storageAlerts)}", 2, 32 * scale);
+            DrawNavigationItem($"Friends{(friendInbox is { IncomingCount: > 0 } or { DenCount: > 0 } ? " [!]" : "")}", 17, 32 * scale);
             ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
             ImGui.TextColored(CompanionMuted, "BATTLE");
             DrawNavigationItem("PvE League", 3, 32 * scale);
@@ -440,7 +443,7 @@ public sealed partial class MainWindow : Window, IDisposable
             || mainSection == 9 && battle?.Kind == "trainer" && battle.OpponentId.StartsWith("legendary-", StringComparison.Ordinal)
             || mainSection == 10 && battle is { Kind: "trainer", OpponentId: "legendary-zarude" };
         if (ImGui.BeginChild("CompanionPage", new Vector2(Math.Max(1, available.X - navigationWidth - gap), bodyHeight), false,
-                consoleVisible || mainSection == 4 || mainSection == 12 && raidRoom?.Status == "active" ? FixedBattlePanel : ImGuiWindowFlags.None))
+                consoleVisible || mainSection is 4 or 17 || mainSection == 12 && raidRoom?.Status == "active" ? FixedBattlePanel : ImGuiWindowFlags.None))
         {
             switch (mainSection)
             {
@@ -461,12 +464,14 @@ public sealed partial class MainWindow : Window, IDisposable
                 case 14: DrawTrainerCard(); break;
                 case 15: DrawCurrencies(); break;
                 case 16: DrawTrading(); break;
+                case 17: DrawFriends(); break;
                 default: mainSection = 0; DrawAdventure(); break;
             }
         }
         ImGui.EndChild();
         ImGui.PopStyleVar();
         DrawUidChoicePrompt();
+        DrawFriendPicker();
     }
 
     private void DrawNavigationItem(string label, int section, float height)
@@ -1480,6 +1485,7 @@ public sealed partial class MainWindow : Window, IDisposable
         battle = null;
         eventBattleId = string.Empty;
         ResetTrading();
+        ResetFriends();
         pvpStatus = null;
         raidRoom = null; raidBoard = null; raidPokemonId = ""; raidJoinCode = ""; raidRefreshRequested = false;
         pendingRaidChoice = null; raidCaptureRequest = null; raidTargetMove = null;
@@ -1657,6 +1663,7 @@ public sealed partial class MainWindow : Window, IDisposable
             QueueConnectionSync();
         }
         if (eventName == "raid.updated") raidRefreshRequested = true;
+        if (eventName is "friends.updated" or "hello") friendsRefreshRequested = true;
         if (eventName == "trades.updated") tradeRefreshRequested = true;
         if (eventName is "trainer.updated" or "encounter.updated" or "battle.updated")
         {

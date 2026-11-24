@@ -6,9 +6,13 @@ using MagitekMonsters.Models;
 namespace MagitekMonsters.Services;
 
 public enum GameNoticeKind { Info, Success, Warning, Error }
-public enum GameNoticeTarget { None, Gifts, Challenge, Match, RaidReady, RaidBattle, RaidCapture, Connection, Login, Update, Trades }
+public enum GameNoticeTarget { None, Gifts, Challenge, Match, RaidReady, RaidBattle, RaidCapture, Connection, Login, Update, Trades, Friends, DenInvitation }
+public sealed record GameNoticeAction(string Label, string Id);
 public sealed record GameNotice(string Key, string Title, string Content, GameNoticeKind Kind = GameNoticeKind.Info,
-    GameNoticeTarget Target = GameNoticeTarget.None, string? Subject = null, string? ActionLabel = null, DateTimeOffset? ExpiresAt = null);
+    GameNoticeTarget Target = GameNoticeTarget.None, string? Subject = null, string? ActionLabel = null, DateTimeOffset? ExpiresAt = null)
+{
+    public IReadOnlyList<GameNoticeAction> Actions { get; init; } = [];
+}
 public sealed record GameNoticeBatch(bool Reset, IReadOnlyList<GameNotice> New, IReadOnlySet<string> ActiveKeys);
 
 public sealed class GameNotificationFeed(TimeProvider? time = null)
@@ -27,6 +31,7 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
     private ChallengeInputs[] challengeInputs = [];
     private GameNoticeBatch? idleBatch;
     private TradingSnapshotDto? tradingInput;
+    private FriendInboxDto? friendsInput;
     private DateTimeOffset observedAt;
     private DateTimeOffset refreshAt = DateTimeOffset.MinValue;
 
@@ -67,11 +72,12 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
     }
 
     public GameNoticeBatch Observe(string owner, long session, GiftInboxDto? gifts, PvpStatusDto? pvp, RaidRoomDto? raid,
-        ServerConnectionState connection, string? requiredUpdate = null, TradingSnapshotDto? trading = null)
+        ServerConnectionState connection, string? requiredUpdate = null, TradingSnapshotDto? trading = null, FriendInboxDto? friends = null)
     {
         var now = clock.GetUtcNow();
-        var changed = InputsChanged(owner, session, gifts, pvp, raid, connection, requiredUpdate) || !ReferenceEquals(tradingInput, trading);
+        var changed = InputsChanged(owner, session, gifts, pvp, raid, connection, requiredUpdate) || !ReferenceEquals(tradingInput, trading) || !ReferenceEquals(friendsInput, friends);
         tradingInput = trading;
+        friendsInput = friends;
         if (!changed && idleBatch is not null && now >= observedAt && now < refreshAt) return idleBatch;
         observedAt = now; refreshAt = DateTimeOffset.MaxValue;
         var reset = ownerScope != owner || sessionScope != session;
@@ -96,6 +102,35 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
         }
         if (owner.Length > 0)
         {
+            if (friends is not null)
+            {
+                var requests = friends.Incoming.Where(entry => entry.RequestId is not null && entry.ExpiresAt > now).ToArray();
+                var fresh = new List<FriendEntryDto>();
+                foreach (var request in requests)
+                {
+                    active.Add("friend:" + request.RequestId);
+                    if (request.ExpiresAt < refreshAt) refreshAt = request.ExpiresAt.Value;
+                    if (Remember("friend:" + request.RequestId)) fresh.Add(request);
+                }
+                if (requests.Length > 1) active.Add("friend-requests");
+                if (fresh.Count == 1)
+                {
+                    var request = fresh[0];
+                    notices.Add(new("friend:" + request.RequestId, "Friend request", $"{request.Name} wants to add you.",
+                        Target: GameNoticeTarget.Friends, Subject: request.RequestId, ActionLabel: "Review", ExpiresAt: request.ExpiresAt)
+                        { Actions = [new("Accept", "accept"), new("Decline", "decline")] });
+                }
+                else if (fresh.Count > 1)
+                    notices.Add(new("friend-requests", "Friend requests", $"{friends.IncomingCount:N0} pending requests. Review them in Friends.",
+                        Target: GameNoticeTarget.Friends, ActionLabel: "Review requests"));
+                foreach (var invite in friends.Dens.Where(entry => entry.RequestId is not null && entry.ExpiresAt > now))
+                {
+                    if (invite.ExpiresAt < refreshAt) refreshAt = invite.ExpiresAt.Value;
+                    Add(new("friend-den:" + invite.RequestId, "Den invitation", $"{invite.Name} invited you to a {invite.Stars}-star {invite.DenSpecies} den.",
+                        Target: GameNoticeTarget.DenInvitation, Subject: invite.RequestId, ActionLabel: "Review den", ExpiresAt: invite.ExpiresAt)
+                        { Actions = [new("Decline", "decline")] });
+                }
+            }
             if (trading?.Active is { } trade && DateTimeOffset.TryParse(trade.ExpiresAt, out var tradeExpiry) && tradeExpiry > now)
             {
                 if (tradeExpiry < refreshAt) refreshAt = tradeExpiry;

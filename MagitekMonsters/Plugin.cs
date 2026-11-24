@@ -53,7 +53,7 @@ public sealed class Plugin : IDalamudPlugin
 
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this);
-        Notifications = new DalamudNotifications(NotificationManager, MainWindow.OpenNotification, () => MainWindow.NotificationScope);
+        Notifications = new DalamudNotifications(NotificationManager, MainWindow.OpenNotification, () => MainWindow.NotificationScope, MainWindow.NotificationAction);
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
 

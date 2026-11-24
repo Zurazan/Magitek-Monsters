@@ -89,6 +89,7 @@ public sealed partial class MainWindow
         var result = await InSession(plugin.Api.RaidAction(lobby ? null : raidRoom!.Id, action, body, disposeCancellation.Token));
         if (action == "leave") { raidRoom = null; raidBoard = null; }
         else ApplyRaid(result);
+        if (action == "join") friendsRefreshRequested = true;
         trainer = await InSession(plugin.Api.GetMe(disposeCancellation.Token));
         SetStatus(action switch { "choose" => "Raid action saved.", "catch" => "Caught! Your Pokémon is saved.", "skip" => "Capture skipped.", "leave" => "You left the raid.", _ => "Raid updated." });
     }
@@ -211,6 +212,9 @@ public sealed partial class MainWindow
     {
         DrawSectionHeader($"{room.Den.Species.ToUpperInvariant()} DEN / {room.Den.Stars} STARS", $"Battle Lv. {room.Den.Level} / {(room.Private ? "Private" : "Public")} lobby / {room.Players.Count}/4 trainers");
         if (DrawAccentSmallButton($"Copy code: {room.Code}", PokemonBlue)) ImGui.SetClipboardText(room.Code);
+        ImGui.SameLine(); ImGui.BeginDisabled(busy || room.Players.Count >= 4);
+        if (DrawAccentSmallButton("Invite friend", CompanionAccent)) OpenFriendPicker("den");
+        ImGui.EndDisabled();
         ImGui.TextWrapped("One shared boss. One Pokémon and three cheers per trainer. Each trainer gets one transformation and one Z-Move with their own equipment. No bag items or switching. NPCs fill empty slots at start.");
         for (var slot = 0; slot < 4; slot++)
         {
