@@ -25,6 +25,8 @@ public sealed record TrainerCardView(PokemonDto? Partner, TrainerCardTitle Title
 public static class TrainerCard
 {
     public const int MaximumBadges = 3;
+    public static IReadOnlyList<string> ColorNames { get; } = Array.AsReadOnly<string>(
+        ["Blue", "Red", "Green", "Gold", "Purple", "Pink", "Teal", "Orange", "Silver", "Cyan", "Lavender", "Rose"]);
 
     public static TrainerProfileDto Profile(TrainerSnapshotDto trainer, TrainerCardPreferences preferences, IReadOnlyList<RegionalLeagueDto>? regions = null)
     {
@@ -50,7 +52,7 @@ public static class TrainerCard
     {
         var card = Resolve(trainer, preferences, regions);
         var badges = preferences.BadgeIds?.Select(id => TrainerLeagueRecords.BadgeId(id, regions ?? [])).ToArray() ?? [];
-        return preferences.Color is >= 0 and <= 3 && card.Title.Id == preferences.TitleId
+        return preferences.Color >= 0 && preferences.Color < ColorNames.Count && card.Title.Id == preferences.TitleId
             && (preferences.FeaturedPokemonId.Length == 0 || card.Partner?.Id == preferences.FeaturedPokemonId)
             && (preferences.BadgeIds is null || preferences.BadgeIds.Count <= MaximumBadges
                 && badges.Distinct(StringComparer.Ordinal).Count() == badges.Length
@@ -115,7 +117,7 @@ public static class TrainerCard
         var selected = preferences.BadgeIds is null ? earned.Take(MaximumBadges)
             : preferences.BadgeIds.Select(id => TrainerLeagueRecords.BadgeId(id, regions ?? [])).Distinct(StringComparer.Ordinal).Select(id => earned.FirstOrDefault(entry => entry.Id == id))
                 .OfType<TrainerCardBadge>().Take(MaximumBadges);
-        return new(partner, title, Math.Clamp(preferences.Color, 0, 3), selected.ToList(), earned);
+        return new(partner, title, Math.Clamp(preferences.Color, 0, ColorNames.Count - 1), selected.ToList(), earned);
     }
 
     public static string PartnerLabel(PokemonDto pokemon)

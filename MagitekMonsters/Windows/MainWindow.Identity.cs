@@ -92,7 +92,7 @@ public sealed partial class MainWindow
                 ImGui.CloseCurrentPopup();
                 Run(() => SaveIdentity(() => plugin.Api.ChooseTrainerUid(new(code, false, true))), "Confirming permanent UID...");
             }
-            ImGui.TextDisabled("You can return here from Trainer Card > Identity.");
+            ImGui.TextDisabled("You can return here from Trainer Card > Customise.");
         }
         EndConfirmationModal();
     }

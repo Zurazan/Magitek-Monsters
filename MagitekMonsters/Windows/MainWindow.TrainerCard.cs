@@ -57,10 +57,8 @@ public sealed partial class MainWindow
             ImGui.SameLine();
             if (DrawAccentSmallButton("Reset changes", CompanionMuted)) { trainerCardDirty = false; trainerCardDraft = null; }
             ImGui.EndDisabled();
-            ImGui.EndTabItem();
-        }
-        if (ImGui.BeginTabItem("Identity"))
-        {
+            ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
+            ImGui.TextColored(CompanionAccent, "TRAINER IDENTITY");
             DrawTrainerIdentity();
             ImGui.EndTabItem();
         }
@@ -79,6 +77,14 @@ public sealed partial class MainWindow
         1 => PokemonRed,
         2 => PokemonGreen,
         3 => PokemonYellow,
+        4 => new Vector4(0.64f, 0.42f, 0.92f, 1f),
+        5 => new Vector4(1f, 0.46f, 0.70f, 1f),
+        6 => new Vector4(0.16f, 0.74f, 0.64f, 1f),
+        7 => PokemonOrange,
+        8 => new Vector4(0.76f, 0.80f, 0.86f, 1f),
+        9 => new Vector4(0.24f, 0.78f, 0.96f, 1f),
+        10 => new Vector4(0.72f, 0.65f, 0.96f, 1f),
+        11 => new Vector4(0.85f, 0.32f, 0.45f, 1f),
         _ => PokemonBlue
     };
 
@@ -226,13 +232,17 @@ public sealed partial class MainWindow
             ImGui.EndCombo();
         }
         ImGui.TextUnformatted("Card colour");
-        string[] colors = ["Blue", "Red", "Green", "Gold"];
         var color = card.Color;
         ImGui.SetNextItemWidth(-1);
-        if (ImGui.Combo("##TrainerCardColor", ref color, colors, colors.Length))
+        if (ImGui.BeginCombo("##TrainerCardColor", TrainerCard.ColorNames[color]))
         {
-            preferences.Color = color;
-            SaveTrainerCard();
+            for (var index = 0; index < TrainerCard.ColorNames.Count; index++)
+            {
+                if (!ImGui.Selectable(TrainerCard.ColorNames[index], color == index)) continue;
+                preferences.Color = index;
+                SaveTrainerCard();
+            }
+            ImGui.EndCombo();
         }
         ImGui.Spacing();
         ImGui.Text($"Showcase badges / {card.Badges.Count}/{TrainerCard.MaximumBadges} selected");
