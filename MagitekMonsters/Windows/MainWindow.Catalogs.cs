@@ -120,7 +120,8 @@ public sealed partial class MainWindow
                 legendaryBosses = legendaryTask.Result.Bosses;
                 if (pendingLegendaryPermit is { } permit) pendingLegendaryPermit = legendaryBosses.FirstOrDefault(boss => boss.Id == permit.Id);
                 specialTrials = trialsTask.Result.Trials;
-                prizePokemon = prizeTask.Result.Pokemon;
+                prizePokemon = prizeTask.Result.Pokemon.OrderBy(prize => prize.Price)
+                    .ThenBy(prize => prize.Species, StringComparer.OrdinalIgnoreCase).ToList();
                 opponents = opponentsTask.Result.Opponents;
                 regionalLeagues = opponentsTask.Result.Regions;
                 friendlyFormats.Clear(); friendlyFormats.AddRange(formatsTask.Result.Formats);
