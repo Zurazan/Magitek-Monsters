@@ -73,7 +73,8 @@ public sealed partial class MainWindow
         ImGui.SetNextItemWidth(-1);
         if (ImGui.InputTextWithHint("##OnlineRosterSearch", "Species, nickname, type, move, ability or held item...", ref onlineRosterSearch, 100)) onlineRosterPage = 0;
         var candidates = GetOnlineCandidates(owned);
-        var footer = ImGui.GetFrameHeight() + ImGui.GetTextLineHeightWithSpacing() + 12 * scale;
+        var summary = $"{candidates.Count:N0} available / {ids.Count}/{format.MaxTeamSize} registered / Battle Lv. {PvpPresentation.BattleLevel(format)}";
+        var footer = Math.Max(30 * scale, ImGui.GetFrameHeight()) + ImGui.CalcTextSize(summary, false, Math.Max(1, ImGui.GetContentRegionAvail().X)).Y + ImGui.GetStyle().ItemSpacing.Y * 2 + 12 * scale;
         ImGui.BeginChild("OnlineRosterCandidates", new Vector2(0, Math.Max(1, ImGui.GetContentRegionAvail().Y - footer)), false);
         DrawPager("OnlineRoster", ref onlineRosterPage, candidates.Count, 6);
         ImGui.BeginDisabled(CollectionLocked);
@@ -92,7 +93,7 @@ public sealed partial class MainWindow
         ImGui.EndDisabled();
         if (candidates.Count == 0) ImGui.TextWrapped("No owned Pokémon match these filters. Fusion partners are unavailable until unfused.");
         ImGui.EndChild();
-        DrawClippedText($"{candidates.Count:N0} available / {ids.Count}/{format.MaxTeamSize} registered / Battle Lv. {PvpPresentation.BattleLevel(format)}", ImGui.GetContentRegionAvail().X, CompanionMuted);
+        OnlineText(summary, CompanionMuted);
         if (DrawAccentButton("Done", new Vector2(-1, 30 * scale), CompanionAccent)) ImGui.CloseCurrentPopup();
         ImGui.EndPopup();
     }

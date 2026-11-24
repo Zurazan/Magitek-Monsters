@@ -259,7 +259,7 @@ public sealed partial class MainWindow
     private void OpenFriendActivity(FriendEntryDto friend, string purpose)
     {
         if (purpose == "battle") { mainSection = 4; onlineView = 2; onlineInvitationId = null; challengeTrainerId = friend.TrainerUid; serverPvpRefreshRequested = true; }
-        else { mainSection = 16; requestTradingTab = 0; tradeTrainerCode = friend.TrainerUid; tradeRefreshRequested = true; }
+        else { mainSection = 16; tradeTrainerCode = friend.TrainerUid; tradeRefreshRequested = true; }
     }
     private void SendFriendDen(FriendEntryDto friend)
     {

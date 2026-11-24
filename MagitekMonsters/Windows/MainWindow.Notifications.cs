@@ -35,7 +35,7 @@ public sealed partial class MainWindow
     private bool IsNotificationVisible(GameNotice notice) => IsOpen && (notice.Target switch
     {
         GameNoticeTarget.Gifts => mainSection == 13,
-        GameNoticeTarget.Trades => mainSection == 16 && tradingTab == (notice.Kind == GameNoticeKind.Success ? 2 : 0),
+        GameNoticeTarget.Trades => mainSection == 16 && (notice.Kind != GameNoticeKind.Success || tradeHistoryOpen),
         GameNoticeTarget.Challenge => mainSection == 4 && onlineView == 2,
         GameNoticeTarget.Match => mainSection == 4 && pvpStatus?.Battle?.Id == notice.Subject,
         GameNoticeTarget.RaidReady or GameNoticeTarget.RaidBattle or GameNoticeTarget.RaidCapture => mainSection == 12 && raidRoom?.Id == notice.Subject,
@@ -55,7 +55,7 @@ public sealed partial class MainWindow
                 if (notice.Subject is { } invite && friendInbox?.Dens.Any(entry => entry.RequestId == invite && entry.ExpiresAt > DateTimeOffset.UtcNow) == true && !busy) ReviewFriendDen(invite);
                 else if (trainer is not null) { mainSection = 17; friendsTab = 1; }
                 break;
-            case GameNoticeTarget.Trades: if (trainer is not null) { mainSection = 16; requestTradingTab = notice.Kind == GameNoticeKind.Success ? 2 : 0; tradeRefreshRequested = true; } break;
+            case GameNoticeTarget.Trades: if (trainer is not null) { mainSection = 16; requestTradeHistory = notice.Kind == GameNoticeKind.Success; tradeRefreshRequested = true; } break;
             case GameNoticeTarget.Gifts: if (trainer is not null) { mainSection = 13; giftPage = 0; } break;
             case GameNoticeTarget.Challenge:
                 if (pvpStatus?.Challenges.Any(invite => invite.Id == notice.Subject && invite.ToUserId == trainer?.User.Id

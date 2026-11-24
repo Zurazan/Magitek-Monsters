@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window, IDisposable
         get => trainerState;
         set
         {
-            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetTrading(); ResetFriends(); ResetBrowseCaches(); }
+            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetTrading(); ResetFriends(); ResetBrowseCaches(); ResetSanctuaries(); }
             ObserveTrainerActivity(trainerState, value);
             navigationAlertTrainer = null;
             trainerState = value;
@@ -650,9 +650,9 @@ public sealed partial class MainWindow : Window, IDisposable
         if (pvpStatus.State == "queued")
         {
             var queuedFormat = season.Formats.FirstOrDefault(format => format.Id == pvpStatus.QueuedFormatId);
-            ImGui.TextColored(new Vector4(1f, 0.82f, 0.2f, 1f), $"SEARCHING - {pvpStatus.QueuedMode?.ToUpperInvariant()}  |  {queuedFormat?.Name}");
+            OnlineText($"SEARCHING / {pvpStatus.QueuedMode?.ToUpperInvariant()} / {queuedFormat?.Name}", PokemonYellow);
             ImGui.TextWrapped("Your selected team is locked on the server while matchmaking searches for another connected Trainer.");
-            ImGui.TextDisabled("You can keep playing FFXIV while the queue is active. The match will appear here automatically.");
+            OnlineText("You can keep playing FFXIV while the queue is active. The match will appear here automatically.", CompanionMuted);
             if (DrawAccentButton("Leave queue", new Vector2(140, 34), PokemonOrange))
                 Run(LeavePvpQueue, "Leaving the PvP queue...");
             return;
@@ -708,44 +708,6 @@ public sealed partial class MainWindow : Window, IDisposable
         requestedShopTab = null;
         ImGui.EndTabBar();
         DrawPurchaseConfirmation();
-    }
-
-    private void DrawPrizeExchange()
-    {
-        if (trainer is null)
-            return;
-        ImGui.TextWrapped("These Pokémon are obtained from the Prize Exchange instead of wild encounters. Purchases go to your party when space is available, otherwise directly to PC storage.");
-        ImGui.Spacing();
-        foreach (var prize in prizePokemon)
-        {
-            if (ImGui.BeginTable($"PrizePokemonLayout{prize.Id}", 3, ImGuiTableFlags.SizingStretchProp))
-            {
-                ImGui.TableSetupColumn("Art", ImGuiTableColumnFlags.WidthFixed, 84);
-                ImGui.TableSetupColumn("Details", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthFixed, 105);
-                ImGui.TableNextRow();
-                ImGui.TableNextColumn();
-                DrawPokemonIcon(prize.Species, false, new Vector2(72, 72));
-                ImGui.TableNextColumn();
-                ImGui.TextWrapped($"{prize.Species} / Lv. {prize.Level} / ¥ {prize.Price:N0}");
-                ImGui.TextWrapped(prize.Description);
-                ImGui.TextWrapped(prize.Origin);
-                ImGui.TableNextColumn();
-                if (trainer.Currency < prize.Price)
-                {
-                    ImGui.BeginDisabled();
-                    DrawAccentButton($"Redeem##{prize.Id}", new Vector2(94, 32), PokemonRed);
-                    ImGui.EndDisabled();
-                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                        ImGui.SetTooltip($"You need ¥ {(prize.Price - trainer.Currency):N0} more.");
-                }
-                else if (DrawAccentButton($"Redeem##{prize.Id}", new Vector2(94, 32), CompanionAccent))
-                    Run(() => RedeemPrizePokemon(prize.Species), $"Redeeming {prize.Species}...");
-                ImGui.EndTable();
-            }
-            ImGui.Separator();
-            ImGui.Spacing();
-        }
     }
 
     private bool DrawPokedexEntryCard(PokedexEntryDto entry, bool registered, bool selected)
@@ -1479,6 +1441,7 @@ public sealed partial class MainWindow : Window, IDisposable
         nextEventRefresh = DateTimeOffset.MinValue;
         eventRequests.Clear();
         eventPage = 0;
+        selectedEvent = selectedEventForm = null;
         pokedexCatalog.Clear();
         selectedPokedexSpecies = null;
         habitat = null;

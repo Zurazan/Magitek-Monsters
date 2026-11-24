@@ -136,7 +136,7 @@ public sealed partial class MainWindow
         }
         if (wild && !ours && pokemon is not null)
         {
-            var caught = captured || IsAdventureSpeciesCaught(pokemon.Species);
+            var caught = captured || IsSpeciesRegistered(pokemon.Species);
             var label = caught ? "CAUGHT" : "NOT CAUGHT";
             var badgeWidth = ImGui.CalcTextSize(label).X + 14 * CompanionScale;
             if (ImGui.BeginTable("WildCardHeader", 2, ImGuiTableFlags.SizingStretchProp))

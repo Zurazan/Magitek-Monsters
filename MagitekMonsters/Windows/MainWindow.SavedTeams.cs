@@ -21,22 +21,18 @@ public sealed partial class MainWindow
     private bool requestSavedTeamEdit;
     private bool savedTeamEditComplete;
 
-    private void DrawSavedTeams()
+    private void DrawSavedTeamButton(IReadOnlyList<SavedTeamView> views)
     {
         if (trainer is null) return;
-        var views = GetSavedTeams();
-        if (DrawAccentSmallButton($"Saved teams ({views.Count})", CompanionAccent))
+        if (DrawAccentButton($"Saved teams ({views.Count})###PartySavedTeams", Vector2.Zero, CompanionAccent))
         {
             savedTeamLibraryOwner = trainer.User.Id;
             closeSavedTeamLibrary = requestSavedTeamEdit = savedTeamEditComplete = false;
             savedTeamEdit = null;
             requestSavedTeamLibrary = true;
         }
-        ImGui.SameLine();
         var current = views.FirstOrDefault(entry => entry.Current);
-        DrawClippedText(current?.Preset.Name ?? "Custom party", ImGui.GetContentRegionAvail().X, current is null ? CompanionMuted : PokemonGreen);
-        ImGui.Spacing();
-        DrawSavedTeamLibrary(views);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(current?.Preset.Name ?? "Custom party");
     }
 
     private void DrawSavedTeamLibrary(IReadOnlyList<SavedTeamView> views)

@@ -34,6 +34,10 @@ public sealed partial class MainWindow
         shopCategoryIndex = -1; shopPage = tokenShopPage = 0; shopBuyQuantity = tokenShopQuantity = 1;
         pendingPurchase = null; requestPurchase = false; purchaseOwner = purchaseCurrency = martInspectorItem = string.Empty;
         shopExchange = 0; shopCompact = false;
+        prizeExchange = collectionExchange = null;
+        pendingExchangePurchase = null;
+        requestExchangePurchase = false;
+        openCollectionExchange = false;
     }
 
     private void DrawCompactShop()

@@ -6,142 +6,281 @@ using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
+using MagitekMonsters.Services;
 
 namespace MagitekMonsters.Windows;
 
 public sealed partial class MainWindow
 {
+    private const int NextGoalView = 0;
+    private const int CompletedGoalView = 1;
+    private const int AllGoalView = 2;
+    private const int PinnedGoalView = 3;
+    private const int GoalsPerPage = 5;
+    private static readonly string[] GoalCategoryLabels =
+        ["All categories", "Species milestones", "Type collections", "Evolution families", "Generation surveys"];
+
     private List<CollectionRewardDto> collectionRewards = [];
     private int objectiveCategory;
     private int objectiveState;
     private int objectivePage;
-    private int rewardGeneration;
-    private int rewardPage;
+    private string? expandedObjective;
+    private bool expandFirstObjective = true;
     private readonly ConcurrentDictionary<string, string> redemptionRequests = new();
 
     private void DrawCollectionGoals()
     {
         if (trainer is null) return;
         var progress = trainer.CollectionPoints;
-        DrawSectionHeader("COLLECTION GOALS", "Complete Pokédex objectives to earn Collection Points");
-        DrawWishlistShortcut();
-        if (ImGui.BeginTable("CollectionMetrics", 3, ImGuiTableFlags.SizingStretchSame))
+        var pins = LocalWishlist().Pins;
+        DrawCollectionGoalsHeader(progress);
+        DrawGoalFilters(pins.Count(pin => pin.Kind == "objective"));
+        DrawGoalText(objectiveState switch
         {
-            ImGui.TableNextColumn(); DrawMetricCard("CollectionBalance", "Available CP", progress.Balance.ToString("N0"), PokemonBlue);
-            ImGui.TableNextColumn(); DrawMetricCard("CollectionObjectives", "Goals completed", $"{progress.CompletedObjectives}/{progress.Objectives.Count}", PokemonGreen);
-            ImGui.TableNextColumn(); DrawMetricCard("CollectionRegistered", "Genuine registrations", progress.RegisteredSpecies.ToString("N0"), PokemonYellow);
-            ImGui.EndTable();
+            NextGoalView => "Next milestone in each collection, closest to completion first.",
+            CompletedGoalView => "These rewards have already been added to your balance.",
+            PinnedGoalView => "Goals pinned to your collection wishlist.",
+            _ => "Every milestone, grouped by category."
+        }, CompanionMuted);
+
+        var goals = GetCollectionObjectives();
+        objectivePage = Math.Clamp(objectivePage, 0, Math.Max(0, (goals.Count - 1) / GoalsPerPage));
+        var start = objectivePage * GoalsPerPage;
+        var end = Math.Min(start + GoalsPerPage, goals.Count);
+        if (expandFirstObjective && start < end)
+        {
+            expandedObjective = goals[start].Id;
+            expandFirstObjective = false;
         }
-        ImGui.TextWrapped("Points are awarded automatically, once per objective. Registered species stay recorded after release. The admin Pokédex completion toggle does not count.");
-        ImGui.TextDisabled($"Lifetime earned: {progress.TotalEarned:N0} CP | Starters unlocked: {progress.UnlockedStarters.Count}/27");
-        if (DrawAccentSmallButton("Open Collection Exchange", PokemonBlue)) { mainSection = 5; openCollectionExchange = true; }
-        ImGui.Spacing();
-        string[] categories = ["All objectives", "Species milestones", "Type collections", "Evolution families", "Generation surveys"];
-        string[] states = ["In progress", "Completed", "All"];
-        ImGui.SetNextItemWidth(210);
-        if (ImGui.Combo("##ObjectiveCategory", ref objectiveCategory, categories, categories.Length)) objectivePage = 0;
-        ImGui.SameLine(); ImGui.SetNextItemWidth(150);
-        if (ImGui.Combo("##ObjectiveState", ref objectiveState, states, states.Length)) objectivePage = 0;
-        var objectives = GetCollectionObjectives();
-        DrawPager("CollectionObjectives", ref objectivePage, objectives.Count, 8);
-        if (objectives.Count == 0) ImGui.TextDisabled("No objectives match these filters.");
-        foreach (var objective in objectives.Skip(objectivePage * 8).Take(8))
+        if (start == end)
+            DrawGoalText(objectiveState == PinnedGoalView ? "No pinned goals in this category." : "No goals in this view.", CompanionMuted);
+
+        for (var index = start; index < end; index++)
         {
-            if (ImGui.BeginTable("CollectionRibbon##" + objective.Id, 2, ImGuiTableFlags.SizingStretchProp))
-            {
-                ImGui.TableSetupColumn("Ribbon", ImGuiTableColumnFlags.WidthFixed, 36 * CompanionScale);
-                ImGui.TableSetupColumn("Objective", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableNextColumn();
-                var icon = ImGui.GetCursorScreenPos(); ImGui.Dummy(new Vector2(32 * CompanionScale));
-                DrawAchievementIconAt("collection:" + objective.Id, icon, new Vector2(32 * CompanionScale), objective.Completed);
-                ImGui.TableNextColumn();
-                ImGui.PushStyleColor(ImGuiCol.Text, objective.Completed ? PokemonGreen : CompanionAccent);
-                ImGui.TextWrapped(objective.Name); ImGui.PopStyleColor();
-                ImGui.EndTable();
-            }
-            DrawWishlistPin("objective", objective.Id);
-            ImGui.SameLine(); ImGui.TextDisabled(objective.Completed ? $"+{objective.Points} CP awarded" : $"Reward: {objective.Points} CP");
-            DrawProgressBar((float)objective.Progress / Math.Max(1, objective.Target), new Vector2(-1, 19),
-                $"{objective.Progress:N0} / {objective.Target:N0}", objective.Completed ? PokemonGreen : ExpBarBlue);
-            if (objective.Completed && DateTimeOffset.TryParse(objective.EarnedAt, out var earnedAt))
-                ImGui.TextDisabled($"Completed {earnedAt.LocalDateTime:g}");
-            else ImGui.TextWrapped(objective.Category == "family" ? "Register every canonical member of an obtainable evolution family." : "Different species count once. Alternate forms and repeat catches do not add progress.");
-            ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
+            var goal = goals[index];
+            var pinned = pins.Any(pin => pin.Kind == "objective" && pin.Id.Equals(goal.Id, StringComparison.OrdinalIgnoreCase));
+            ImGui.PushID(goal.Id);
+            DrawGoalRow(goal, pinned);
+            if (expandedObjective == goal.Id) DrawGoalDetails(goal, pinned);
+            ImGui.PopID();
+        }
+        DrawGoalFooter(start, end, goals.Count, pins.Count);
+        if (ImGui.CollapsingHeader("How Collection Points work"))
+        {
+            DrawGoalText("Each goal pays out once, automatically. Registrations stay recorded after release. Admin Pokédex completion does not count toward goals.", CompanionMuted);
+            DrawGoalText($"Lifetime earned: {progress.TotalEarned:N0} CP / Starters unlocked: {progress.UnlockedStarters.Count}/27", CompanionMuted);
         }
         DrawCollectionWishlist();
     }
 
-    private bool openCollectionExchange;
-
-    private void DrawCollectionExchange()
+    private void DrawCollectionGoalsHeader(CollectionPointProgressDto progress)
     {
-        if (trainer is null) return;
-        var progress = trainer.CollectionPoints;
-        DrawSectionHeader("COLLECTION EXCHANGE", $"{progress.Balance:N0} CP available");
-        ImGui.TextWrapped("Unlock a starter once with CP. Extra normal level-5 copies use ¥. CP cannot be bought, traded or earned from battles.");
-        if (DrawAccentSmallButton("View collection objectives", PokemonBlue)) mainSection = 7;
-        if (collectionRewards.Count == 0)
+        var width = ImGui.GetContentRegionAvail().X;
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var balance = $"{progress.Balance:N0} CP";
+        var actionWidth = GoalButtonWidth("Collection Exchange") + ImGui.CalcTextSize(balance).X + spacing;
+        ImGui.BeginGroup();
+        ImGui.TextUnformatted("Collection Goals");
+        DrawGoalText($"{progress.RegisteredSpecies:N0} species registered / {progress.CompletedObjectives:N0}/{progress.Objectives.Count:N0} goals completed", CompanionMuted);
+        ImGui.EndGroup();
+        var headingWidth = ImGui.GetItemRectSize().X;
+        if (headingWidth + spacing + actionWidth <= width)
+            ImGui.SameLine(0, width - headingWidth - actionWidth);
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(PokemonYellow, balance);
+        ImGui.SameLine();
+        if (DrawAccentButton("Collection Exchange", Vector2.Zero, CompanionAccent))
         {
-            ImGui.TextDisabled("The collection reward catalog is loading. It retries automatically.");
-            return;
-        }
-        foreach (var reward in collectionRewards.Where(entry => entry.Kind == "item")) DrawCollectionReward(reward);
-        foreach (var reward in collectionRewards.Where(entry => entry.Kind == "pokemon")) DrawCollectionReward(reward);
-        ImGui.Spacing();
-        ImGui.TextColored(PokemonBlue, "STARTER COLLECTION");
-        ImGui.TextDisabled($"{progress.UnlockedStarters.Count}/27 permanently unlocked. Your original partner is already unlocked.");
-        string[] generations = ["All generations", "Gen 1", "Gen 2", "Gen 3", "Gen 4", "Gen 5", "Gen 6", "Gen 7", "Gen 8", "Gen 9"];
-        ImGui.SetNextItemWidth(180);
-        if (ImGui.Combo("##RewardGeneration", ref rewardGeneration, generations, generations.Length)) rewardPage = 0;
-        var starters = collectionRewards.Where(entry => entry.Kind == "starter" && (rewardGeneration == 0 || entry.Generation == rewardGeneration)).ToList();
-        DrawPager("StarterRewards", ref rewardPage, starters.Count, 6);
-        foreach (var reward in starters.Skip(rewardPage * 6).Take(6)) DrawCollectionReward(reward);
-    }
-
-    private void DrawCollectionReward(CollectionRewardDto reward)
-    {
-        var progress = trainer!.CollectionPoints;
-        var unlocked = reward.Kind == "starter" && reward.Species is not null && progress.UnlockedStarters.Contains(reward.Species);
-        var itemOwned = reward.Kind == "item" && InventoryCount(reward.Id) > 0;
-        var claimed = progress.ClaimedFormRewards.Contains(reward.Id);
-        var missingForms = reward.RequiredForms.Where(name => !trainer.Pokedex.CaughtForms.Contains(name)).ToList();
-        var eligible = progress.RegisteredSpecies >= reward.RequiredSpecies && missingForms.Count == 0;
-        var affordable = unlocked ? trainer.Currency >= reward.CopyPrice.GetValueOrDefault() : progress.Balance >= reward.Points;
-        if (ImGui.BeginTable($"RewardLayout{reward.Id}", 3, ImGuiTableFlags.SizingStretchProp))
-        {
-            ImGui.TableSetupColumn("Sprite", ImGuiTableColumnFlags.WidthFixed, 66);
-            ImGui.TableSetupColumn("Reward", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthFixed, 138);
-            ImGui.TableNextRow(); ImGui.TableNextColumn();
-            if (reward.Species is not null) DrawPokemonIcon(reward.Species, false, new Vector2(60, 60));
-            else DrawItemImage(reward.Id, new Vector2(48, 48));
-            ImGui.TableNextColumn();
-            ImGui.TextColored(itemOwned || unlocked || claimed ? PokemonGreen : PokemonBlue, reward.Name);
-            if (reward.Species is not null) ImGui.TextDisabled($"Generation {reward.Generation} | {reward.Type} | Lv. 5");
-            ImGui.TextWrapped(reward.Description);
-            ImGui.TableNextColumn();
-            ImGui.TextColored(unlocked ? PokemonYellow : PokemonBlue, reward.Kind == "pokemon" ? "FREE REWARD" : unlocked ? $"¥ {reward.CopyPrice:N0}" : $"{reward.Points:N0} CP");
-            if (reward.RequiredForms.Count > 0)
-            {
-                ImGui.TextWrapped($"{reward.RequiredForms.Count - missingForms.Count}/{reward.RequiredForms.Count} forms registered");
-                if (missingForms.Count > 0 && ImGui.IsItemHovered()) ImGui.SetTooltip("Missing: " + string.Join(", ", missingForms));
-            }
-            if (reward.RequiredSpecies > 0) ImGui.TextWrapped($"{progress.RegisteredSpecies:N0}/{reward.RequiredSpecies:N0} species");
-            if (itemOwned || claimed) ImGui.TextColored(PokemonGreen, claimed ? "CLAIMED" : "OWNED / ACTIVE");
-            else
-            {
-                ImGui.BeginDisabled(CollectionLocked || !eligible || !affordable);
-                if (DrawAccentButton(reward.Kind == "pokemon" ? $"Claim##{reward.Id}" : unlocked ? $"Buy copy##{reward.Id}" : $"Unlock##{reward.Id}", new Vector2(-1, 32), eligible && affordable ? PokemonGreen : PokemonRed))
-                    Run(() => RedeemCollectionReward(reward.Id, unlocked ? "copy" : "unlock"), $"Redeeming {reward.Name}...");
-                ImGui.EndDisabled();
-                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                    ImGui.SetTooltip(CollectionLocked ? "Finish battles, matchmaking or outgoing invitations first." : !eligible ? missingForms.Count > 0 ? "Missing: " + string.Join(", ", missingForms) : "Register enough genuine species first." : !affordable ? unlocked ? "Not enough ¥." : "Not enough Collection Points." : reward.Kind == "pokemon" ? "Claim one free Pokémon. No repeat copies, even after release." : unlocked ? "Buy another normal level-5 copy with ¥." : "Spend CP to unlock this reward permanently.");
-            }
-            ImGui.EndTable();
+            mainSection = 5;
+            openCollectionExchange = true;
         }
         ImGui.Separator();
-        ImGui.Spacing();
     }
+
+    private void DrawGoalFilters(int pinnedCount)
+    {
+        var width = ImGui.GetContentRegionAvail().X;
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var used = 0f;
+        GoalViewButton("Next up", NextGoalView);
+        GoalViewButton("All goals", AllGoalView);
+        GoalViewButton("Completed", CompletedGoalView);
+        GoalViewButton($"Pinned ({pinnedCount})###PinnedGoals", PinnedGoalView);
+
+        var categoryWidth = Math.Min(width, 170 * CompanionScale);
+        if (used + spacing + categoryWidth <= width) ImGui.SameLine(0, width - used - categoryWidth);
+        ImGui.SetNextItemWidth(categoryWidth);
+        if (ImGui.Combo("##ObjectiveCategory", ref objectiveCategory, GoalCategoryLabels, GoalCategoryLabels.Length)) ResetGoalPage();
+
+        void GoalViewButton(string label, int view)
+        {
+            var buttonWidth = Math.Min(width, GoalButtonWidth(label));
+            if (used > 0 && used + spacing + buttonWidth <= width)
+            {
+                ImGui.SameLine();
+                used += spacing;
+            }
+            else used = 0;
+
+            if (DrawAccentButton(label, new Vector2(buttonWidth, 0), objectiveState == view ? CompanionAccent : CompanionMuted)
+                && objectiveState != view)
+            {
+                objectiveState = view;
+                ResetGoalPage();
+            }
+            used += buttonWidth;
+        }
+    }
+
+    private void ResetGoalPage()
+    {
+        objectivePage = 0;
+        expandedObjective = null;
+        expandFirstObjective = false;
+    }
+
+    private void DrawGoalRow(CollectionObjectiveDto goal, bool pinned)
+    {
+        var scale = CompanionScale;
+        var width = ImGui.GetContentRegionAvail().X;
+        var line = ImGui.GetTextLineHeight();
+        var pad = 8 * scale;
+        var art = 28 * scale;
+        var nameX = art + 2 * pad;
+        var kind = goal.Category switch
+        {
+            "species" => "Species milestone",
+            "type" => "Type collection",
+            "family" => "Evolution families",
+            "generation" => "Generation survey",
+            _ => "Collection goal"
+        };
+        if (pinned) kind += " / Pinned";
+        var count = $"{Math.Min(goal.Progress, goal.Target):N0}/{goal.Target:N0}";
+        var remaining = Math.Max(0, goal.Target - goal.Progress);
+        var left = goal.Completed ? "" : $"{remaining:N0} left";
+        var reward = $"+{goal.Points:N0} CP";
+        var rewardRight = width - 3 * pad;
+        var rewardWidth = Math.Max(ImGui.CalcTextSize(reward).X, goal.Completed ? ImGui.CalcTextSize("Awarded").X : 0);
+        var nameEnd = rewardRight - rewardWidth - pad;
+        var meterWidth = Math.Max(116 * scale, ImGui.CalcTextSize(count).X + ImGui.CalcTextSize(left).X + pad);
+        var wide = nameEnd - nameX >= meterWidth + 190 * scale;
+        var nameWidth = Math.Max(1, nameEnd - nameX - (wide ? meterWidth + pad : 0));
+        var nameHeight = ImGui.CalcTextSize(goal.Name, false, nameWidth).Y;
+        var textHeight = nameHeight + ImGui.CalcTextSize(kind, false, nameWidth).Y + 2 * scale;
+        var meterHeight = line + 8 * scale;
+        var height = 2 * pad + Math.Max(art, wide ? Math.Max(textHeight, meterHeight) : textHeight + meterHeight + 3 * scale);
+        var expanded = expandedObjective == goal.Id;
+        if (DrawPveCardSurface("GoalRow", height, expanded, out var min, out var max, out var after))
+        {
+            expanded = !expanded;
+            expandedObjective = expanded ? goal.Id : null;
+        }
+
+        DrawAchievementIconAt("collection:" + goal.Id, min + new Vector2(pad, (height - art) / 2), new Vector2(art), goal.Completed);
+        var draw = ImGui.GetWindowDrawList();
+        var textColor = expanded ? CompanionAccent : ImGui.GetStyle().Colors[(int)ImGuiCol.Text];
+        draw.AddText(ImGui.GetFont(), ImGui.GetFontSize(), min + new Vector2(nameX, pad), ImGui.GetColorU32(textColor), goal.Name, nameWidth);
+        draw.AddText(ImGui.GetFont(), ImGui.GetFontSize(), min + new Vector2(nameX, pad + nameHeight + 2 * scale),
+            ImGui.GetColorU32(pinned ? PokemonYellow : CompanionMuted), kind, nameWidth);
+
+        var meter = min + new Vector2(wide ? nameEnd - meterWidth : nameX, wide ? (height - meterHeight) / 2 : pad + textHeight + 3 * scale);
+        if (!wide) meterWidth = Math.Max(1, nameWidth);
+        draw.AddText(meter, ImGui.GetColorU32(CompanionMuted), count);
+        if (left.Length > 0 && ImGui.CalcTextSize(count).X + ImGui.CalcTextSize(left).X + pad <= meterWidth)
+            DrawGoalRightText(meter + new Vector2(meterWidth, 0), left, CompanionMuted);
+        ImGui.SetCursorScreenPos(meter + new Vector2(0, line + 3 * scale));
+        DrawProgressBar(goal.Progress / (float)Math.Max(1, goal.Target), new Vector2(meterWidth, 4 * scale), "", goal.Completed ? PokemonGreen : ExpBarBlue);
+
+        var rewardTop = min + new Vector2(rewardRight, (height - line * (goal.Completed ? 2 : 1)) / 2);
+        DrawGoalRightText(rewardTop, reward, goal.Completed ? PokemonGreen : PokemonYellow);
+        if (goal.Completed) DrawGoalRightText(rewardTop + new Vector2(0, line), "Awarded", CompanionMuted);
+        var caret = new Vector2(max.X - 1.5f * pad, min.Y + height / 2);
+        var caretColor = ImGui.GetColorU32(CompanionMuted);
+        var tip = 3 * scale;
+        if (expanded)
+            draw.AddTriangleFilled(caret + new Vector2(-tip, -tip / 2), caret + new Vector2(tip, -tip / 2), caret + new Vector2(0, tip), caretColor);
+        else
+            draw.AddTriangleFilled(caret + new Vector2(-tip / 2, -tip), caret + new Vector2(-tip / 2, tip), caret + new Vector2(tip, 0), caretColor);
+        ImGui.SetCursorScreenPos(after);
+    }
+
+    private void DrawGoalDetails(CollectionObjectiveDto goal, bool pinned)
+    {
+        var scale = CompanionScale;
+        var pinLabel = pinned ? "Unpin goal" : "Pin goal";
+        var pinWidth = GoalButtonWidth(pinLabel) + 4 * scale;
+        var wide = ImGui.GetContentRegionAvail().X >= pinWidth + 300 * scale;
+        ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(10, 6) * scale);
+        if (ImGui.BeginTable("GoalDetails", wide ? 2 : 1, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersOuter))
+        {
+            ImGui.TableSetupColumn("Details", ImGuiTableColumnFlags.WidthStretch);
+            if (wide) ImGui.TableSetupColumn("Pin", ImGuiTableColumnFlags.WidthFixed, pinWidth);
+            ImGui.TableNextColumn();
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(CompanionSurface));
+            if (goal.Completed)
+            {
+                var awarded = DateTimeOffset.TryParse(goal.EarnedAt, out var earnedAt)
+                    ? $"Reward added on {earnedAt.LocalDateTime:g}." : "Reward added to your Collection Points.";
+                DrawGoalText(awarded, CompanionMuted);
+            }
+            else
+            {
+                DrawGoalText(goal.Category switch
+                {
+                    "family" => "Register every species in an available evolution family to complete it.",
+                    "type" => "Register different Pokémon species of the listed type.",
+                    "generation" => "Register different species introduced in the listed generation.",
+                    _ => "Register different Pokémon species in your Pokédex."
+                }, ImGui.GetStyle().Colors[(int)ImGuiCol.Text]);
+                var later = objectiveTracks![CollectionGoalTrack(goal)].Where(entry => entry.Target > goal.Target).Take(3)
+                    .Select(entry => $"{entry.Target:N0} (+{entry.Points:N0} CP)").ToArray();
+                if (later.Length > 0) DrawGoalText("Next milestones / " + string.Join(" / ", later), CompanionMuted);
+            }
+            if (wide) ImGui.TableNextColumn();
+            DrawWishlistPin("objective", goal.Id, pinLabel);
+            ImGui.EndTable();
+        }
+        ImGui.PopStyleVar();
+    }
+
+    private void DrawGoalFooter(int start, int end, int total, int pins)
+    {
+        var width = ImGui.GetContentRegionAvail().X;
+        ImGui.BeginGroup();
+        ImGui.BeginDisabled(start == 0);
+        if (DrawAccentSmallButton("Prev##GoalPage", CompanionAccent)) { objectivePage--; expandedObjective = null; }
+        ImGui.EndDisabled();
+        ImGui.SameLine();
+        ImGui.TextDisabled(total == 0 ? "0 goals" : $"{start + 1:N0}-{end:N0} of {total:N0}");
+        ImGui.SameLine();
+        ImGui.BeginDisabled(end >= total);
+        if (DrawAccentSmallButton("Next##GoalPage", CompanionAccent)) { objectivePage++; expandedObjective = null; }
+        ImGui.EndDisabled();
+        ImGui.EndGroup();
+        var pagerWidth = ImGui.GetItemRectSize().X;
+        var wishlist = $"Collection wishlist ({pins})";
+        var wishlistWidth = GoalButtonWidth(wishlist);
+        if (pagerWidth + ImGui.GetStyle().ItemSpacing.X + wishlistWidth <= width)
+            ImGui.SameLine(0, width - pagerWidth - wishlistWidth);
+        if (DrawAccentSmallButton(wishlist, PokemonYellow)) requestCollectionWishlist = true;
+    }
+
+    private static float GoalButtonWidth(string label) => ImGui.CalcTextSize(label, true).X + 2 * ImGui.GetStyle().FramePadding.X;
+
+    private static void DrawGoalText(string text, Vector4 color)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, color);
+        ImGui.TextWrapped(text);
+        ImGui.PopStyleColor();
+    }
+
+    private static void DrawGoalRightText(Vector2 right, string text, Vector4 color)
+    {
+        ImGui.GetWindowDrawList().AddText(right - new Vector2(ImGui.CalcTextSize(text).X, 0), ImGui.GetColorU32(color), text);
+    }
+
+    private bool openCollectionExchange;
 
     private async Task RedeemCollectionReward(string rewardId, string mode)
     {

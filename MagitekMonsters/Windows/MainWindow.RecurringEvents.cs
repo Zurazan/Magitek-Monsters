@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
-using System.Numerics;
 using System.Threading.Tasks;
-using Dalamud.Bindings.ImGui;
+using MagitekMonsters.Contracts;
 using MagitekMonsters.Models;
 
 namespace MagitekMonsters.Windows;
@@ -20,78 +19,60 @@ public sealed partial class MainWindow
         var schedule = await InSession(plugin.Api.GetRecurringEvents());
         if (!plugin.Api.Catalogs.TryApply([schedule], () =>
         {
-            if (recurringSchedule?.Active?.OccurrenceId != schedule.Active?.OccurrenceId) eventPage = 0;
             recurringSchedule = schedule; eventLoadedAt = DateTimeOffset.UtcNow; nextEventRefresh = eventLoadedAt.AddMinutes(1);
         })) { RetryCatalogs(); nextEventRefresh = DateTimeOffset.UtcNow.AddSeconds(5); }
     }
-    private void DrawRecurringEvents()
+
+    private static bool EventIsLive(RecurringEventScheduleDto schedule, RecurringEventDto entry, DateTimeOffset now) =>
+        schedule.Active?.OccurrenceId == entry.OccurrenceId && now >= entry.StartsAt && now < entry.EndsAt;
+
+    private EncounterDto? SavedEventEncounter(DateTimeOffset now) =>
+        trainer?.ActiveEncounter is { Status: "active" } encounter && IsEventEncounter(encounter)
+            && (!DateTimeOffset.TryParse(encounter.ExpiresAt, out var expires) || expires > now) ? encounter : null;
+
+    private string? EventEntryRestriction(RecurringEventScheduleDto schedule, RecurringEventDto entry, DateTimeOffset now)
     {
-        if (trainer is null) return;
-        if (battle is { Kind: "trainer", OpponentId: "legendary-zarude" })
-        { DrawBattleConsole(battle); return; }
-        DrawSectionHeader("RECURRING EVENTS", "Monthly UTC rotation / Permanent catches / No event currency");
-        if (!busy && DateTimeOffset.UtcNow >= nextEventRefresh)
+        if (!EventIsLive(schedule, entry, now)) return "This event is not accepting entries yet.";
+        if (SavedEventEncounter(now) is not null) return "Resume your saved battle first.";
+        if (busy) return "Wait for the current action to finish.";
+        if (CollectionLocked) return "Finish your current battle, run or matchmaking first.";
+        if (trainer is null || trainer.Party.Count == 0) return "Add Pokémon to your party first.";
+        if (trainer.Party.All(pokemon => pokemon.Vitals?.Hp == 0)) return "Heal your party at the Pokémon Center first.";
+        if (entry.Mode == "sanctuary")
         {
-            nextEventRefresh = DateTimeOffset.UtcNow.AddSeconds(20);
-            Run(RefreshRecurringEvents, "Loading the event calendar...");
+            var champion = RegionalLeagueProgress.HasChampion(trainer.PveProgress.DefeatedOpponentIds);
+            var permit = trainer.Legendary.Permits.Contains(entry.BossId);
+            if (!champion && !permit) return "Requires a Champion victory and the Sanctuary permit.";
+            if (!champion) return "Defeat a regional League Champion first.";
+            return permit ? null : "Unlock the permanent Zarude permit in Sanctuaries.";
         }
-        if (recurringSchedule is null) { ImGui.TextDisabled("Loading event schedule..."); return; }
-        var now = recurringSchedule.ServerTime + (DateTimeOffset.UtcNow - eventLoadedAt);
-        if (trainer.ActiveEncounter is { Status: "active" } encounter && IsEventEncounter(encounter))
+        if (schedule.NextEncounterAt is { } ready && ready > now)
+            return $"Next search in {EventTimeLeft(ready - now)}.";
+        return null;
+    }
+
+    private async Task EnterRecurringEvent(RecurringEventDto entry, string species, string[] partyIds)
+    {
+        if (entry.Mode == "sanctuary")
         {
-            ImGui.TextColored(PokemonGreen, "YOUR EVENT CAPTURE BATTLE IS SAVED");
-            ImGui.BeginDisabled(busy);
-            if (DrawAccentButton("Resume capture battle", new Vector2(230, 34), PokemonGreen))
-                Run(async () => { await InSession(ResumeWildBattle(encounter.Id, true)); mainSection = 0; }, "Resuming event capture...");
-            ImGui.EndDisabled(); ImGui.Separator();
+            battle = await InSession(plugin.Api.StartEventSanctuary(entry.BossId, entry.OccurrenceId, partyIds));
+            eventBattleId = battle.Id;
+            nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1);
         }
-        if (recurringSchedule.Active is { } active && now < active.EndsAt)
+        else
         {
-            ImGui.TextColored(PokemonYellow, active.Name.ToUpperInvariant());
-            ImGui.TextWrapped(active.Description);
-            var left = active.EndsAt - now;
-            ImGui.TextColored(PokemonBlue, $"Ends {active.EndsAt:dd MMM yyyy HH:mm} UTC / {Math.Max(0, left.Days)}d {Math.Max(0, left.Hours)}h remaining");
-            if (active.Manual) ImGui.TextDisabled("Administrator override active. Upcoming dates below show the regular rotation.");
-            ImGui.TextWrapped("Caught Pokémon and form history stay yours after the event. Events do not affect Mew access. Existing encounters can finish within their normal expiry.");
-            var cooling = recurringSchedule.NextEncounterAt is { } ready && ready > now;
-            if (cooling && active.Mode == "encounter") ImGui.TextColored(PokemonOrange, $"Next search in {Math.Ceiling((recurringSchedule.NextEncounterAt!.Value - now).TotalSeconds)} seconds.");
-            DrawPager("EventForms", ref eventPage, active.Species.Count, 6);
-            foreach (var species in active.Species.Skip(eventPage * 6).Take(6))
+            var key = entry.OccurrenceId + ":" + species;
+            var request = eventRequests.GetOrAdd(key, _ => Guid.NewGuid().ToString());
+            var found = await InSession(plugin.Api.SearchRecurringEvent(entry.OccurrenceId, species, request));
+            eventRequests.TryRemove(key, out _);
+            if (found.Status == "active")
             {
-                ImGui.PushID(species);
-                if (ImGui.BeginTable("EventForm", 2, ImGuiTableFlags.SizingStretchProp))
-                {
-                    ImGui.TableSetupColumn("Portrait", ImGuiTableColumnFlags.WidthFixed, 70); ImGui.TableSetupColumn("Form", ImGuiTableColumnFlags.WidthStretch);
-                    ImGui.TableNextColumn(); DrawPokemonIcon(species, false, new Vector2(62, 62)); ImGui.TableNextColumn();
-                    var caught = trainer.Pokedex.CaughtForms.Contains(species);
-                    ImGui.TextColored(caught ? PokemonGreen : PokemonBlue, species); ImGui.SameLine(); ImGui.TextDisabled(caught ? "REGISTERED" : "UNDISCOVERED");
-                    ImGui.TextDisabled(active.ShinyLockedSpecies.Contains(species) ? "Normal variant only / Shiny locked" : "Normal shiny odds / Shiny Charm applies");
-                    var sanctuary = active.Mode == "sanctuary";
-                    var eligible = !sanctuary || trainer.Legendary.Permits.Contains(active.BossId) && MagitekMonsters.Contracts.RegionalLeagueProgress.HasChampion(trainer.PveProgress.DefeatedOpponentIds);
-                    if (!eligible) ImGui.TextColored(PokemonOrange, "Requires Champion clear and your permanent Zarude permit.");
-                    ImGui.BeginDisabled(busy || CollectionLocked || trainer.Party.Count == 0 || !eligible || (!sanctuary && cooling));
-                    if (DrawAccentButton(sanctuary ? "Challenge Zarude for Dada capture" : "Battle and catch", new Vector2(sanctuary ? 285 : 190, 32), sanctuary ? PokemonRed : PokemonBlue))
-                    {
-                        var occurrence = active.OccurrenceId; var boss = active.BossId; var ids = trainer.Party.Select(item => item.Id).ToArray();
-                        Run(async () =>
-                        {
-                            if (sanctuary) { battle = await InSession(plugin.Api.StartEventSanctuary(boss, occurrence, ids)); eventBattleId = battle.Id; nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1); }
-                            else
-                            {
-                                var key = occurrence + ":" + species; var request = eventRequests.GetOrAdd(key, _ => Guid.NewGuid().ToString());
-                                var found = await InSession(plugin.Api.SearchRecurringEvent(occurrence, species, request)); eventRequests.TryRemove(key, out _);
-                                if (found.Status == "active") { await InSession(ResumeWildBattle(found.Id, true)); mainSection = 0; }
-                            }
-                            trainer = await InSession(plugin.Api.GetMe()); await InSession(RefreshRecurringEvents());
-                        }, sanctuary ? "Starting the event Sanctuary raid..." : "Starting the event encounter...");
-                    }
-                    ImGui.EndDisabled(); ImGui.EndTable();
-                }
-                ImGui.Separator(); ImGui.PopID();
+                trainer!.ActiveEncounter = found;
+                await InSession(ResumeWildBattle(found.Id, true));
+                mainSection = 0;
             }
         }
-        else ImGui.TextDisabled("No event is accepting new entries. Your caught forms and saved battles remain available.");
-        ImGui.Spacing(); ImGui.TextColored(PokemonBlue, "COMING BACK");
-        foreach (var upcoming in recurringSchedule.Upcoming) ImGui.TextWrapped($"{upcoming.StartsAt:MMM yyyy}: {upcoming.Name} / {upcoming.Species.Count} featured forms");
+        trainer = await InSession(plugin.Api.GetMe());
+        await InSession(RefreshRecurringEvents());
     }
 }

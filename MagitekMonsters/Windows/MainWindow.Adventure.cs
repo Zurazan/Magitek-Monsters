@@ -15,16 +15,28 @@ public sealed partial class MainWindow
     private HashSet<string> adventureCaughtSpecies = [];
     private bool adventureNotCaughtOnly;
 
-    private bool IsAdventureSpeciesCaught(string species)
+    private bool IsSpeciesRegistered(string species)
     {
         if (trainer is null) return false;
-        if (!ReferenceEquals(adventurePokedex, trainer.Pokedex))
+        RefreshRegisteredSpecies(trainer.Pokedex);
+        return SpeciesDisplayCatalog.IsCaught(species, adventureCaughtForms, adventureCaughtSpecies);
+    }
+
+    private bool IsFormRegistered(string form)
+    {
+        if (trainer is null) return false;
+        RefreshRegisteredSpecies(trainer.Pokedex);
+        return adventureCaughtForms.Contains(SpriteNames.Normalize(form));
+    }
+
+    private void RefreshRegisteredSpecies(PokedexDto pokedex)
+    {
+        if (!ReferenceEquals(adventurePokedex, pokedex))
         {
-            adventurePokedex = trainer.Pokedex;
+            adventurePokedex = pokedex;
             adventureCaughtForms = adventurePokedex.CaughtForms.Select(SpriteNames.Normalize).ToHashSet();
             adventureCaughtSpecies = adventurePokedex.CaughtSpecies.Select(SpriteNames.Normalize).ToHashSet();
         }
-        return SpeciesDisplayCatalog.IsCaught(species, adventureCaughtForms, adventureCaughtSpecies);
     }
 
     private void DrawAdventureFieldGuide(uint territoryId, TerritoryContextInfo context)
@@ -65,7 +77,7 @@ public sealed partial class MainWindow
         }
         ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
 
-        bool Caught(string species) => IsAdventureSpeciesCaught(species);
+        bool Caught(string species) => IsSpeciesRegistered(species);
         targetIndex = Math.Clamp(targetIndex, 0, current.Species.Count);
         var anyWidth = ImGui.CalcTextSize("Any species").X + 20 * scale;
         if (ImGui.BeginTable("AdventurePoolHeading", 2, ImGuiTableFlags.SizingStretchProp))

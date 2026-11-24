@@ -16,7 +16,7 @@ public sealed partial class MainWindow
 
     private void DrawCompactTrayCombatant(BattleCombatantDto? pokemon, bool ours, bool wild, bool captured, string role, float width)
     {
-        var caught = pokemon is not null && (captured || IsAdventureSpeciesCaught(pokemon.Species));
+        var caught = pokemon is not null && (captured || IsSpeciesRegistered(pokemon.Species));
         DrawClippedText(wild && !ours ? caught ? "CAUGHT" : "NOT CAUGHT" : role, width,
             wild && !ours ? caught ? PokemonGreen : PokemonYellow : CompanionAccent);
         if (pokemon is null) { DrawClippedText("Waiting...", width, CompanionMuted); return; }
@@ -237,7 +237,7 @@ public sealed partial class MainWindow
             var hp = BattleBag.Health(target.Condition);
             DrawProgressBar(hp.Ratio, new Vector2(-1, 5 * scale), "", HpBarRed);
             DrawClippedText(hp.Label, infoWidth, CompanionMuted);
-            var caught = IsAdventureSpeciesCaught(target.Species);
+            var caught = IsSpeciesRegistered(target.Species);
             DrawClippedText(caught ? "ALREADY CAUGHT" : "NOT CAUGHT YET", infoWidth, caught ? PokemonGreen : PokemonYellow);
         }
         ImGui.EndChild(); ImGui.PopStyleColor(); ImGui.PopStyleVar();

@@ -118,6 +118,7 @@ public sealed partial class MainWindow
                 collectionRewards = collectionTask.Result.Rewards;
                 frontierRentals = frontierTask.Result.Rentals;
                 legendaryBosses = legendaryTask.Result.Bosses;
+                legendaryRequiredIds = legendaryTask.Result.RequiredBossIds;
                 if (pendingLegendaryPermit is { } permit) pendingLegendaryPermit = legendaryBosses.FirstOrDefault(boss => boss.Id == permit.Id);
                 specialTrials = trialsTask.Result.Trials;
                 prizePokemon = prizeTask.Result.Pokemon.OrderBy(prize => prize.Price)

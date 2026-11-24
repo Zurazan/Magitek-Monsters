@@ -20,28 +20,32 @@ public sealed partial class MainWindow
 
     private void DrawOnlineLobbyHeader(PvpProfileDto profile)
     {
-        var width = ImGui.GetContentRegionAvail().X;
         var openDetails = false;
         if (ImGui.BeginTable("OnlineSeasonSummary", 2, ImGuiTableFlags.SizingStretchProp))
         {
             ImGui.TableSetupColumn("Season", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Details", ImGuiTableColumnFlags.WidthFixed, 105 * CompanionScale);
-            ImGui.TableNextColumn(); DrawClippedText($"{profile.Season.Name} / Rank {profile.Rank}", ImGui.GetContentRegionAvail().X, CompanionAccent);
+            ImGui.TableSetupColumn("Details", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("Season details").X + 2 * ImGui.GetStyle().FramePadding.X);
+            ImGui.TableNextColumn(); OnlineText(profile.Season.Name, CompanionAccent);
             ImGui.TableNextColumn(); openDetails = DrawAccentSmallButton("Season details", CompanionAccent);
             ImGui.EndTable();
         }
         if (openDetails) ImGui.OpenPopup("Online season details");
         var end = DateTimeOffset.TryParse(profile.Season.EndsAt, out var at) ? $"Ends {at.LocalDateTime:d}" : "Open preseason";
-        DrawClippedText($"{end} / Ranked {profile.RankedWins}W {profile.RankedLosses}L / Casual {profile.CasualWins}W {profile.CasualLosses}L", width, CompanionMuted);
         var next = profile.NextRankAt;
+        OnlineText(next is int threshold ? $"Rank {profile.Rank} / {Math.Max(0, profile.RankPoints - profile.CurrentRankStart):N0} of {Math.Max(1, threshold - profile.CurrentRankStart):N0} points to next rank / {end}"
+            : $"Rank {profile.Rank} / Highest rank reached / {end}", CompanionMuted);
         DrawProgressBar(next is int target ? Math.Clamp((profile.RankPoints - profile.CurrentRankStart) / (float)Math.Max(1, target - profile.CurrentRankStart), 0, 1) : 1, new Vector2(-1, 4 * CompanionScale), "", ExpBarBlue);
-        DrawCurrencyGuideShortcut();
-        ImGui.SetNextWindowSize(new Vector2(520, 440) * CompanionScale, ImGuiCond.Appearing);
-        if (ImGui.BeginPopup("Online season details")) { DrawCompanionOnlineHeader(profile); ImGui.EndPopup(); }
+        ImGui.Spacing();
+        var work = ImGui.GetMainViewport().WorkSize;
+        ImGui.SetNextWindowSize(new Vector2(Math.Min(560 * CompanionScale, work.X * .9f), Math.Min(520 * CompanionScale, work.Y * .85f)), ImGuiCond.Appearing);
+        if (ImGui.BeginPopup("Online season details"))
+        { ImGui.PushTextWrapPos(0); DrawCompanionOnlineHeader(profile); ImGui.PopTextWrapPos(); ImGui.EndPopup(); }
     }
 
     private void DrawOnlineLobby(PvpSeasonDto season)
     {
+        onlineView = Math.Clamp(onlineView, 0, 2);
+        if (onlineView < 2) pvpModeIndex = onlineView;
         var scale = CompanionScale;
         var incoming = pvpStatus!.Challenges.Where(invitation => invitation.FromUserId != trainer!.User.Id).ToList();
         if (ImGui.BeginTable("OnlineMatchTabs", 3, ImGuiTableFlags.SizingStretchSame))
@@ -50,8 +54,17 @@ public sealed partial class MainWindow
             {
                 ImGui.TableNextColumn();
                 var accent = index == 1 ? PokemonYellow : index == 2 ? new Vector4(0.75f, 0.62f, 0.95f, 1) : PokemonBlue;
-                var label = index == 0 ? "Casual" : index == 1 ? "Ranked" : incoming.Count > 0 ? $"Friendly matches ({incoming.Count})" : "Friendly matches";
-                if (DrawAccentButton(label, new Vector2(-1, 36 * scale), onlineView == index ? accent : CompanionMuted))
+                var label = index == 0 ? "Casual" : index == 1 ? "Ranked" : "Friendly";
+                var note = index == 0 ? "Record only" : index == 1 ? "Season points" : incoming.Count > 0 ? $"{incoming.Count} received" : "Direct invites";
+                var content = Math.Max(1, ImGui.GetContentRegionAvail().X - 18 * scale);
+                var height = Math.Max(52 * scale, ImGui.GetTextLineHeight() + ImGui.CalcTextSize(note, false, content).Y + 18 * scale);
+                var clicked = DrawPveCardSurface("OnlineMode##" + index, height, onlineView == index, out var min, out var max, out var after);
+                ImGui.SetCursorScreenPos(min + new Vector2(9, 6) * scale);
+                ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + content); OnlineText(label, onlineView == index ? accent : CompanionMuted); ImGui.PopTextWrapPos();
+                ImGui.SetCursorScreenPos(min + new Vector2(9 * scale, 10 * scale + ImGui.GetTextLineHeight()));
+                ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + content); OnlineText(note, CompanionMuted); ImGui.PopTextWrapPos();
+                ImGui.SetCursorScreenPos(after);
+                if (clicked)
                 {
                     onlineView = index;
                     if (index < 2) pvpModeIndex = index;
@@ -61,25 +74,18 @@ public sealed partial class MainWindow
             }
             ImGui.EndTable();
         }
-        DrawClippedText(onlineView == 2 ? "Challenge a Trainer directly. No rank, record or currency changes."
+        OnlineText(onlineView == 2 ? "Challenge a Trainer directly. No rank, record or currency changes."
             : onlineView == 1 ? $"Ranked / Win +{season.WinPoints}, draw +{season.DrawPoints}, loss +{season.LossPoints} points"
-            : "Casual / Same format rules, no ranked points. Tier bans still apply.", ImGui.GetContentRegionAvail().X, onlineView == 1 ? PokemonYellow : CompanionAccent);
+            : "Casual / Same format rules, no ranked points. Tier bans still apply.", onlineView == 1 ? PokemonYellow : CompanionAccent);
         if (incoming.Count > 0 && (onlineView != 2 || OnlineInvitation is null))
         {
-            if (DrawAccentButton($"Review invitation from {incoming[0].FromName}", new Vector2(-1, 28 * scale), PokemonGreen))
+            OnlineText($"Invitation from {incoming[0].FromName}", PokemonGreen);
+            if (DrawAccentSmallButton("Review invitation", PokemonGreen))
             { onlineView = 2; onlineInvitationId = incoming[0].Id; pvpTeamError = string.Empty; }
         }
         ImGui.Spacing();
-        var footer = (string.IsNullOrWhiteSpace(pvpTeamError) ? 64 : 94) * scale;
-        var available = ImGui.GetContentRegionAvail();
-        var layout = PvpPresentation.Lobby(available.X, Math.Max(1, available.Y - footer), scale);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10, 8) * scale);
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, CompanionSurface);
-        ImGui.BeginChild("OnlineSetup", new Vector2(layout.SetupWidth, layout.SetupHeight), true);
         var format = onlineView == 2 ? DrawOnlineFriendlySetup() : DrawPvpFormats(season);
-        ImGui.EndChild();
-        if (layout.SideBySide) ImGui.SameLine(0, layout.Gap); else ImGui.Spacing();
-        ImGui.BeginChild("OnlineParty", new Vector2(layout.TeamWidth, layout.TeamHeight), true);
+        ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
         var ids = onlineView == 2 ? friendlyTeamIds : pvpTeamIds;
         if (format is not null)
         {
@@ -92,14 +98,15 @@ public sealed partial class MainWindow
                 foreach (var pokemon in party.Take(format.MaxTeamSize)) ids.Add(pokemon.Id);
                 if (onlineView == 2) friendlyTeamInitialized = true; else onlineTeamInitialized = true;
             }
-            DrawClippedText($"REGISTERED TEAM / {ids.Count} of {format.MaxTeamSize}", ImGui.GetContentRegionAvail().X, CompanionAccent);
+            OnlineText($"REGISTERED TEAM / {ids.Count} of {format.MaxTeamSize}", CompanionAccent);
+            var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
             ImGui.BeginDisabled(CollectionLocked);
             if (DrawAccentSmallButton("Choose Pokémon", CompanionAccent)) OpenOnlineRosterPicker(format);
-            ImGui.SameLine();
+            SameLineIfFits("Use party", right);
             if (DrawAccentSmallButton("Use party", CompanionAccent)) { ids.Clear(); foreach (var pokemon in party.Take(format.MaxTeamSize)) ids.Add(pokemon.Id); pvpTeamError = string.Empty; }
-            ImGui.SameLine();
+            SameLineIfFits("Clear", right);
             if (DrawAccentSmallButton("Clear", CompanionMuted)) { ids.Clear(); pvpTeamError = string.Empty; }
-            var columns = ImGui.GetContentRegionAvail().X >= 300 * scale ? 2 : 1;
+            var columns = Math.Clamp((int)(ImGui.GetContentRegionAvail().X / (220 * scale)), 1, 3);
             if (ImGui.BeginTable("OnlinePartyGrid", columns, ImGuiTableFlags.SizingStretchSame))
             {
                 foreach (var pokemon in PvpRoster.Selected(owned, ids))
@@ -115,8 +122,7 @@ public sealed partial class MainWindow
             if (ids.Count == 0) ImGui.TextWrapped("Choose Pokémon from your party or PC Storage. Your PvE party stays unchanged.");
         }
         else ImGui.TextWrapped("Choose an available format first.");
-        ImGui.EndChild();
-        ImGui.PopStyleColor(); ImGui.PopStyleVar();
+        ImGui.Spacing();
         DrawOnlineLobbyFooter(format, ids, season);
         DrawOnlineRosterPicker();
     }
@@ -127,21 +133,33 @@ public sealed partial class MainWindow
         ImGui.PushID(pokemon.Id);
         var min = ImGui.GetCursorScreenPos();
         var width = Math.Max(1, ImGui.GetContentRegionAvail().X);
-        var height = Math.Max(92 * scale, 4 * ImGui.GetTextLineHeight() + 22 * scale);
+        var padding = 8 * scale; var gap = 4 * scale; var spriteSize = 40 * scale;
+        var content = Math.Max(1, width - 2 * padding); var textWidth = Math.Max(1, content - spriteSize - padding);
+        var name = pokemon.Nickname.Length > 0 ? pokemon.Nickname : SpeciesDisplayCatalog.Name(pokemon.Appearance);
+        var level = $"Lv. {PvpPresentation.BattleLevel(format)} / {PvpRoster.Location(pokemon)}";
+        var held = itemCatalog.FirstOrDefault(item => item.Id == pokemon.HeldItem)?.Name ?? (pokemon.HeldItem.Length > 0 ? pokemon.HeldItem : "None");
+        var headerHeight = Math.Max(spriteSize, ImGui.CalcTextSize(name, false, textWidth).Y);
+        var typeHeight = Math.Max(14 * scale, ImGui.GetTextLineHeight());
+        var levelHeight = ImGui.CalcTextSize(level, false, content).Y;
+        var itemHeight = ImGui.CalcTextSize("Item: " + held, false, content).Y;
+        var height = 2 * padding + headerHeight + typeHeight + levelHeight + itemHeight + 3 * gap;
         var clicked = ImGui.InvisibleButton("PickOnlinePokemon", new Vector2(width, height));
         var hover = ImGui.IsItemHovered();
-        if (hover) { ImGui.SetMouseCursor(ImGuiMouseCursor.Hand); ImGui.SetTooltip($"{pokemon.DisplaySpecies} / {PvpRoster.Location(pokemon)}\n{PvpPresentation.LevelRule(format)} (owned Lv. {pokemon.Level})\n{(selected ? "Click to remove from registration." : canPick ? "Click to register." : "Team is full. Remove another Pokémon first.")}"); }
+        if (hover) { ImGui.SetMouseCursor(ImGuiMouseCursor.Hand); ImGui.SetTooltip($"{name}\n{pokemon.DisplaySpecies} / {PvpRoster.Location(pokemon)}\nHeld item: {held}\n{PvpPresentation.LevelRule(format)} (owned Lv. {pokemon.Level})\n{(selected ? "Click to remove from registration." : canPick ? "Click to register." : "Team is full. Remove another Pokémon first.")}"); }
         var after = ImGui.GetCursorScreenPos(); var draw = ImGui.GetWindowDrawList();
         draw.AddRectFilled(min, min + new Vector2(width, height), ImGui.GetColorU32(selected ? new Vector4(0.14f, 0.19f, 0.28f, 1) : new Vector4(0.10f, 0.10f, 0.11f, 1)), 4 * scale);
         if (selected || hover) draw.AddRect(min, min + new Vector2(width, height), ImGui.GetColorU32(CompanionAccent with { W = selected ? 0.7f : 0.4f }), 4 * scale);
-        ImGui.SetCursorScreenPos(min + new Vector2(8, 24) * scale); DrawPokemonIcon(pokemon.Appearance, pokemon.Shiny, new Vector2(40 * scale));
-        var textWidth = Math.Max(1, width - 66 * scale);
-        ImGui.SetCursorScreenPos(min + new Vector2(58, 7) * scale); DrawClippedText((selected ? "[IN] " : "") + pokemon.Nickname, textWidth, selected ? CompanionAccent : CompanionMuted);
-        ImGui.SetCursorScreenPos(min + new Vector2(58, 28) * scale);
-        DrawConsoleTypeRow(pokemon.Types.ToArray(), BattleLayout.Types(textWidth, scale * 0.72f, pokemon.Types.Count));
-        ImGui.SetCursorScreenPos(min + new Vector2(58, 47) * scale); DrawClippedText($"Lv. {PvpPresentation.BattleLevel(format)} / {PvpRoster.Location(pokemon)}", textWidth, CompanionMuted);
-        var held = itemCatalog.FirstOrDefault(item => item.Id == pokemon.HeldItem)?.Name ?? (pokemon.HeldItem.Length > 0 ? pokemon.HeldItem : "No held item");
-        ImGui.SetCursorScreenPos(min + new Vector2(58, 67) * scale); DrawClippedText(held, textWidth, CompanionMuted);
+        ImGui.SetCursorScreenPos(min + new Vector2(padding)); DrawPokemonIcon(pokemon.Appearance, pokemon.Shiny, new Vector2(spriteSize));
+        ImGui.SetCursorScreenPos(min + new Vector2(padding * 2 + spriteSize, padding));
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + textWidth); OnlineText(name, selected ? CompanionAccent : CompanionMuted); ImGui.PopTextWrapPos();
+        var y = min.Y + padding + headerHeight + gap;
+        ImGui.SetCursorScreenPos(new Vector2(min.X + padding, y));
+        DrawStarterTypeBadges(pokemon.Types.ToArray(), Math.Max(1, Math.Min(64 * scale, (content - Math.Max(0, pokemon.Types.Count - 1) * 5 * scale) / Math.Max(1, pokemon.Types.Count))), scale);
+        y += typeHeight + gap;
+        ImGui.SetCursorScreenPos(new Vector2(min.X + padding, y));
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + content); OnlineText(level, CompanionMuted); ImGui.PopTextWrapPos();
+        ImGui.SetCursorScreenPos(new Vector2(min.X + padding, y + levelHeight + gap));
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + content); OnlineText("Item: " + held, CompanionMuted); ImGui.PopTextWrapPos();
         ImGui.SetCursorScreenPos(after); ImGui.PopID();
         return clicked && canPick;
     }
@@ -190,7 +208,6 @@ public sealed partial class MainWindow
             format = DrawOnlineFormatCombo(friendlyFormats, ref friendlyFormatId, "FriendlyFormat");
         }
         if (format is not null) DrawOnlineFormatSummary(format);
-        ImGui.TextWrapped("Pick your registered team on the right, then send or accept below.");
         return format;
     }
 
@@ -205,20 +222,24 @@ public sealed partial class MainWindow
             ImGui.EndCombo();
         }
         selectedId = selected;
-        return formats.FirstOrDefault(format => format.Id == selectedId);
+        var result = formats.FirstOrDefault(format => format.Id == selectedId);
+        if (result is not null && ImGui.CalcTextSize(result.Name).X > ImGui.GetContentRegionAvail().X - ImGui.GetFrameHeight() - ImGui.GetStyle().FramePadding.X * 2)
+            OnlineText(result.Name, CompanionAccent);
+        return result;
     }
 
     private void DrawOnlineFormatSummary(PvpFormatDto format)
     {
-        ImGui.TextColored(CompanionAccent, format.GameType == "doubles" ? "DOUBLES" : "SINGLES");
-        ImGui.TextWrapped(PvpPresentation.TeamRule(format));
-        ImGui.TextColored(PokemonGreen, $"Battle level: {PvpPresentation.BattleLevel(format)}");
-        ImGui.TextWrapped("Owned levels, IVs, EVs and moves are not changed. No Bag items in PvP.");
-        if (format.PickedTeamSize is int picked) ImGui.TextWrapped($"Register your roster now. Choose {picked} Pokémon and your leads after seeing the opponent's team.");
-        else ImGui.TextWrapped("All registered Pokémon enter battle. Choose your lead in team preview.");
-        if (format.OpenTeamSheets) ImGui.TextWrapped("Open team sheets: both players can inspect moves, ability, item and Tera type.");
-        if (onlineView == 1) ImGui.TextWrapped(RankedForfeitRules.Notice);
-        if (ImGui.CollapsingHeader("Format rules and bans")) foreach (var rule in format.Rules) ImGui.TextWrapped(rule);
+        OnlineText($"{(format.GameType == "doubles" ? "Doubles" : "Singles")} / Battle Lv. {PvpPresentation.BattleLevel(format)} / {PvpPresentation.TeamRule(format)}", CompanionAccent);
+        if (format.PickedTeamSize is int picked) OnlineText($"Pick {picked} and your leads in team preview.", CompanionMuted);
+        else OnlineText("Choose your lead in team preview. All registered Pokémon battle.", CompanionMuted);
+        if (ImGui.CollapsingHeader("Format rules & battle details"))
+        {
+            ImGui.TextWrapped("Owned levels, IVs, EVs and moves stay unchanged. Held items work; Bag items cannot be used in PvP.");
+            if (format.OpenTeamSheets) ImGui.TextWrapped("Open team sheets: both players can inspect moves, ability, item and Tera type.");
+            if (onlineView == 1) ImGui.TextWrapped(RankedForfeitRules.Notice);
+            foreach (var rule in format.Rules) ImGui.TextWrapped(rule);
+        }
     }
 
     private void DrawOnlineLobbyFooter(PvpFormatDto? format, HashSet<string> ids, PvpSeasonDto season)
@@ -228,7 +249,8 @@ public sealed partial class MainWindow
         {
             if (DrawAccentButton("Team rejected / View details", new Vector2(-1, 26 * scale), PokemonRed)) ImGui.OpenPopup("Online team validation");
         }
-        ImGui.SetNextWindowSize(new Vector2(560, 380) * scale, ImGuiCond.Appearing);
+        var work = ImGui.GetMainViewport().WorkSize;
+        ImGui.SetNextWindowSize(new Vector2(Math.Min(560 * scale, work.X * .9f), Math.Min(380 * scale, work.Y * .85f)), ImGuiCond.Appearing);
         if (ImGui.BeginPopup("Online team validation"))
         {
             ImGui.TextColored(PokemonRed, "TEAM VALIDATION"); ImGui.TextWrapped(pvpTeamError);
@@ -236,7 +258,8 @@ public sealed partial class MainWindow
             if (ImGui.Button("Close")) ImGui.CloseCurrentPopup();
             ImGui.EndPopup();
         }
-        DrawClippedText(format is null ? "Choose a format" : $"{ids.Count}/{format.MaxTeamSize} registered / Battle Lv. {PvpPresentation.BattleLevel(format)} / {(format.PickedTeamSize is int picked ? $"Pick {picked} in preview" : "Full registered team battles")}", ImGui.GetContentRegionAvail().X, CompanionMuted);
+        OnlineText(format is null ? "Choose a format" : ids.Count < format.MinTeamSize ? $"Choose at least {format.MinTeamSize} Pokémon to continue."
+            : $"{ids.Count}/{format.MaxTeamSize} registered / Ready for {(onlineView == 2 ? "a friendly match" : onlineView == 1 ? "ranked" : "casual")}", CompanionMuted);
         var valid = format is not null && ids.Count >= format.MinTeamSize && ids.Count <= format.MaxTeamSize;
         if (onlineView < 2)
         {
@@ -253,16 +276,17 @@ public sealed partial class MainWindow
             if (invitation is not null)
             {
                 var outgoing = invitation.FromUserId == trainer!.User.Id;
+                var sideBySide = ImGui.GetContentRegionAvail().X >= ImGui.CalcTextSize("Accept with this team").X * 2 + 4 * ImGui.GetStyle().FramePadding.X + 8 * scale;
                 var width = Math.Max(1, (ImGui.GetContentRegionAvail().X - 8 * scale) / 2);
                 ImGui.BeginDisabled(busy);
-                if (DrawAccentButton(outgoing ? "Cancel invitation" : "Decline", new Vector2(outgoing ? -1 : width, 34 * scale), PokemonOrange))
+                if (DrawAccentButton(outgoing ? "Cancel invitation" : "Decline", new Vector2(outgoing || !sideBySide ? -1 : width, 34 * scale), PokemonOrange))
                     RunOnlineAction(async () => { pvpStatus = await InSession(plugin.Api.ResolveChallenge(invitation.Id, outgoing ? "cancelled" : "declined")); }, "Updating invitation...");
                 ImGui.EndDisabled();
                 if (!outgoing)
                 {
-                    ImGui.SameLine(0, 8 * scale);
+                    if (sideBySide) ImGui.SameLine(0, 8 * scale);
                     ImGui.BeginDisabled(CollectionLocked || !valid);
-                    if (DrawAccentButton("Accept with this team", new Vector2(width, 34 * scale), PokemonGreen))
+                    if (DrawAccentButton("Accept with this team", new Vector2(sideBySide ? width : -1, 34 * scale), PokemonGreen))
                     { var team = FriendlyTeam(); RunOnlineAction(async () => { pvpStatus = await InSession(plugin.Api.AcceptChallenge(invitation.Id, team)); }, "Starting friendly battle..."); }
                     ImGui.EndDisabled();
                 }
@@ -279,6 +303,9 @@ public sealed partial class MainWindow
             }
         }
     }
+
+    private static void OnlineText(string text, Vector4 color)
+    { ImGui.PushStyleColor(ImGuiCol.Text, color); ImGui.TextWrapped(text); ImGui.PopStyleColor(); }
 
     private static void DrawOnlineForfeitNotice()
         => ImGui.TextWrapped(RankedForfeitRules.Notice);

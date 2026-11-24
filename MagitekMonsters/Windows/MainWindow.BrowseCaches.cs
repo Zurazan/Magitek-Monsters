@@ -23,6 +23,7 @@ public sealed partial class MainWindow
     private int cachedObjectiveCategory;
     private int cachedObjectiveState;
     private List<CollectionObjectiveDto>? cachedObjectives;
+    private Dictionary<string, CollectionObjectiveDto[]>? objectiveTracks;
     private List<PokemonDto>? overviewSource;
     private Dictionary<int, List<PokemonDto>>? overviewGroups;
     private bool overviewEmpty;
@@ -88,13 +89,47 @@ public sealed partial class MainWindow
     private List<CollectionObjectiveDto> GetCollectionObjectives()
     {
         var source = trainer!.CollectionPoints.Objectives;
-        if (cachedObjectives is not null && ReferenceEquals(source, objectiveSource)
-            && cachedObjectiveCategory == objectiveCategory && cachedObjectiveState == objectiveState) return cachedObjectives;
-        objectiveSource = source; cachedObjectiveCategory = objectiveCategory; cachedObjectiveState = objectiveState;
-        return cachedObjectives = source.Where(entry => (objectiveCategory == 0 || entry.Category == ObjectiveCategories[objectiveCategory])
-                && (objectiveState == 2 || entry.Completed == (objectiveState == 1)))
-            .OrderBy(entry => entry.Completed).ThenByDescending(entry => (double)entry.Progress / Math.Max(1, entry.Target))
-            .ThenBy(entry => entry.Category).ThenBy(entry => entry.Target).ToList();
+        if (!ReferenceEquals(source, objectiveSource))
+        {
+            objectiveSource = source;
+            objectiveTracks = source.GroupBy(CollectionGoalTrack)
+                .ToDictionary(track => track.Key, track => track.OrderBy(goal => goal.Target).ToArray());
+            cachedObjectives = null;
+        }
+        if (cachedObjectives is not null && cachedObjectiveCategory == objectiveCategory && cachedObjectiveState == objectiveState)
+            return cachedObjectives;
+        cachedObjectiveCategory = objectiveCategory;
+        cachedObjectiveState = objectiveState;
+        IEnumerable<CollectionObjectiveDto> goals;
+        switch (objectiveState)
+        {
+            case CompletedGoalView:
+                goals = source.Where(goal => goal.Completed).OrderByDescending(goal => goal.EarnedAt, StringComparer.Ordinal);
+                break;
+            case AllGoalView:
+                goals = source.OrderBy(goal => Array.IndexOf(ObjectiveCategories, goal.Category))
+                    .ThenBy(CollectionGoalTrack, StringComparer.Ordinal).ThenBy(goal => goal.Target);
+                break;
+            case PinnedGoalView:
+                var byId = source.ToDictionary(goal => goal.Id, StringComparer.OrdinalIgnoreCase);
+                goals = LocalWishlist().Pins.Where(pin => pin.Kind == "objective" && byId.ContainsKey(pin.Id))
+                    .Select(pin => byId[pin.Id]);
+                break;
+            default:
+                goals = objectiveTracks!.Values.Select(track => track.FirstOrDefault(goal => !goal.Completed))
+                    .OfType<CollectionObjectiveDto>().OrderBy(goal => Math.Max(0, goal.Target - goal.Progress))
+                    .ThenByDescending(goal => goal.Points).ThenBy(goal => goal.Name, StringComparer.OrdinalIgnoreCase);
+                break;
+        }
+        return cachedObjectives = goals.Where(goal => objectiveCategory == 0 || goal.Category == ObjectiveCategories[objectiveCategory]).ToList();
+    }
+
+    private static string CollectionGoalTrack(CollectionObjectiveDto goal)
+    {
+        // Objective IDs end in their milestone target.
+        var suffix = goal.Id.LastIndexOf('-');
+        return suffix >= 0 && int.TryParse(goal.Id.AsSpan(suffix + 1), out var target) && target == goal.Target
+            ? goal.Id[..suffix] : goal.Id;
     }
 
     private (Dictionary<int, List<PokemonDto>> Groups, int[] Boxes) GetStorageOverview(List<PokemonDto> filtered)
@@ -128,6 +163,10 @@ public sealed partial class MainWindow
         ResetStorageSelectionCache();
         dexDirectoryTrainer = comparisonTrainer = null; dexDirectoryCatalog = null; dexDirectory = null;
         objectiveSource = cachedObjectives = null; overviewSource = comparisonPokemon = null;
+        objectiveTracks = null;
+        objectiveCategory = objectiveState = objectivePage = 0;
+        expandedObjective = null;
+        expandFirstObjective = true;
         overviewGroups = null; overviewBoxes = null;
         onlineOwnedTrainer = savedTeamsTrainer = null;
         onlineOwned = onlineCandidateSource = onlineCandidates = raidCandidateSource = raidCandidates = null;

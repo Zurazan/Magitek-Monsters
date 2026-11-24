@@ -44,6 +44,7 @@ public sealed partial class MainWindow
         var species = kind == "form" ? pokedexCatalog.FirstOrDefault(entry => entry.Forms.Contains(id, StringComparer.OrdinalIgnoreCase))?.Species
             ?? SpeciesDisplayCatalog.Get(id)?.BaseSpecies ?? "" : "";
         if (!CollectionWishlist.Toggle(preferences, kind, id, species)) { wishlistMessage = $"Your wishlist has {CollectionWishlist.MaximumPins} pins. Remove one to make room."; return; }
+        if (kind == "objective" && objectiveState == PinnedGoalView) cachedObjectives = null;
         plugin.Configuration.Save();
         wishlistMessage = removing ? "Removed from your wishlist." : "Added to your wishlist.";
         SetStatus(wishlistMessage);

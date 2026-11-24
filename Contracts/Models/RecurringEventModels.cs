@@ -19,6 +19,8 @@ public sealed class RecurringEventDto
     public string Mode { get; set; } = string.Empty;
     public string BossId { get; set; } = string.Empty;
     public int CooldownSeconds { get; set; }
+    public int MinLevel { get; set; }
+    public int MaxLevel { get; set; }
     public DateTimeOffset StartsAt { get; set; }
     public DateTimeOffset EndsAt { get; set; }
     public bool Manual { get; set; }

@@ -25,8 +25,7 @@ public sealed partial class MainWindow
         ImGui.TextColored(CompanionAccent, "SEASON FORMAT");
         var selected = DrawOnlineFormatCombo(season.Formats, ref selectedPvpFormat, "QueueFormat");
         if (selected is not null) DrawOnlineFormatSummary(selected);
-        ImGui.TextWrapped("Shared season rank and RT. Skill matchmaking is separate per format.");
-        if (!season.FormatsAvailable) ImGui.TextColored(PokemonRed, "Season matchmaking unavailable: the server needs its pinned battle rules.");
+        if (!season.FormatsAvailable) OnlineText("Season matchmaking unavailable: the server needs its pinned battle rules.", PokemonRed);
         return selected;
     }
 

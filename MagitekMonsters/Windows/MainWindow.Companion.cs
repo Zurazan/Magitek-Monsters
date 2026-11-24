@@ -15,6 +15,10 @@ public sealed partial class MainWindow
     private static readonly Vector4 CompanionMuted = new(0.70f, 0.70f, 0.74f, 1f);
     private static readonly Vector4 CompanionSurface = new(0.13f, 0.13f, 0.14f, 1f);
     private static float CompanionScale => Math.Max(ImGuiHelpers.GlobalScale, ImGui.GetTextLineHeight() / 17f);
+    private static void SameLineIfFits(string label, float right)
+    {
+        if (ImGui.GetItemRectMax().X + ImGui.GetStyle().ItemSpacing.X + ImGui.CalcTextSize(label).X + 2 * ImGui.GetStyle().FramePadding.X <= right) ImGui.SameLine();
+    }
     private string? selectedPartyPokemon;
     private string? selectedStoragePokemon;
     private string? releasePokemonId;
@@ -36,104 +40,6 @@ public sealed partial class MainWindow
         draw.AddText(min, ImGui.GetColorU32(color), text);
         draw.PopClipRect();
         if (ImGui.IsItemHovered() && ImGui.CalcTextSize(text).X > width) ImGui.SetTooltip(text);
-    }
-
-    private void DrawCompanionParty()
-    {
-        if (trainer is null) return;
-        var scale = CompanionScale;
-        DrawSectionHeader("Your party", $"{trainer.Party.Count}/6 Pokémon / First slot leads into battle");
-        DrawPokemonCenter();
-        ImGui.Spacing();
-        if (DrawAccentSmallButton("Open PC", CompanionAccent)) mainSection = 2;
-        ImGui.SameLine();
-        ImGui.BeginDisabled(trainer.Party.Count == 0);
-        if (DrawAccentSmallButton("Team analysis", PokemonBlue)) OpenTeamAnalysis();
-        ImGui.EndDisabled();
-        if (InventoryCount("expshare") > 0) ImGui.TextDisabled("EXP Share: double party EXP");
-        DrawSavedTeams();
-        var pokemon = trainer.Party.OrderBy(entry => entry.PartySlot).ToList();
-        if (pokemon.Count == 0)
-        {
-            ImGui.TextWrapped("Your party is empty. Add Pokémon from PC Storage.");
-            if (DrawAccentButton("Open PC Storage", Vector2.Zero, CompanionAccent)) mainSection = 2;
-            DrawTeamAnalysis();
-            return;
-        }
-        var selected = selectedPartyPokemon;
-        if (!pokemon.Any(entry => entry.Id == selected)) selected = pokemon[0].Id;
-        var layout = CompanionLayout.Selection(ImGui.GetContentRegionAvail().X, ImGui.GetContentRegionAvail().Y, scale);
-        var listHeight = layout.SideBySide ? layout.Height : Math.Min(280 * scale, pokemon.Count * 132 * scale + 50 * scale);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-        ImGui.BeginChild("CompanionPokemonList", new Vector2(layout.ListWidth, Math.Max(1, listHeight)), false);
-        foreach (var entry in pokemon)
-        {
-            if (DrawCompanionPokemonRow(entry, entry.Id == selected, pokemon)) selected = entry.Id;
-        }
-        ImGui.EndChild();
-        ImGui.PopStyleVar();
-        selectedPartyPokemon = selected;
-        if (layout.SideBySide) ImGui.SameLine(0, 12 * scale); else ImGui.Spacing();
-        var detailHeight = layout.SideBySide ? layout.Height : 500 * scale;
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12, 12) * scale);
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, CompanionSurface);
-        ImGui.BeginChild("CompanionPokemonInspector", new Vector2(layout.DetailWidth, detailHeight), false);
-        DrawCompanionPokemonInspector(pokemon.First(entry => entry.Id == selected));
-        ImGui.EndChild();
-        ImGui.PopStyleColor();
-        ImGui.PopStyleVar();
-        DrawReleaseConfirmation();
-        DrawPokemonManagement();
-        DrawTeamAnalysis();
-    }
-
-    private bool DrawCompanionPokemonRow(PokemonDto pokemon, bool selected, List<PokemonDto> ordered)
-    {
-        var scale = CompanionScale;
-        ImGui.PushID(pokemon.Id);
-        var min = ImGui.GetCursorScreenPos();
-        var width = Math.Max(1, ImGui.GetContentRegionAvail().X);
-        var height = Math.Max(124 * scale, ImGui.GetTextLineHeight() * 4 + 48 * scale);
-        var actionWidth = Math.Max(96 * scale, ImGui.CalcTextSize("Down").X * 2 + 27 * scale);
-        var clickWidth = Math.Max(1, width - actionWidth - 12 * scale);
-        var clicked = ImGui.InvisibleButton("Select", new Vector2(clickWidth, height));
-        var hover = ImGui.IsItemHovered();
-        if (hover) ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-        var after = ImGui.GetCursorScreenPos();
-        var draw = ImGui.GetWindowDrawList();
-        draw.AddRectFilled(min, min + new Vector2(width, height), ImGui.GetColorU32(selected ? new Vector4(0.14f, 0.17f, 0.22f, 1) : CompanionSurface), 4 * scale);
-        if (selected || hover) draw.AddRect(min, min + new Vector2(width, height), ImGui.GetColorU32(CompanionAccent with { W = selected ? 0.65f : 0.4f }), 4 * scale);
-        if (selected) draw.AddRectFilled(min + new Vector2(0, 8 * scale), min + new Vector2(3 * scale, height - 8 * scale), ImGui.GetColorU32(CompanionAccent), 2 * scale);
-        ImGui.SetCursorScreenPos(min + new Vector2(10, 16) * scale);
-        DrawPokemonIcon(pokemon.Appearance, pokemon.Shiny, new Vector2(64 * scale));
-        ImGui.SetCursorScreenPos(min + new Vector2(86, 9) * scale);
-        ImGui.BeginGroup();
-        var textWidth = Math.Max(1, clickWidth - 94 * scale);
-        DrawClippedText($"{(pokemon.Shiny ? "★ " : "")}{pokemon.Nickname}{(pokemon.Favorite ? " [FAV]" : "")}", textWidth, ImGui.GetStyle().Colors[(int)ImGuiCol.Text]);
-        DrawClippedText($"Lv. {pokemon.Level} / {(pokemon.PartySlot == 1 ? "Lead Pokémon" : $"Slot {pokemon.PartySlot}")}", textWidth, CompanionMuted);
-        var vital = CompanionVital(pokemon);
-        DrawClippedText(vital is null ? "HP unavailable" : $"HP {vital.Hp}/{vital.MaxHp}{HealthStatus(vital)}", textWidth, vital?.Hp == 0 ? PokemonRed : CompanionMuted);
-        DrawProgressBar(vital is null ? 0 : vital.Hp / (float)Math.Max(1, vital.MaxHp), new Vector2(textWidth, 5 * scale), "", HpBarRed);
-        var (progress, label) = ExperienceProgress(pokemon);
-        DrawClippedText(label, textWidth, CompanionMuted);
-        DrawProgressBar(progress, new Vector2(textWidth, 5 * scale), "", ExpBarBlue);
-        ImGui.EndGroup();
-        ImGui.SetCursorScreenPos(new Vector2(min.X + width - actionWidth - 8 * scale, min.Y + 12 * scale));
-        ImGui.BeginGroup();
-        ImGui.BeginDisabled(CollectionLocked || pokemon.FusionHostId.Length > 0);
-        var index = ordered.FindIndex(entry => entry.Id == pokemon.Id);
-        ImGui.BeginDisabled(index <= 0);
-        if (DrawAccentButton("Up", new Vector2((actionWidth - 5 * scale) / 2, 28 * scale), CompanionAccent)) Run(() => ReorderPokemon(pokemon.Id, index), $"Moving {pokemon.Nickname} up...");
-        ImGui.EndDisabled(); ImGui.SameLine(0, 5 * scale);
-        ImGui.BeginDisabled(index >= ordered.Count - 1);
-        if (DrawAccentButton("Down", new Vector2((actionWidth - 5 * scale) / 2, 28 * scale), CompanionAccent)) Run(() => ReorderPokemon(pokemon.Id, index + 2), $"Moving {pokemon.Nickname} down...");
-        ImGui.EndDisabled();
-        if (DrawAccentButton("To PC", new Vector2(actionWidth, 28 * scale), PokemonOrange))
-            Run(() => MovePokemon(pokemon.Id, "storage"), $"Storing {pokemon.Nickname}...");
-        ImGui.EndDisabled(); ImGui.EndGroup();
-        ImGui.SetCursorScreenPos(after);
-        ImGui.PopID();
-        return clicked;
     }
 
     private void DrawCompanionPokemonInspector(PokemonDto pokemon)
@@ -304,8 +210,13 @@ public sealed partial class MainWindow
         ImGui.TextColored(CompanionMuted, "EXP");
         DrawProgressBar(progress, new Vector2(-1, 7 * CompanionScale), "", ExpBarBlue);
         ImGui.TextDisabled(label);
-        var build = GetPokemonBuild(pokemon);
         ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
+        DrawCompanionStats(pokemon);
+    }
+
+    private void DrawCompanionStats(PokemonDto pokemon)
+    {
+        var build = GetPokemonBuild(pokemon);
         if (build is null) ImGui.TextDisabled("Loading stats...");
         else if (ImGui.BeginTable("CompanionStats", 3, ImGuiTableFlags.SizingStretchSame))
         {
@@ -332,17 +243,23 @@ public sealed partial class MainWindow
 
     private static string HealthStatus(LeagueVitalDto vital) => vital.Hp == 0 ? " / Fainted" : vital.Status.Length > 0 ? $" / {vital.Status.ToUpperInvariant()}" : "";
 
-    private void DrawCompanionPendingMove(PokemonDto pokemon)
+    private void DrawCompanionPendingMove(PokemonDto pokemon, bool compact = false)
     {
         var learning = trainer!.PendingMoves.FirstOrDefault(entry => entry.PokemonId == pokemon.Id);
         if (learning is null) return;
         ImGui.Separator();
-        ImGui.TextColored(CompanionAccent, "New move available");
+        if (compact)
+        {
+            ImGui.TextColored(PokemonYellow, $"{learning.Move} is ready to learn");
+            if (!ImGui.TreeNode($"Review move##{learning.Id}")) return;
+        }
+        else ImGui.TextColored(CompanionAccent, "New move available");
         ImGui.TextWrapped($"{pokemon.Nickname} can learn {learning.Move}, unlocked at level {learning.Level}. Choose a move to forget.");
         foreach (var move in pokemon.Moves)
             if (DrawAccentButton($"Forget {move}", new Vector2(-1, 28 * CompanionScale), PokemonOrange))
                 Run(() => ResolveMoveLearning(learning.Id, move), $"Teaching {learning.Move}...");
         if (ImGui.Button("Keep current moves")) Run(() => ResolveMoveLearning(learning.Id, null), $"Skipping {learning.Move}...");
+        if (compact) ImGui.TreePop();
         ImGui.Spacing();
     }
 
