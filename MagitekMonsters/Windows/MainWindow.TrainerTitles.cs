@@ -18,19 +18,23 @@ public sealed partial class MainWindow
         var size = new Vector2(Math.Max(1, width), ImGui.GetTextLineHeight());
         ImGui.Dummy(size);
         if (!ImGui.IsItemVisible()) return;
-        var radius = Math.Max(1, ImGui.GetFontSize() / 17f);
+        var radius = style.Glow.W > 0 ? Math.Max(1, ImGui.GetFontSize() / 17f) : 0;
         var draw = ImGui.GetWindowDrawList();
-        draw.PushClipRect(start - new Vector2(radius * 2), start + size + new Vector2(0, radius * 2), true);
-        var outer = ImGui.GetColorU32(style.Glow with { W = style.Glow.W * 0.25f });
-        var inner = ImGui.GetColorU32(style.Glow);
-        draw.AddText(start + new Vector2(-2 * radius, 0), outer, text);
-        draw.AddText(start + new Vector2(2 * radius, 0), outer, text);
-        draw.AddText(start + new Vector2(0, -2 * radius), outer, text);
-        draw.AddText(start + new Vector2(0, 2 * radius), outer, text);
-        draw.AddText(start + new Vector2(-radius, -radius), inner, text);
-        draw.AddText(start + new Vector2(radius, -radius), inner, text);
-        draw.AddText(start + new Vector2(-radius, radius), inner, text);
-        draw.AddText(start + new Vector2(radius, radius), inner, text);
+        var edge = radius * 2;
+        draw.PushClipRect(start - new Vector2(edge), start + size + new Vector2(0, edge), true);
+        if (radius > 0)
+        {
+            var outer = ImGui.GetColorU32(style.Glow with { W = style.Glow.W * 0.25f });
+            var inner = ImGui.GetColorU32(style.Glow);
+            draw.AddText(start + new Vector2(-edge, 0), outer, text);
+            draw.AddText(start + new Vector2(edge, 0), outer, text);
+            draw.AddText(start + new Vector2(0, -edge), outer, text);
+            draw.AddText(start + new Vector2(0, edge), outer, text);
+            draw.AddText(start + new Vector2(-radius, -radius), inner, text);
+            draw.AddText(start + new Vector2(radius, -radius), inner, text);
+            draw.AddText(start + new Vector2(-radius, radius), inner, text);
+            draw.AddText(start + new Vector2(radius, radius), inner, text);
+        }
         var from = ImGui.GetColorU32(style.Text);
         var firstVertex = draw.VtxBuffer.Size;
         draw.AddText(start, from, text);
