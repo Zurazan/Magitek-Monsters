@@ -25,15 +25,16 @@ public sealed partial class MainWindow
 
     private RegionalCircuitDto? SelectedRegionalCircuit => regionalLeagues.SelectMany(region => region.Circuits).FirstOrDefault(circuit => circuit.Id == regionalCircuitId);
 
-    private string? RegionalPreparationLock(OpponentDto opponent)
+    private string? RegionalPreparationLock(OpponentDto opponent, string? circuitId)
     {
         var clears = RegionalLeaguePresentation.Clears(trainer!);
         if (opponent.RegionId is null) return PvePresentation.LockReason(opponent, clears, opponents);
-        var circuit = regionalLeagues.SelectMany(region => region.Circuits).FirstOrDefault(circuit => circuit.Id == pveSetupCircuitId);
+        var circuit = regionalLeagues.SelectMany(region => region.Circuits).FirstOrDefault(circuit => circuit.Id == circuitId);
         var region = regionalLeagues.FirstOrDefault(region => region.Id == opponent.RegionId);
         if (circuit is null || region is null || circuit.RegionId != region.Id) return "Choose a valid regional League lineup.";
         if (opponent.RegionalRole == "gym")
             return RegionalLeaguePresentation.GymLock(region, circuit, opponent, clears, opponent.RematchOf is not null, regionalLeagues, opponents);
+        if (!circuit.OpponentIds.Contains(opponent.RematchOf ?? opponent.Id)) return "Choose this trainer's League lineup.";
         return RegionalLeaguePresentation.CircuitLock(region, circuit, clears, regionalLeagues, opponents)
             ?? PvePresentation.LockReason(opponent, clears, opponents);
     }

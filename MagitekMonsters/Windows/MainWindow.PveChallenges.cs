@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using MagitekMonsters.Models;
 using MagitekMonsters.Services;
 
 namespace MagitekMonsters.Windows;
@@ -24,6 +26,41 @@ public sealed partial class MainWindow
     private int pveChallengeIndex;
     private int pveTypeIndex;
     private readonly HashSet<string> pveTeamIds = [];
+
+    private OpponentDto? RematchOpponent(BattleSnapshotDto current) =>
+        current is { Kind: "trainer", Status: "won" or "lost" or "draw", LeagueId: null, FrontierId: null, Raid: null }
+        && current.Result?.CaptureAvailable != true
+            ? opponents.FirstOrDefault(opponent => opponent.Id == current.OpponentId)
+            : null;
+
+    private string? TrainerRematchRestriction(BattleSnapshotDto current)
+    {
+        if (resultTrainerBattle != current.Id || trainer is not { } profile) return "Updating your party...";
+        if (CollectionLocked) return "Finish your current activity before rematching.";
+        if (current.PartyVitals.Count == 0 || current.PartyVitals.Any(vital => !profile.Party.Any(pokemon => pokemon.Id == vital.PokemonId)))
+            return "Return to the challenger list to choose a new team.";
+        return profile.Party.Any(pokemon => pokemon.Vitals?.Hp != 0 && current.PartyVitals.Any(vital => vital.PokemonId == pokemon.Id))
+            ? null : "Heal your party before rematching.";
+    }
+
+    private async Task RematchTrainer(BattleSnapshotDto current, OpponentDto opponent)
+    {
+        string? circuitId = null;
+        if (opponent.RegionId is not null)
+        {
+            circuitId = pveSetupOpponentId == opponent.Id && RegionalPreparationLock(opponent, pveSetupCircuitId) is null
+                ? pveSetupCircuitId
+                : regionalLeagues.SelectMany(region => region.Circuits)
+                    .FirstOrDefault(circuit => circuit.RegionId == opponent.RegionId && RegionalPreparationLock(opponent, circuit.Id) is null)?.Id;
+            if (circuitId is null)
+            {
+                SetStatus("Return to the challenger list to choose this trainer's League lineup.", true);
+                return;
+            }
+        }
+        await StartBattle(opponent.Id, current.Rules?.Challenge ?? "standard", current.Rules?.Monotype,
+            current.PartyVitals.Select(vital => vital.PokemonId).ToArray(), circuitId);
+    }
 
     private void OpenPveChallenge(string opponentId, string? circuitId = null)
     {
@@ -91,7 +128,7 @@ public sealed partial class MainWindow
             ImGui.TextColored(PokemonYellow, "MEDAL ALREADY EARNED. You can still challenge again.");
         ImGui.EndChild();
         ImGui.Separator();
-        var access = RegionalPreparationLock(opponent);
+        var access = RegionalPreparationLock(opponent, pveSetupCircuitId);
         ImGui.BeginDisabled(busy || CollectionLocked || invalid is not null || access is not null);
         if (DrawAccentButton("Start battle", new Vector2(190, 34) * scale, PokemonRed))
         {

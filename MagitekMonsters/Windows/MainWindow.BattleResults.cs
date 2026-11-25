@@ -51,7 +51,11 @@ public sealed partial class MainWindow
         ImGui.Spacing();
         DrawBattleResultRewards(current);
         ImGui.Spacing();
-        var footerRows = width < 290 * scale + ImGui.GetStyle().ItemSpacing.X ? 2 : 1;
+        var rematch = RematchOpponent(current);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var footerInline = width >= (rematch is null ? 290 : 400) * scale + spacing * (rematch is null ? 1 : 2);
+        var partyActionsInline = rematch is not null && width >= 210 * scale + spacing;
+        var footerRows = footerInline ? 1 : rematch is null || partyActionsInline ? 2 : 3;
         var footerHeight = footerRows * (31 * scale + ImGui.GetStyle().ItemSpacing.Y) + ImGui.GetTextLineHeightWithSpacing() + 20 * scale;
         var maximumBodyHeight = Math.Max(1, ImGui.GetContentRegionAvail().Y - footerHeight);
         var bodyHeight = Math.Min(maximumBodyHeight, resultBodyContentHeight > 0 ? resultBodyContentHeight : maximumBodyHeight);
@@ -86,7 +90,7 @@ public sealed partial class MainWindow
         if (bodyVisible) resultBodyContentHeight = Math.Max(1, ImGui.GetCursorPosY() + 4 * scale);
         ImGui.EndChild();
         ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
-        DrawBattleResultFooter(current);
+        DrawBattleResultFooter(current, rematch, footerInline, partyActionsInline);
         DrawBattleResultMovePopup();
         DrawBattleResultEvolutionPopup();
         DrawPokemonManagement();
@@ -254,7 +258,7 @@ public sealed partial class MainWindow
             ImGui.TextWrapped(current.Status == "lost" ? "Your progress is saved. Rest your party before trying again." : "Party progress saved. Ready for your next challenge.");
     }
 
-    private void DrawBattleResultFooter(BattleSnapshotDto current)
+    private void DrawBattleResultFooter(BattleSnapshotDto current, OpponentDto? rematch, bool footerInline, bool partyActionsInline)
     {
         var label = IsEventBattle(current) ? "Return to Events" : current.Kind == "wild" ? "Continue adventuring" : current.FrontierId is not null ? "Return to Frontier" : current.LeagueId is not null ? "Return to League" : "Return to challengers";
         var scale = CompanionScale;
@@ -262,9 +266,20 @@ public sealed partial class MainWindow
         var width = ImGui.GetContentRegionAvail().X;
         if (DrawAccentButton(label, new Vector2(Math.Min(width, 190 * scale), 31 * scale), CompanionAccent)) Run(ReturnFromBattle, "Returning from battle...");
         ImGui.EndDisabled();
-        if (width >= 290 * scale + ImGui.GetStyle().ItemSpacing.X) ImGui.SameLine();
+        if (footerInline) ImGui.SameLine();
+        if (rematch is not null)
+        {
+            var restriction = TrainerRematchRestriction(current);
+            ImGui.BeginDisabled(restriction is not null);
+            if (DrawAccentButton("Rematch", new Vector2(Math.Min(width, 110 * scale), 31 * scale), PokemonGreen))
+                Run(() => RematchTrainer(current, rematch), $"Challenging {rematch.Name} again...");
+            ImGui.EndDisabled();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(restriction ?? "Fight this trainer again with the same Pokémon and challenge rules.");
+            if (partyActionsInline) ImGui.SameLine();
+        }
         ImGui.BeginDisabled(resultTrainerBattle != current.Id || CollectionLocked || trainer?.Party.Any(NeedsRest) != true);
-        if (DrawAccentButton("Heal party", new Vector2(100, 31) * scale, CenterAccent)) Run(HealPartyAtCenter, "Healing your party at the Pokémon Center...");
+        if (DrawAccentButton("Heal party", new Vector2(Math.Min(width, 100 * scale), 31 * scale), CenterAccent)) Run(HealPartyAtCenter, "Healing your party at the Pokémon Center...");
         ImGui.EndDisabled();
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Pokémon Center: free healing, revival and PP recovery outside battles, capture opportunities, runs and matchmaking.");
         DrawClippedText(current.FrontierId is not null ? "Frontier health is separate from your party." : current.LeagueId is not null && LeagueBusy ? "League HP, PP and status carry over." : "Heal here or visit the Pokémon Center in Party. Healing is free.", ImGui.GetContentRegionAvail().X, CompanionMuted);
