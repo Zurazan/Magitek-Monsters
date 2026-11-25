@@ -10,6 +10,7 @@ namespace MagitekMonsters.Windows;
 
 public sealed partial class MainWindow
 {
+    private const int IdlePvpPollSeconds = 15;
     private readonly RefreshState refreshState = new();
     private readonly ConcurrentQueue<Action> backgroundResults = new();
     private CancellationTokenSource? backgroundCancellation;
@@ -153,6 +154,13 @@ public sealed partial class MainWindow
         }, () => { if (battle?.Id == id && battle.Revision == revision) refreshState.Battle(id, null); });
     }
 
+    private bool ShouldRefreshPvp(DateTimeOffset now) =>
+        serverPvpRefreshRequested || pvpStatus is { } status && now >= nextPvpPollAt
+        && (status.State == "queued" || status.Challenges.Count > 0
+            || status.State == "idle" && IsOpen && mainSection == 4
+            || status.Battle is { Status: "active" } match
+                && (plugin.Connection.CanInvoke || match.Request is null || match.Request.Wait == true));
+
     private void BackgroundPvp()
     {
         RunBackground(async token =>
@@ -164,7 +172,8 @@ public sealed partial class MainWindow
                 pvpStatus = next;
                 ObserveRecentBattle(next.Battle, true);
                 if (trainer is not null) trainer.PvpProfile = next.Profile;
-                nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(plugin.Connection.CanInvoke ? 10 : next.State == "queued" ? 2 : 1);
+                nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(next.State == "idle" && next.Challenges.Count == 0 ? IdlePvpPollSeconds
+                    : plugin.Connection.CanInvoke ? 10 : next.State == "queued" ? 2 : 1);
             };
         }, () => serverPvpRefreshRequested = true);
     }

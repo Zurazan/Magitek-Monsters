@@ -340,10 +340,7 @@ public sealed partial class MainWindow : Window, IDisposable
             else if (battle is { Status: "active" } current && (refreshState.TakeBattle(current.Id)
                 || (plugin.Connection.CanInvoke || current.Request is null || current.Request.Wait == true) && DateTimeOffset.UtcNow >= nextBattlePollAt))
                 BackgroundBattle();
-            else if (serverPvpRefreshRequested || pvpStatus is not null
-                && (pvpStatus.State == "queued" || pvpStatus.Challenges.Count > 0
-                    || pvpStatus.Battle is { Status: "active" } match && (plugin.Connection.CanInvoke || match.Request is null || match.Request.Wait == true))
-                && DateTimeOffset.UtcNow >= nextPvpPollAt)
+            else if (ShouldRefreshPvp(DateTimeOffset.UtcNow))
             {
                 serverPvpRefreshRequested = false;
                 BackgroundPvp();
@@ -487,7 +484,10 @@ public sealed partial class MainWindow : Window, IDisposable
         ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, new Vector2(0.06f, 0.5f));
         var itemWidth = Math.Max(1f, ImGui.GetContentRegionAvail().X);
         if (ImGui.Button($"{label}##MainSection{section}", new Vector2(itemWidth, height)))
+        {
+            if (!selected && section == 4 && pvpStatus is not null) serverPvpRefreshRequested = true;
             mainSection = section;
+        }
         ImGui.PopStyleVar();
         ImGui.PopStyleColor(3);
 
@@ -1237,7 +1237,8 @@ public sealed partial class MainWindow : Window, IDisposable
         ObserveRecentBattle(pvpStatus.Battle, true);
         if (trainer is not null)
             trainer.PvpProfile = pvpStatus.Profile;
-        nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(pvpStatus.State == "queued" ? 2 : 1);
+        nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(pvpStatus.State == "idle" && pvpStatus.Challenges.Count == 0 ? IdlePvpPollSeconds
+            : pvpStatus.State == "queued" ? 2 : 1);
         if (pvpStatus.State == "battle" && pvpStatus.Battle?.Status != "active")
             SetStatus($"PvP match ended: {pvpStatus.Battle?.Status ?? "complete"}.");
         else if (pvpStatus.State == "battle" && pvpStatus.Battle?.Request is not null && pvpStatus.Battle.Request.Wait != true)
