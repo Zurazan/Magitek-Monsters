@@ -16,8 +16,6 @@ public sealed partial class MainWindow
     private Dictionary<int, List<PokemonDto>> storageBoxContents = [];
     private bool storageScrollToTop;
     private bool storageShowEmptyBoxes;
-    private bool requestStorageSummary;
-    private string storageSummaryPokemon = string.Empty;
 
     private void DrawStorageBrowser()
     {
@@ -51,9 +49,7 @@ public sealed partial class MainWindow
             if (layout.SideBySide) ImGui.SameLine(0, 10 * CompanionScale); else ImGui.Spacing();
             DrawStorageInspector(layout.DetailWidth, Math.Max(height, 480 * CompanionScale));
         }
-        DrawStorageSummary();
         DrawReleaseConfirmation();
-        DrawPokemonManagement();
         DrawStorageReleasePopup();
         DrawStorageComparison();
         DrawStorageSearchPopups();
@@ -261,6 +257,8 @@ public sealed partial class MainWindow
         var (moves, evolutions) = GetPokemonAlerts(pokemon.Id);
         if (moves > 0) ImGui.TextColored(PokemonYellow, moves == 1 ? "New move available" : $"{moves} new moves available");
         if (evolutions > 0) ImGui.TextColored(PokemonYellow, "Evolution ready");
+        if ((moves > 0 || evolutions > 0) && CollectionEditRestriction is { } reason)
+            ImGui.TextColored(PokemonRed, reason);
         if (pokemon.TradeLockId is not null) ImGui.TextColored(PokemonOrange, "Reserved for trading / Open Trading to cancel or withdraw.");
         if (pokemon.FusionHostId.Length > 0) ImGui.TextWrapped("Fusion partner / Unfuse the host to manage this Pokémon.");
         ImGui.EndTooltip();
@@ -434,7 +432,7 @@ public sealed partial class MainWindow
             if (clicked)
             {
                 selectedStoragePokemon = pokemon.Id;
-                if (storageBox == 0) { storageSummaryPokemon = pokemon.Id; requestStorageSummary = true; }
+                if (storageBox == 0) OpenPokemonSummary(pokemon.Id);
             }
         }
         else
@@ -467,6 +465,7 @@ public sealed partial class MainWindow
                     Run(() => UpdateCollection(plugin.Api.EditPokemon(pokemon.Id, favorite: !pokemon.Favorite), "Favourite updated."), "Updating favourite...");
                 ImGui.EndDisabled();
                 if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(pokemon.Favorite ? "Unmark favourite" : "Mark favourite");
+                DrawCollectionEditNotice();
                 var portrait = Math.Min(100 * scale, ImGui.GetContentRegionAvail().X);
                 ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0, (ImGui.GetContentRegionAvail().X - portrait) / 2));
                 DrawPokemonImage(pokemon.Appearance, pokemon.Shiny, new Vector2(portrait));
@@ -492,7 +491,7 @@ public sealed partial class MainWindow
                     DrawStorageMovePicker("##StorageMove", [pokemon]);
                 }
                 if (DrawAccentButton("Summary & moves", new Vector2(-1, 28 * scale), CompanionAccent))
-                { storageSummaryPokemon = pokemon.Id; requestStorageSummary = true; }
+                    OpenPokemonSummary(pokemon.Id);
                 DrawStoragePokemonActions(pokemon);
                 if (pokemon.FusionHostId.Length > 0) ImGui.TextWrapped("Fusion partner / Unfuse the host to manage this Pokémon.");
                 if (pokemon.TradeLockId is not null)
@@ -500,7 +499,6 @@ public sealed partial class MainWindow
                     ImGui.TextColored(PokemonOrange, "Reserved for trading");
                     if (DrawAccentSmallButton("Open Trading", CompanionAccent)) mainSection = 16;
                 }
-                if (CollectionLocked) ImGui.TextWrapped("Finish your battle, run or matchmaking before editing Pokémon.");
                 ImGui.PopID();
             }
         }
@@ -545,18 +543,4 @@ public sealed partial class MainWindow
         ImGui.EndDisabled();
     }
 
-    private void DrawStorageSummary()
-    {
-        if (requestStorageSummary) { ImGui.OpenPopup("PC Pokémon summary"); requestStorageSummary = false; }
-        var scale = CompanionScale;
-        var work = ImGui.GetMainViewport().WorkSize;
-        ImGui.SetNextWindowSize(new Vector2(Math.Min(560 * scale, work.X * 0.92f), Math.Min(640 * scale, work.Y * 0.88f)), ImGuiCond.Appearing);
-        var open = true;
-        if (!BeginCenteredModal("PC Pokémon summary", ref open, ImGuiWindowFlags.None)) return;
-        var pokemon = trainer?.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == storageSummaryPokemon);
-        if (pokemon is null) ImGui.CloseCurrentPopup();
-        else DrawCompanionPokemonInspector(pokemon);
-        if (ImGui.Button("Close")) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
-    }
 }

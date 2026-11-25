@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window, IDisposable
         get => trainerState;
         set
         {
-            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetTrading(); ResetFriends(); ResetBrowseCaches(); ResetSanctuaries(); }
+            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetTrading(); ResetFriends(); ResetBrowseCaches(); ResetSanctuaries(); ResetPokemonSummary(); }
             ObserveTrainerActivity(trainerState, value);
             navigationAlertTrainer = null;
             trainerState = value;
@@ -467,6 +467,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         ImGui.EndChild();
         ImGui.PopStyleVar();
+        DrawPokemonSummary();
         DrawUidChoicePrompt();
         DrawFriendPicker();
     }
@@ -759,18 +760,18 @@ public sealed partial class MainWindow : Window, IDisposable
     }
 
 
-    private void DrawMoveRelearner(PokemonDto pokemon)
+    private void DrawMoveRelearner(PokemonDto pokemon, bool expanded = false)
     {
-        if (!ImGui.TreeNode($"Move Relearner  ({pokemon.RelearnableMoves.Count})##Relearn{pokemon.Id}"))
+        if (!expanded && !ImGui.TreeNode($"Move Relearner  ({pokemon.RelearnableMoves.Count})##Relearn{pokemon.Id}"))
             return;
         if (pokemon.RelearnableMoves.Count == 0)
         {
-            ImGui.TextDisabled("No earlier level-up moves are currently available.");
-            ImGui.TreePop();
+            ImGui.TextWrapped("No earlier level-up moves are currently available.");
+            if (!expanded) ImGui.TreePop();
             return;
         }
 
-        ImGui.TextDisabled("Relearn any level-up move this Pokémon has already unlocked.");
+        ImGui.TextWrapped("Relearn any level-up move this Pokémon has already unlocked.");
         foreach (var move in pokemon.RelearnableMoves)
         {
             if (pokemon.Moves.Count < 4)
@@ -783,64 +784,27 @@ public sealed partial class MainWindow : Window, IDisposable
             if (!ImGui.TreeNode($"Relearn {move}##ChooseForgotten{pokemon.Id}{move}"))
                 continue;
             ImGui.TextDisabled("Choose the move to forget:");
-            foreach (var knownMove in pokemon.Moves)
+            var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+            for (var index = 0; index < pokemon.Moves.Count; index++)
             {
+                var knownMove = pokemon.Moves[index];
+                if (index > 0) SameLineIfFits(knownMove, right);
                 if (DrawAccentSmallButton($"{knownMove}##RelearnForget{pokemon.Id}{move}{knownMove}", PokemonOrange))
                     Run(() => RelearnMove(pokemon.Id, move, knownMove), $"Relearning {move}...");
-                ImGui.SameLine();
             }
-            ImGui.NewLine();
             ImGui.TreePop();
         }
-        ImGui.TreePop();
-    }
-
-    private void DrawHeldItemManagement(PokemonDto pokemon)
-    {
-        ImGui.Spacing();
-        ImGui.TextColored(new Vector4(0.65f, 0.85f, 1f, 1f), "HELD ITEM");
-        if (string.IsNullOrWhiteSpace(pokemon.HeldItem))
-        {
-            ImGui.TextDisabled("None - held items take effect when the next battle starts.");
-        }
-        else
-        {
-            var held = itemCatalog.FirstOrDefault(item => item.Id == pokemon.HeldItem);
-            DrawItemImage(pokemon.HeldItem, new Vector2(34, 34));
-            ImGui.SameLine();
-            ImGui.BeginGroup();
-            ImGui.Text(held?.Name ?? pokemon.HeldItem);
-            if (DrawAccentSmallButton($"Take item##Unequip{pokemon.Id}", PokemonOrange))
-                Run(() => SetHeldItem(pokemon.Id, null), $"Taking {held?.Name ?? pokemon.HeldItem} from {pokemon.Nickname}...");
-            ImGui.EndGroup();
-        }
-
-        DrawMegaEvolutionGuide(pokemon);
-        if (!ImGui.TreeNode($"Choose from bag##HeldItemBag{pokemon.Id}"))
-            return;
-        var available = GetHeldItems();
-        if (available.Count == 0)
-        {
-            ImGui.TextDisabled("No held items are currently in your bag.");
-        }
-        else
-        {
-            foreach (var item in available)
-            {
-                DrawItemImage(item.Id, new Vector2(30, 30));
-                ImGui.SameLine();
-                if (DrawAccentButton($"Give {item.Name}  ×{InventoryCount(item.Id)}##Equip{pokemon.Id}{item.Id}", Vector2.Zero, PokemonGreen))
-                    Run(() => SetHeldItem(pokemon.Id, item.Id), $"Giving {item.Name} to {pokemon.Nickname}...");
-            }
-        }
-        ImGui.TreePop();
+        if (!expanded) ImGui.TreePop();
     }
 
     private void DrawRareCandyTraining(PokemonDto pokemon)
     {
         var rareCandies = InventoryCount("rarecandy");
         if (rareCandies <= 0)
+        {
+            ImGui.TextDisabled("No Rare Candy in your Bag.");
             return;
+        }
 
         ImGui.Spacing();
         if (pokemon.Level >= 100)
@@ -851,42 +815,6 @@ public sealed partial class MainWindow : Window, IDisposable
         if (DrawAccentButton($"Use Rare Candy  ×{rareCandies}##RareCandy{pokemon.Id}", Vector2.Zero, PokemonBlue))
             Run(() => UseRareCandy(pokemon.Id), $"Raising {pokemon.Nickname} to level {pokemon.Level + 1}...");
         ImGui.TextDisabled($"Lv. {pokemon.Level} → {pokemon.Level + 1}");
-    }
-
-    private void DrawIvTraining(PokemonDto pokemon)
-    {
-        if (!ImGui.TreeNode($"IVs & Hyper Training##{pokemon.Id}"))
-            return;
-
-        var stats = new (string Label, string Id)[]
-        {
-            ("HP", "hp"), ("Atk", "atk"), ("Def", "def"), ("SpA", "spa"), ("SpD", "spd"), ("Spe", "spe")
-        };
-        ImGui.TextWrapped(string.Join("   ", stats.Select(stat => $"{stat.Label} {pokemon.Ivs.GetValueOrDefault(stat.Id)}")));
-
-        var bottleCaps = InventoryCount("bottlecap");
-        if (bottleCaps > 0)
-        {
-            ImGui.TextDisabled($"Bottle Caps: {bottleCaps} - choose one imperfect IV");
-            if (ImGui.BeginTable($"HyperTrainingStats{pokemon.Id}", 3, ImGuiTableFlags.SizingStretchSame))
-            {
-                foreach (var stat in stats.Where(stat => pokemon.Ivs.GetValueOrDefault(stat.Id) < 31))
-                {
-                    ImGui.TableNextColumn();
-                    if (DrawAccentButton($"Max {stat.Label}##Train{pokemon.Id}{stat.Id}", new Vector2(-1, 28 * CompanionScale), CompanionAccent))
-                        Run(() => UseTrainingItem(pokemon.Id, "bottlecap", stat.Id), $"Hyper Training {pokemon.Nickname}'s {stat.Label} IV...");
-                }
-                ImGui.EndTable();
-            }
-        }
-
-        var goldCaps = InventoryCount("goldbottlecap");
-        if (goldCaps > 0 && pokemon.Ivs.Values.Any(value => value < 31))
-        {
-            if (DrawAccentButton($"Use Gold Bottle Cap ({goldCaps})##GoldTrain{pokemon.Id}", Vector2.Zero, PokemonGreen))
-                Run(() => UseTrainingItem(pokemon.Id, "goldbottlecap", null), $"Perfecting {pokemon.Nickname}'s IVs...");
-        }
-        ImGui.TreePop();
     }
 
     private void DrawPokemonImage(string species, bool shiny, Vector2 size)
@@ -1420,9 +1348,6 @@ public sealed partial class MainWindow : Window, IDisposable
         requestRelease = false;
         pendingPurchase = null;
         requestPurchase = false;
-        managePokemonId = null;
-        requestPokemonManagement = false;
-        requestedManagementTab = null;
         savedTeamEdit = null;
         savedTeamEditName = string.Empty;
         savedTeamLibraryOwner = string.Empty;

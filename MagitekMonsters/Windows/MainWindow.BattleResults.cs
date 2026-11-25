@@ -93,7 +93,6 @@ public sealed partial class MainWindow
         DrawBattleResultFooter(current, rematch, footerInline, partyActionsInline);
         DrawBattleResultMovePopup();
         DrawBattleResultEvolutionPopup();
-        DrawPokemonManagement();
         DrawBattleConsolePopups(current);
     }
 
@@ -196,8 +195,8 @@ public sealed partial class MainWindow
             ImGui.TextWrapped($"{(capture.Shiny ? "★ " : "")}{capture.Name} / Lv. {capture.Level}");
             ImGui.TextWrapped(capture.InParty ? "Added to your party." : "Added to PC Storage.");
             ImGui.BeginDisabled(busy || !synchronized);
-            if (DrawAccentButton("Manage Pokémon", new Vector2(-1, 29 * CompanionScale), CompanionAccent))
-            { managePokemonId = capture.PokemonId; requestedManagementTab = "Training"; requestPokemonManagement = true; }
+            if (DrawAccentButton("Pokémon summary", new Vector2(-1, 29 * CompanionScale), CompanionAccent))
+                OpenPokemonSummary(capture.PokemonId);
             ImGui.EndDisabled(); ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
         }
         foreach (var badge in result.Badges) { ImGui.TextColored(PokemonYellow, "BADGE EARNED"); ImGui.TextWrapped(badge); ImGui.Spacing(); }

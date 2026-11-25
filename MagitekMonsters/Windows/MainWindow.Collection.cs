@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
@@ -25,9 +26,41 @@ public sealed partial class MainWindow
     private BattleHelpDto? battleHelp;
     private readonly ConcurrentDictionary<string, MoveDetailsDto> battleMoveHelp = new(StringComparer.OrdinalIgnoreCase);
 
-    private bool CollectionLocked => busy || trainer?.ActiveEncounter is not null || battle?.Status == "active"
-        || LeagueBusy || FrontierBusy || trainer?.RaidLocked == true || raidRoom?.Status is "lobby" or "active" || trainer?.ActiveTrainerBattle?.Status == "active"
-        || pvpStatus?.State == "queued" || pvpStatus?.Battle?.Status == "active" || HasOutgoingInvitation;
+    private bool CollectionLocked => busy || CollectionEditRestriction is not null;
+    private string? CollectionEditRestriction
+    {
+        get
+        {
+            if (battle?.Status == "active" || trainer?.ActiveTrainerBattle?.Status == "active" || pvpStatus?.Battle?.Status == "active")
+                return "Finish the active battle to evolve Pokémon or change moves.";
+            if (trainer?.ActiveEncounter is not null) return "Finish or flee your wild encounter before editing Pokémon.";
+            if (LeagueBusy) return "Finish or end your League run before editing Pokémon.";
+            if (FrontierBusy) return "Finish or end your Frontier run before editing Pokémon.";
+            if (trainer?.RaidLocked == true || raidRoom?.Status is "lobby" or "active") return "Finish the raid or leave its lobby before editing Pokémon.";
+            if (pvpStatus?.State == "queued") return "Leave matchmaking before editing Pokémon.";
+            if (HasOutgoingInvitation) return "Cancel your outgoing battle invitation before editing Pokémon.";
+            return null;
+        }
+    }
+
+    private void DrawCollectionEditNotice()
+    {
+        if (CollectionEditRestriction is not { } reason) return;
+        ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(8, 6) * CompanionScale);
+        if (ImGui.BeginTable("CollectionEditNotice", 1, ImGuiTableFlags.SizingStretchSame))
+        {
+            ImGui.TableNextColumn();
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.22f, 0.13f, 0.15f, 1)));
+            ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.66f, 0.69f, 1));
+            ImGui.TextWrapped("Pokémon editing locked");
+            ImGui.TextWrapped(reason);
+            ImGui.PopStyleColor();
+            ImGui.EndTable();
+        }
+        ImGui.PopStyleVar();
+        ImGui.Spacing();
+    }
+
     private bool HasOutgoingInvitation => pvpStatus?.Challenges.Any(entry => entry.FromUserId == trainer?.User.Id) == true;
     private string BoxLabel(int number) => trainer?.Collection.BoxNames.TryGetValue(number.ToString(), out var name) == true
         ? $"Box {number}: {name}" : $"Box {number}";

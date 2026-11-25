@@ -45,7 +45,6 @@ public sealed partial class MainWindow
             storageFavorites = storageShiny = storageDuplicatesOnly = false;
             selectedStoragePokemon = null;
             storageScrollToTop = true; storageShowEmptyBoxes = false;
-            requestStorageSummary = false; storageSummaryPokemon = string.Empty;
         }
         if (ReferenceEquals(storageIndexedTrainer, trainer)) return;
         var started = System.Diagnostics.Stopwatch.GetTimestamp();

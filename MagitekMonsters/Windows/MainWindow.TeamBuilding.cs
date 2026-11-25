@@ -66,62 +66,58 @@ public sealed partial class MainWindow
 
     private void DrawTeamBuildingSummary(PokemonDto pokemon)
     {
-        if (pokemon.TradeLockId is not null) { ImGui.TextWrapped("This Pokémon is reserved for trading. Review its details in Trading."); return; }
+        if (!ImGui.TreeNode("Detailed stats")) return;
         var build = GetPokemonBuild(pokemon);
         if (build is null)
         {
-            ImGui.TextDisabled("Loading stats, abilities and compatible moves...");
+            ImGui.TextWrapped(pokemon.TradeLockId is null ? "Loading stats and abilities..." : "Stats unavailable while reserved for trading.");
+            ImGui.TreePop();
             return;
         }
-        if (ImGui.TreeNode($"Stats & build summary##Summary{pokemon.Id}"))
+        ImGui.TextColored(PokemonBlue, string.Join(" / ", build.Types));
+        ImGui.TextColored(TypeColor(build.TeraType), $"Tera type: {build.TeraType}");
+        ImGui.TextUnformatted($"Nature effects: {build.EffectiveNature}");
+        ImGui.TextWrapped(build.NatureEffect);
+        if (!string.IsNullOrWhiteSpace(pokemon.MintNature))
+            ImGui.TextWrapped($"Original nature: {pokemon.Nature}. Mint effects remain through evolution.");
+        ImGui.TextWrapped($"Ability: {pokemon.Ability}");
+        ImGui.TextWrapped(build.AbilityDescription);
+        if (ImGui.BeginTable($"BuildStats{pokemon.Id}", 5, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchSame))
         {
-            ImGui.TextColored(PokemonBlue, string.Join(" / ", build.Types));
-            ImGui.TextColored(TypeColor(build.TeraType), $"Tera type: {build.TeraType}");
-            ImGui.Text($"Nature effects: {build.EffectiveNature}");
-            ImGui.TextDisabled(build.NatureEffect);
-            if (!string.IsNullOrWhiteSpace(pokemon.MintNature))
-                ImGui.TextDisabled($"Original nature: {pokemon.Nature}. Mint effects remain through evolution.");
-            ImGui.Text($"Ability: {pokemon.Ability}");
-            ImGui.TextWrapped(build.AbilityDescription);
-            if (ImGui.BeginTable($"BuildStats{pokemon.Id}", 5, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchSame))
+            ImGui.TableSetupColumn("Stat");
+            ImGui.TableSetupColumn($"Lv. {pokemon.Level}");
+            ImGui.TableSetupColumn("Lv. 50");
+            ImGui.TableSetupColumn("IV / 31");
+            ImGui.TableSetupColumn("EV / 252");
+            ImGui.TableHeadersRow();
+            foreach (var stat in BuildStats)
             {
-                ImGui.TableSetupColumn("Stat");
-                ImGui.TableSetupColumn($"Lv. {pokemon.Level}");
-                ImGui.TableSetupColumn("Lv. 50");
-                ImGui.TableSetupColumn("IV / 31");
-                ImGui.TableSetupColumn("EV / 252");
-                ImGui.TableHeadersRow();
-                foreach (var stat in BuildStats)
-                {
-                    ImGui.TableNextRow();
-                    ImGui.TableNextColumn();
-                    ImGui.Text(stat.Label);
-                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(stat.Description);
-                    ImGui.TableNextColumn(); ImGui.Text(build.Stats.GetValueOrDefault(stat.Id).ToString());
-                    ImGui.TableNextColumn(); ImGui.Text(build.Level50Stats.GetValueOrDefault(stat.Id).ToString());
-                    ImGui.TableNextColumn(); ImGui.Text(pokemon.Ivs.GetValueOrDefault(stat.Id).ToString());
-                    ImGui.TableNextColumn(); ImGui.Text(pokemon.Evs.GetValueOrDefault(stat.Id).ToString());
-                }
-                ImGui.EndTable();
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.TextWrapped(stat.Label);
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(stat.Description);
+                ImGui.TableNextColumn(); ImGui.Text(build.Stats.GetValueOrDefault(stat.Id).ToString());
+                ImGui.TableNextColumn(); ImGui.Text(build.Level50Stats.GetValueOrDefault(stat.Id).ToString());
+                ImGui.TableNextColumn(); ImGui.Text(pokemon.Ivs.GetValueOrDefault(stat.Id).ToString());
+                ImGui.TableNextColumn(); ImGui.Text(pokemon.Evs.GetValueOrDefault(stat.Id).ToString());
             }
-            ImGui.TextDisabled("Stats before held-item and battle effects. PvP level depends on the format.");
-            ImGui.TextWrapped("IVs are individual values. EVs are training points: every 4 EVs contribute to a stat before level scaling. EV limits are 252 per stat and 510 total.");
-            ImGui.TreePop();
+            ImGui.EndTable();
         }
-
-        ImGui.TextColored(PokemonBlue, "KNOWN MOVES");
-        foreach (var move in build.Moves)
-        {
-            ImGui.TextWrapped($"{move.Name}  |  {move.Type} / {move.Category}  |  Power {move.Power}  |  Accuracy {move.Accuracy?.ToString() ?? "Always"}  |  Base PP {move.Pp}");
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(move.Description);
-        }
+        ImGui.TextWrapped("Stats before held-item and battle effects. PvP level depends on the format.");
+        ImGui.TextWrapped("IVs are individual values. EVs are training points: every 4 EVs contribute to a stat before level scaling. EV limits are 252 per stat and 510 total.");
+        ImGui.TreePop();
     }
 
     private void DrawGigantamaxTraining(PokemonDto pokemon)
     {
-        if (GetPokemonBuild(pokemon)?.CanGigantamax != true) return;
+        var build = GetPokemonBuild(pokemon);
+        if (build?.CanGigantamax != true)
+        {
+            ImGui.TextWrapped(build is null ? "Loading Gigantamax eligibility..." : "This Pokémon cannot Gigantamax.");
+            return;
+        }
         var enabled = pokemon.EvolutionProgress?.Gigantamax == true;
-        if (!ImGui.TreeNode($"Gigantamax Factor: {(enabled ? "Enabled" : "Disabled")}##Gmax{pokemon.Id}")) return;
+        ImGui.TextColored(CompanionAccent, $"Gigantamax Factor: {(enabled ? "Enabled" : "Disabled")}");
         ImGui.TextWrapped("Three Max Mushrooms add or remove this Pokémon's Gigantamax Factor. A Dynamax Band is still required for PvE battles.");
         ImGui.TextDisabled($"Max Mushrooms owned: {InventoryCount("maxmushrooms")} / Three required / ¥35,000 each");
         ImGui.BeginDisabled(InventoryCount("maxmushrooms") < 3);
@@ -135,34 +131,28 @@ public sealed partial class MainWindow
             { ImGui.CloseCurrentPopup(); Run(() => UseTrainingItem(pokemon.Id, "maxmushrooms", null, 3), "Applying Max Mushrooms..."); }
             EndConfirmationModal();
         }
-        ImGui.TreePop();
     }
 
     private void DrawTeraTraining(PokemonDto pokemon)
     {
         var build = GetPokemonBuild(pokemon);
         var current = build?.TeraType ?? pokemon.TeraType;
-        ImGui.PushStyleColor(ImGuiCol.Text, TypeColor(current));
-        var open = ImGui.TreeNode($"Tera type: {current}##Tera{pokemon.Id}");
-        ImGui.PopStyleColor();
-        if (!open) return;
         if (build is null)
         {
             ImGui.TextDisabled("Loading legal Tera types...");
-            ImGui.TreePop();
             return;
         }
         if (build.AllowedTeraTypes.Count <= 1)
         {
             ImGui.TextWrapped($"This Pokémon requires {current} Tera. Its species or held form determines the type; no shard is needed.");
-            ImGui.TreePop();
             return;
         }
         var selected = teraSelections.GetValueOrDefault(pokemon.Id, current);
         if (!build.AllowedTeraTypes.Contains(selected)) selected = current;
         ImGui.TextWrapped("One Tera Shard changes this Pokémon's type for formats that allow Terastallization. It does not change the Pokémon's normal typing.");
-        ImGui.SetNextItemWidth(220);
-        if (ImGui.BeginCombo($"New type##TeraType{pokemon.Id}", selected))
+        ImGui.TextUnformatted("New type");
+        ImGui.SetNextItemWidth(Math.Min(220 * CompanionScale, ImGui.GetContentRegionAvail().X));
+        if (ImGui.BeginCombo($"##TeraType{pokemon.Id}", selected))
         {
             foreach (var type in build.AllowedTeraTypes)
             {
@@ -174,7 +164,8 @@ public sealed partial class MainWindow
         }
         teraSelections[pokemon.Id] = selected;
         ImGui.TextColored(TypeColor(current), $"Current: {current}");
-        ImGui.SameLine(); ImGui.TextColored(TypeColor(selected), $"New: {selected}");
+        SameLineIfFits($"New: {selected}", ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X);
+        ImGui.TextColored(TypeColor(selected), $"New: {selected}");
         ImGui.TextDisabled($"Tera Shards owned: {InventoryCount("terashard")}  |  Mart price: ¥75,000");
         ImGui.BeginDisabled(selected == current || InventoryCount("terashard") < 1);
         if (DrawAccentButton($"Change Tera Type##ChangeTera{pokemon.Id}", Vector2.Zero, TypeColor(selected)))
@@ -195,7 +186,6 @@ public sealed partial class MainWindow
             }
             EndConfirmationModal();
         }
-        ImGui.TreePop();
     }
 
     private void DrawEvTrainingManual(PokemonDto pokemon)
@@ -266,17 +256,15 @@ public sealed partial class MainWindow
 
     private void DrawNatureAndAbilityTraining(PokemonDto pokemon)
     {
-        if (!ImGui.TreeNode($"Nature Mints & abilities##NatureAbility{pokemon.Id}")) return;
         var build = GetPokemonBuild(pokemon);
         if (build is null)
         {
             ImGui.TextDisabled("Waiting for build information.");
-            ImGui.TreePop();
             return;
         }
         ImGui.TextWrapped($"Nature effects: {build.EffectiveNature} ({build.NatureEffect})");
         var mints = trainingItems.Where(item => item.TrainingEffect is { Kind: "mint" } && InventoryCount(item.Id) > 0).ToList();
-        if (mints.Count == 0) ImGui.TextDisabled("Exchange BP for a Nature Mint at the Battle Frontier to change stat effects.");
+        if (mints.Count == 0) ImGui.TextWrapped("Exchange BP for a Nature Mint at the Battle Frontier to change stat effects.");
         foreach (var mint in mints)
         {
             ImGui.BeginDisabled(mint.TrainingEffect!.Nature == build.EffectiveNature || mint.TrainingEffect.Nature == "Serious" && build.NatureEffect == "Neutral stat effects");
@@ -303,17 +291,16 @@ public sealed partial class MainWindow
             Run(() => UseTrainingItem(pokemon.Id, "abilitypatch", null), "Applying Ability Patch...");
         ImGui.EndDisabled();
         ImGui.TextDisabled($"Capsules: {InventoryCount("abilitycapsule")}   |   Patches: {InventoryCount("abilitypatch")}");
-        ImGui.TreePop();
     }
 
-    private void DrawMoveLicenses(PokemonDto pokemon)
+    private void DrawMoveLicenses(PokemonDto pokemon, bool expanded = false)
     {
-        if (!ImGui.TreeNode($"TMs & Move Tutor##Licenses{pokemon.Id}")) return;
+        if (!expanded && !ImGui.TreeNode($"TMs & Move Tutor##Licenses{pokemon.Id}")) return;
         var build = GetPokemonBuild(pokemon);
         if (build is null)
         {
             ImGui.TextDisabled("Waiting for compatible moves.");
-            ImGui.TreePop();
+            if (!expanded) ImGui.TreePop();
             return;
         }
         var search = moveLicenseSearches.GetValueOrDefault(pokemon.Id, string.Empty);
@@ -365,7 +352,7 @@ public sealed partial class MainWindow
             ImGui.TreePop();
         }
         if (items.Count == 0) ImGui.TextDisabled("No compatible unlearned moves match your search.");
-        ImGui.TreePop();
+        if (!expanded) ImGui.TreePop();
     }
 
     private async Task TeachMove(string pokemonId, string itemId, string? forgetMove)

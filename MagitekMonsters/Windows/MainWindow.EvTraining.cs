@@ -175,9 +175,9 @@ public sealed partial class MainWindow
         ImGui.TextWrapped($"Use {command.Plan.Items.Sum(item => item.Quantity)} items from your Bag to train {pokemon.Nickname}?");
         ImGui.TextWrapped("This uses exactly the items shown in the preview.");
         var changed = command.Stamp != EvTrainingStamp(pokemon);
-        var locked = CollectionLocked || pokemon.FusionHostId.Length > 0;
+        var locked = CollectionLocked || pokemon.FusionHostId.Length > 0 || pokemon.TradeLockId is not null;
         if (changed) ImGui.TextColored(PokemonOrange, "Trainer data changed. Go back and preview again.");
-        if (locked) ImGui.TextWrapped("Finish your battle or run before applying training.");
+        if (locked) ImGui.TextWrapped(CollectionEditRestriction ?? "This Pokémon cannot be edited right now.");
         if (DrawConfirmationActions("Confirm training", PokemonGreen, locked || changed, "Go back", () => evTrainingConfirmation = null))
         {
             Run(() => ApplyEvTraining(command), "Applying EV training...");

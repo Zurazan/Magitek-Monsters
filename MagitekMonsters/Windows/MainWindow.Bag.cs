@@ -15,7 +15,6 @@ public sealed partial class MainWindow
     private int bagPage;
     private string? selectedBagItem;
     private string? bagPokemonId;
-    private string? requestedManagementTab;
     private string? requestedShopTab;
     private List<InventoryEntryDto>? bagInventorySource;
     private List<ShopItemDto>? bagCatalogSource;
@@ -75,7 +74,6 @@ public sealed partial class MainWindow
         else DrawBagDetails(selected);
         ImGui.EndChild();
         ImGui.PopStyleColor(); ImGui.PopStyleVar();
-        DrawPokemonManagement();
     }
 
     private bool DrawBagItemRow(BagEntry entry, bool selected)
@@ -192,14 +190,29 @@ public sealed partial class MainWindow
         }
         pokemon = party.FirstOrDefault(pokemon => pokemon.Id == bagPokemonId);
         ImGui.BeginDisabled(CollectionLocked || pokemon is null || pokemon.FusionHostId.Length > 0);
-        var tab = action switch { BagAction.Evolution => "Evolution & forms", BagAction.HeldItem => "Held item", _ => "Training" };
-        if (DrawAccentButton(action == BagAction.Moves ? "Open move licenses" : $"Open {tab.ToLowerInvariant()}", new Vector2(-1, 32 * CompanionScale), CompanionAccent) && pokemon is not null)
+        var (panel, label) = action switch
         {
-            if (action == BagAction.Moves) { selectedPartyPokemon = pokemon.Id; pokemonMovesOpen = true; mainSection = 1; }
-            else { managePokemonId = pokemon.Id; requestedManagementTab = tab; requestPokemonManagement = true; }
+            BagAction.Evolution => (PokemonSummaryPanel.Evolution, "Open evolution & forms"),
+            BagAction.HeldItem => (PokemonSummaryPanel.HeldItem, "Open held item"),
+            BagAction.Moves => (PokemonSummaryPanel.Tutor, "Open move licenses"),
+            _ => (PokemonSummaryPanel.Training, "Open training")
+        };
+        if (DrawAccentButton(label, new Vector2(-1, 32 * CompanionScale), CompanionAccent) && pokemon is not null)
+        {
+            var tool = item.TrainingEffect?.Kind switch
+            {
+                "iv" => PokemonTrainingTool.BottleCap,
+                "ivs" => PokemonTrainingTool.GoldBottleCap,
+                "ev" or "ev-reset" => PokemonTrainingTool.Evs,
+                "mint" or "ability-capsule" or "ability-patch" => PokemonTrainingTool.NatureAndAbility,
+                "tera" => PokemonTrainingTool.Tera,
+                "gigantamax" => PokemonTrainingTool.Gigantamax,
+                _ => PokemonTrainingTool.RareCandy
+            };
+            OpenPokemonSummary(pokemon.Id, panel, tool, action == BagAction.HeldItem ? item.Id : null);
         }
         if (item.CanBeHeld && action != BagAction.HeldItem && DrawAccentButton("Manage held item", new Vector2(-1, 30 * CompanionScale), CompanionAccent) && pokemon is not null)
-        { managePokemonId = pokemon.Id; requestedManagementTab = "Held item"; requestPokemonManagement = true; }
+            OpenPokemonSummary(pokemon.Id, PokemonSummaryPanel.HeldItem, heldItem: item.Id);
         ImGui.EndDisabled();
         if (CollectionLocked) ImGui.TextWrapped("Finish your battle, run or matchmaking before changing Pokémon.");
         if (DrawAccentButton("Open PC Storage", new Vector2(-1, 30 * CompanionScale), CompanionAccent)) mainSection = 2;

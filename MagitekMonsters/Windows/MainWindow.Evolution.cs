@@ -104,10 +104,14 @@ public sealed partial class MainWindow
     {
         if (pokemon.EvolutionProgress is { } progress)
         {
-            ImGui.TextDisabled($"Friendship: {progress.Friendship}/255   |   Party travel: {progress.Travelled:N0} yalms");
+            ImGui.PushStyleColor(ImGuiCol.Text, CompanionMuted);
+            ImGui.TextWrapped($"Friendship: {progress.Friendship}/255   |   Party travel: {progress.Travelled:N0} yalms");
+            ImGui.PopStyleColor();
             if (pokemon.Species == "Gimmighoul")
             {
-                ImGui.TextColored(PokemonYellow, $"Gimmighoul Coins: {progress.Coins}/999   |   Bag: {InventoryCount("gimmighoulcoin")}");
+                ImGui.PushStyleColor(ImGuiCol.Text, PokemonYellow);
+                ImGui.TextWrapped($"Gimmighoul Coins: {progress.Coins}/999   |   Bag: {InventoryCount("gimmighoulcoin")}");
+                ImGui.PopStyleColor();
                 var count = Math.Min(99, Math.Min(999 - progress.Coins, InventoryCount("gimmighoulcoin")));
                 ImGui.BeginDisabled(count <= 0);
                 if (DrawAccentButton($"Feed {count} Gimmighoul Coins##Coins{pokemon.Id}", Vector2.Zero, PokemonYellow))
@@ -115,6 +119,8 @@ public sealed partial class MainWindow
                 ImGui.EndDisabled();
             }
         }
-        ImGui.TextDisabled("EV-reset berries also raise friendship, even with zero EVs.");
+        ImGui.PushStyleColor(ImGuiCol.Text, CompanionMuted);
+        ImGui.TextWrapped("EV-reset berries also raise friendship, even with zero EVs.");
+        ImGui.PopStyleColor();
     }
 }

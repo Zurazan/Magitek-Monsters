@@ -31,7 +31,6 @@ public sealed partial class MainWindow
 
         DrawSavedTeamLibrary(savedTeams);
         DrawReleaseConfirmation();
-        DrawPokemonManagement();
         DrawTeamAnalysis();
     }
 
@@ -224,7 +223,7 @@ public sealed partial class MainWindow
         var right = ImGui.GetCursorScreenPos().X + width;
         var spacing = ImGui.GetStyle().ItemSpacing.X;
         var movesLabel = pending > 0 ? $"Moves ({pending})" : "Moves";
-        var toolsWidth = PartyButtonWidth("Summary") + PartyButtonWidth(movesLabel) + PartyButtonWidth("Manage") + 2 * spacing;
+        var toolsWidth = PartyButtonWidth("Summary") + PartyButtonWidth(movesLabel) + PartyButtonWidth("Full summary") + 2 * spacing;
         ImGui.BeginGroup();
         DrawPokemonIcon(pokemon.Appearance, pokemon.Shiny, new Vector2(44 * scale));
         ImGui.SameLine();
@@ -242,13 +241,8 @@ public sealed partial class MainWindow
         SameLineIfFits(movesLabel, right);
         if (DrawAccentButton(movesLabel + "###PartyMoves", Vector2.Zero,
             pokemonMovesOpen ? CompanionAccent : pending > 0 ? PokemonYellow : CompanionMuted)) pokemonMovesOpen = true;
-        SameLineIfFits("Manage", right);
-        if (DrawAccentButton("Manage", Vector2.Zero, CompanionAccent))
-        {
-            managePokemonId = pokemon.Id;
-            requestedManagementTab = null;
-            requestPokemonManagement = true;
-        }
+        SameLineIfFits("Full summary", right);
+        if (DrawAccentButton("Full summary", Vector2.Zero, CompanionAccent)) OpenPokemonSummary(pokemon.Id);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip("Manage held items, training, evolution, and forms.");
     }
 
