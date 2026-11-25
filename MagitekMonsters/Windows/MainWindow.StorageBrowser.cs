@@ -10,6 +10,7 @@ namespace MagitekMonsters.Windows;
 
 public sealed partial class MainWindow
 {
+    private const float StorageAlertFontScale = 1.4f;
     private static readonly Vector4 StorageGrass = new(0.15f, 0.24f, 0.20f, 1);
     private static readonly Vector4 StorageSlot = new(0.20f, 0.31f, 0.26f, 1);
     private Dictionary<int, List<PokemonDto>> storageBoxContents = [];
@@ -197,10 +198,18 @@ public sealed partial class MainWindow
             var image = Math.Min(Math.Min(size.X, size.Y) - 4 * scale, 68 * scale);
             image = Math.Max(1, image);
             DrawPokemonIconAt(pokemon.Appearance, pokemon.Shiny, min + (size - new Vector2(image)) / 2, new Vector2(image));
-            DrawStorageGenderMark(pokemon, min, size);
+            var genderWidth = DrawStorageGenderMark(pokemon, min, size, scale);
             var marks = (pokemon.Shiny ? "★" : "") + (pokemon.Favorite ? "F" : "") + (pokemon.FusionHostId.Length > 0 ? "L" : "") + (pokemon.TradeLockId is not null ? " T" : "");
-            if (marks.Length > 0) draw.AddText(min + new Vector2(Math.Max(2 * scale, size.X - ImGui.CalcTextSize(marks).X - 3 * scale), 2 * scale), ImGui.GetColorU32(PokemonYellow), marks);
+            if (marks.Length > 0)
+            {
+                var left = Math.Min(size.X, genderWidth + 2 * scale);
+                draw.PushClipRect(min + new Vector2(left, 0), min + size, true);
+                var position = min + new Vector2(size.X - ImGui.CalcTextSize(marks).X - 3 * scale, 2 * scale);
+                draw.AddText(position, ImGui.GetColorU32(PokemonYellow), marks);
+                draw.PopClipRect();
+            }
             if (marked) draw.AddText(min + new Vector2(3 * scale, Math.Max(0, size.Y - ImGui.GetTextLineHeight())), ImGui.GetColorU32(PokemonYellow), "✓");
+            if (GetPokemonAlerts(pokemon.Id) != default) DrawStorageAlertCorner(min, size, scale);
             if (clicked)
             {
                 selectedStoragePokemon = pokemon.Id;
@@ -219,6 +228,25 @@ public sealed partial class MainWindow
         else if (hovered && slot is int number) ImGui.SetTooltip($"Slot {number} / Empty or filtered out");
     }
 
+    private static void DrawStorageAlertCorner(Vector2 origin, Vector2 size, float scale)
+    {
+        var length = Math.Min(26 * scale, Math.Min(size.X, size.Y) * 0.38f);
+        if (length < 6 * scale) return;
+        var corner = origin + size - new Vector2(scale);
+        var radius = Math.Min(3 * scale, length / 3);
+        var draw = ImGui.GetWindowDrawList();
+        draw.PathLineTo(corner - new Vector2(0, length));
+        draw.PathArcTo(corner - new Vector2(radius), radius, 0, MathF.PI / 2);
+        draw.PathLineTo(corner - new Vector2(length, 0));
+        draw.PathFillConvex(ImGui.GetColorU32(PokemonYellow with { W = 0.9f }));
+
+        if (length < 12 * scale) return;
+        var fontSize = Math.Min(ImGui.GetFontSize(), length * 0.56f);
+        var textSize = ImGui.CalcTextSize("!") * (fontSize / ImGui.GetFontSize());
+        var center = corner - new Vector2(length * 0.26f);
+        draw.AddText(ImGui.GetFont(), fontSize, center - textSize / 2, ImGui.GetColorU32(PanelSurface), "!");
+    }
+
     private void DrawStoragePokemonTooltip(PokemonDto pokemon)
     {
         ImGui.BeginTooltip();
@@ -230,17 +258,20 @@ public sealed partial class MainWindow
         if (copies > 1) ImGui.TextColored(CompanionAccent, $"{copies} owned copies");
         if (pokemon.Favorite) ImGui.TextColored(PokemonYellow, "Favourite / Protected from release");
         if (pokemon.Shiny) ImGui.TextColored(PokemonYellow, "Shiny");
+        var (moves, evolutions) = GetPokemonAlerts(pokemon.Id);
+        if (moves > 0) ImGui.TextColored(PokemonYellow, moves == 1 ? "New move available" : $"{moves} new moves available");
+        if (evolutions > 0) ImGui.TextColored(PokemonYellow, "Evolution ready");
         if (pokemon.TradeLockId is not null) ImGui.TextColored(PokemonOrange, "Reserved for trading / Open Trading to cancel or withdraw.");
         if (pokemon.FusionHostId.Length > 0) ImGui.TextWrapped("Fusion partner / Unfuse the host to manage this Pokémon.");
         ImGui.EndTooltip();
     }
 
-    private static void DrawStorageGenderMark(PokemonDto pokemon, Vector2 origin, Vector2 size)
+    private static float DrawStorageGenderMark(PokemonDto pokemon, Vector2 origin, Vector2 size, float scale)
     {
-        if (PokemonGenderMark(pokemon.Gender) is not { } mark) return;
-        var scale = CompanionScale;
+        if (PokemonGenderMark(pokemon.Gender) is not { } mark) return 0;
         var edge = Math.Min(16 * scale, Math.Min(size.X, size.Y) * .4f);
         DrawPokemonGenderMark(mark, origin + new Vector2(2 * scale), edge);
+        return edge + 2 * scale;
     }
 
     private void DrawStorageBoxShortcuts(float width, bool empty)
@@ -269,7 +300,7 @@ public sealed partial class MainWindow
         if (DrawAccentButton(">##NextBoxGroup", new Vector2(28, 24) * scale, CompanionAccent)) OpenStorageBox(last + 1);
         ImGui.EndDisabled();
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(last == StorageBrowser.BoxCount ? "Last box group" : $"Boxes {last + 1}-{last + 10}");
-        var legend = empty ? "No Pokémon match in this box." : "★ Shiny / F Favourite";
+        var legend = empty ? "No Pokémon match in this box." : "★ Shiny / F Favourite / ! Alert";
         StorageSameLine(right, ImGui.CalcTextSize(legend).X);
         DrawClippedText(legend, Math.Max(1, right - ImGui.GetCursorScreenPos().X), CompanionMuted);
     }
@@ -315,10 +346,17 @@ public sealed partial class MainWindow
         draw.AddRectFilled(min, min + size, ImGui.GetColorU32(hovered ? new Vector4(0.20f, 0.25f, 0.33f, 1) : CompanionSurface), 4 * scale);
         if (hovered) draw.AddRect(min, min + size, ImGui.GetColorU32(CompanionAccent), 4 * scale);
         var count = $"{pokemon.Count}/30";
-        draw.PushClipRect(min + new Vector2(7 * scale), min + new Vector2(Math.Max(8 * scale, size.X - ImGui.CalcTextSize(count).X - 16 * scale), ImGui.GetTextLineHeight() + 8 * scale), true);
+        var hasAlerts = false;
+        foreach (var entry in pokemon)
+            if (GetPokemonAlerts(entry.Id) != default) { hasAlerts = true; break; }
+        var countX = size.X - ImGui.CalcTextSize(count).X - 7 * scale;
+        var alertX = hasAlerts ? countX - ImGui.CalcTextSize("!").X * StorageAlertFontScale - 6 * scale : countX;
+        draw.PushClipRect(min + new Vector2(7 * scale), min + new Vector2(Math.Max(8 * scale, alertX - 9 * scale), ImGui.GetTextLineHeight() + 8 * scale), true);
         draw.AddText(min + new Vector2(7 * scale), ImGui.GetColorU32(CompanionAccent), BoxLabel(number));
         draw.PopClipRect();
-        draw.AddText(min + new Vector2(size.X - ImGui.CalcTextSize(count).X - 7 * scale, 7 * scale), ImGui.GetColorU32(CompanionMuted), count);
+        if (hasAlerts)
+            draw.AddText(ImGui.GetFont(), ImGui.GetFontSize() * StorageAlertFontScale, min + new Vector2(alertX, 5 * scale), ImGui.GetColorU32(PokemonYellow), "!");
+        draw.AddText(min + new Vector2(countX, 7 * scale), ImGui.GetColorU32(CompanionMuted), count);
         var slots = StorageBrowser.BoxSlots(pokemon, storageSort == 0);
         var gap = 2 * scale;
         var origin = min + new Vector2(7 * scale, ImGui.GetTextLineHeight() + 14 * scale);
@@ -389,7 +427,7 @@ public sealed partial class MainWindow
             var artHeight = Math.Max(1, size.Y - ImGui.GetTextLineHeight() - 6 * scale);
             var image = Math.Max(1, Math.Min(44 * scale, Math.Min(size.X - 8 * scale, artHeight)));
             DrawPokemonIconAt(pokemon.Appearance, pokemon.Shiny, min + new Vector2((size.X - image) / 2, 2 * scale + (artHeight - image) / 2), new Vector2(image));
-            DrawStorageGenderMark(pokemon, min, size);
+            DrawStorageGenderMark(pokemon, min, size, scale);
             var label = $"Lv. {pokemon.Level}";
             draw.AddText(min + new Vector2(Math.Max(0, (size.X - ImGui.CalcTextSize(label).X) / 2), size.Y - ImGui.GetTextLineHeight() - 2 * scale), ImGui.GetColorU32(CompanionMuted), label);
             if (hovered) DrawStoragePokemonTooltip(pokemon);
