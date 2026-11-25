@@ -240,10 +240,7 @@ public sealed partial class MainWindow
         if (PokemonGenderMark(pokemon.Gender) is not { } mark) return;
         var scale = CompanionScale;
         var edge = Math.Min(16 * scale, Math.Min(size.X, size.Y) * .4f);
-        var position = origin + new Vector2(2 * scale);
-        ImGui.GetWindowDrawList().AddRectFilled(position, position + new Vector2(edge),
-            ImGui.GetColorU32(new Vector4(.07f, .09f, .13f, .92f)), 3 * scale);
-        DrawPokemonGenderMark(mark, position, edge);
+        DrawPokemonGenderMark(mark, origin + new Vector2(2 * scale), edge);
     }
 
     private void DrawStorageBoxShortcuts(float width, bool empty)
