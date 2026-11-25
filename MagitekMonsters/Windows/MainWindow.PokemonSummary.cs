@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Numerics;
+using System.Text;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
 using MagitekMonsters.Services;
@@ -9,7 +10,7 @@ namespace MagitekMonsters.Windows;
 
 public sealed partial class MainWindow
 {
-    private enum PokemonSummaryPanel { None, Evolution, PendingMove, Relearn, Tutor, HeldItem, Training, Collection }
+    private enum PokemonSummaryPanel { None, Evolution, PendingMove, Relearn, Tutor, HeldItem, Training }
 
     private (string PokemonId, PokemonSummaryPanel Panel, PokemonTrainingTool Tool, string? HeldItem)? pokemonSummaryRequest;
     private string? pokemonSummaryId;
@@ -18,6 +19,8 @@ public sealed partial class MainWindow
     private (string Species, string Appearance)? summaryEvolution;
     private (string LearningId, string Move)? summaryReplacement;
     private long pokemonSummaryGeneration;
+    private string? summaryNickname;
+    private bool focusSummaryNickname;
 
     private void OpenPokemonSummary(string pokemonId, PokemonSummaryPanel panel = PokemonSummaryPanel.None,
         PokemonTrainingTool tool = PokemonTrainingTool.RareCandy, string? heldItem = null) =>
@@ -28,6 +31,8 @@ public sealed partial class MainWindow
         pokemonSummaryRequest = null;
         pokemonSummaryId = null;
         pokemonSummaryFocus = PokemonSummaryPanel.None;
+        summaryNickname = null;
+        focusSummaryNickname = false;
         ClosePokemonSummaryPanel();
     }
 
@@ -41,6 +46,8 @@ public sealed partial class MainWindow
             ClosePokemonSummaryPanel();
             pokemonSummaryId = request.PokemonId;
             pokemonSummaryPanel = pokemonSummaryFocus = request.Panel;
+            summaryNickname = null;
+            focusSummaryNickname = false;
             pokemonTrainingTool = request.Tool;
             summaryHeldItem = request.HeldItem;
             pokemonSummaryGeneration = foregroundGeneration;
@@ -61,12 +68,13 @@ public sealed partial class MainWindow
         }
 
         ImGui.PushID(pokemon.Id);
+        var locked = CollectionLocked || pokemon.TradeLockId is not null || pokemon.FusionHostId.Length > 0;
         var appearing = ImGui.IsWindowAppearing();
         var footerHeight = ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.Y * 3 + 1;
         if (ImGui.BeginChild("PokemonSummaryContent", new Vector2(0, -footerHeight)))
         {
             if (appearing) ImGui.SetScrollY(0);
-            DrawPokemonSummaryContent(pokemon);
+            DrawPokemonSummaryContent(pokemon, locked);
             if (foregroundGeneration != pokemonSummaryGeneration && (statusIsError || busy))
             {
                 ImGui.Spacing();
@@ -77,15 +85,20 @@ public sealed partial class MainWindow
         }
         ImGui.EndChild();
         ImGui.Separator();
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
         if (DrawAccentButton("Close", Vector2.Zero, CompanionMuted)) ImGui.CloseCurrentPopup();
+        SameLineIfFits("Copy summary", right);
+        ImGui.BeginDisabled(locked || busy);
+        if (DrawAccentButton("Copy summary", Vector2.Zero, CompanionAccent)) QueueTeamExport([pokemon.Id]);
+        ImGui.EndDisabled();
         ImGui.PopID();
         ImGui.EndPopup();
     }
 
-    private void DrawPokemonSummaryContent(PokemonDto pokemon)
+    private void DrawPokemonSummaryContent(PokemonDto pokemon, bool locked)
     {
         var wide = ImGui.GetContentRegionAvail().X >= 550 * CompanionScale;
-        DrawPokemonSummaryIdentity(pokemon, wide);
+        DrawPokemonSummaryIdentity(pokemon, wide, locked);
         ImGui.Separator();
         DrawCollectionEditNotice();
         if (pokemon.TradeLockId is not null)
@@ -95,7 +108,6 @@ public sealed partial class MainWindow
             var host = trainer!.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == pokemon.FusionHostId);
             ImGui.TextWrapped($"Fusion partner of {host?.Nickname ?? "another Pokémon"}. Unfuse the host to edit this Pokémon.");
         }
-        var locked = CollectionLocked || pokemon.TradeLockId is not null || pokemon.FusionHostId.Length > 0;
         var vital = CompanionVital(pokemon);
         if (wide)
         {
@@ -122,7 +134,7 @@ public sealed partial class MainWindow
         DrawPokemonSummaryManagement(pokemon, locked || busy);
     }
 
-    private void DrawPokemonSummaryIdentity(PokemonDto pokemon, bool wide)
+    private void DrawPokemonSummaryIdentity(PokemonDto pokemon, bool wide, bool locked)
     {
         var scale = CompanionScale;
         var art = Math.Clamp(ImGui.GetContentRegionAvail().X / 4, 1, 68 * scale);
@@ -134,7 +146,7 @@ public sealed partial class MainWindow
         ImGui.TableNextColumn();
         DrawPokemonImage(pokemon.Appearance, pokemon.Shiny, new Vector2(art));
         ImGui.TableNextColumn();
-        DrawGenderedPokemonText(pokemon.Nickname.Length == 0 ? pokemon.DisplaySpecies : pokemon.Nickname, pokemon.Gender, CompanionAccent);
+        DrawPokemonSummaryName(pokemon, locked);
         ImGui.TextWrapped($"{(pokemon.Nickname.Length > 0 && pokemon.Nickname != pokemon.DisplaySpecies ? pokemon.DisplaySpecies + " / " : "")}Lv. {pokemon.Level}");
         if (pokemon.Types.Count > 0)
             DrawStarterTypeBadges(pokemon.Types.ToArray(), Math.Max(1, Math.Min(64 * scale,
@@ -142,6 +154,82 @@ public sealed partial class MainWindow
         if (wide) ImGui.TableNextColumn();
         ImGui.TextColored(CompanionMuted, location);
         ImGui.EndTable();
+    }
+
+    private void DrawPokemonSummaryName(PokemonDto pokemon, bool locked)
+    {
+        var name = pokemon.Nickname.Length > 0 ? pokemon.Nickname : pokemon.DisplaySpecies;
+        var available = ImGui.GetContentRegionAvail().X;
+        var right = ImGui.GetCursorScreenPos().X + available;
+        if (summaryNickname is null)
+        {
+            ImGui.AlignTextToFramePadding();
+            DrawGenderedPokemonText(name, pokemon.Gender, CompanionAccent);
+            var edit = !locked && ImGui.IsItemClicked();
+            if (!locked && ImGui.IsItemHovered()) ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+            ImGui.BeginDisabled(locked);
+            SameLineIfFits("Edit", right);
+            edit |= DrawAccentButton("Edit##Nickname", Vector2.Zero, CompanionMuted);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Edit nickname");
+            var star = pokemon.Favorite ? "★" : "☆";
+            SameLineIfFits(star, right);
+            if (DrawAccentButton($"{star}##SummaryFavourite", Vector2.Zero, pokemon.Favorite ? PokemonYellow : CompanionMuted))
+                TogglePokemonFavourite(pokemon);
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(pokemon.Favorite ? "Unmark favourite" : "Mark favourite");
+            ImGui.EndDisabled();
+            if (edit)
+            {
+                summaryNickname = name;
+                focusSummaryNickname = true;
+            }
+            return;
+        }
+
+        var draft = summaryNickname;
+        var mark = PokemonGenderMark(pokemon.Gender);
+        var iconSize = ImGui.GetTextLineHeight();
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var genderSpace = mark is null ? 0 : iconSize + spacing;
+        ImGui.BeginDisabled(locked);
+        if (focusSummaryNickname && !locked)
+        {
+            ImGui.SetKeyboardFocusHere();
+            focusSummaryNickname = false;
+        }
+        ImGui.SetNextItemWidth(Math.Clamp(available - genderSpace, 1, 170 * CompanionScale));
+        var submitted = ImGui.InputTextWithHint("##PokemonNickname", "Nickname", ref draft, 49,
+            ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
+        summaryNickname = draft;
+        ImGui.EndDisabled();
+        if (mark is { } gender)
+        {
+            ImGui.SameLine();
+            var position = ImGui.GetCursorScreenPos();
+            var frameHeight = ImGui.GetFrameHeight();
+            ImGui.Dummy(new Vector2(iconSize, frameHeight));
+            DrawPokemonGenderMark(gender, position + new Vector2(0, (frameHeight - iconSize) / 2), iconSize);
+        }
+
+        var trimmed = draft.Trim();
+        var valid = trimmed.EnumerateRunes().Count() is >= 1 and <= 12 && trimmed.IndexOfAny(['[', ']', '|']) < 0;
+        var canSave = !locked && valid && trimmed != name;
+        SameLineIfFits("Save", right);
+        ImGui.BeginDisabled(!canSave);
+        var save = DrawAccentButton("Save##Nickname", Vector2.Zero, PokemonGreen);
+        ImGui.EndDisabled();
+        SameLineIfFits("Cancel", right);
+        if (DrawAccentButton("Cancel##Nickname", Vector2.Zero, CompanionMuted)) summaryNickname = null;
+        else if ((save || submitted) && canSave)
+        {
+            Run(async () =>
+            {
+                await UpdateCollection(plugin.Api.EditPokemon(pokemon.Id, trimmed), "Nickname updated.");
+                if (pokemonSummaryId == pokemon.Id && summaryNickname == draft) summaryNickname = null;
+            }, "Saving nickname...");
+        }
+
+        if (!valid) ImGui.TextWrapped("Use 1-12 visible characters without brackets or pipes.");
     }
 
     private void DrawPokemonSummaryDetails(PokemonDto pokemon, LeagueVitalDto? vital)

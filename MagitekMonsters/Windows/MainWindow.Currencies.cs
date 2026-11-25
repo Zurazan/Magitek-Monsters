@@ -1,114 +1,249 @@
 using System;
-using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using MagitekMonsters.Models;
 
 namespace MagitekMonsters.Windows;
 
 public sealed partial class MainWindow
 {
-    private void DrawCurrencies()
+    private enum WalletCurrency { Yen, CollectionPoints, BattlePoints, RankTokens }
+
+    private static readonly WalletCurrency[] WalletCurrencies = Enum.GetValues<WalletCurrency>();
+    private WalletCurrency walletCurrency;
+    private bool openTrainerWallet;
+
+    private static string WalletName(WalletCurrency currency) => currency switch
     {
-        if (trainer is null) return;
-        ImGui.PushTextWrapPos(0);
-        DrawSectionHeader("CURRENCIES", "How to earn them and where to spend them");
-        ImGui.TextWrapped("Magitek Monsters has four separate currencies. Each activity awards its own rewards; balances cannot be converted into another currency.");
-        ImGui.Spacing();
-        ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(14, 12) * CompanionScale);
-        if (ImGui.BeginTable("CurrencyGuide", 1, ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.RowBg))
+        WalletCurrency.CollectionPoints => "Collection Points",
+        WalletCurrency.BattlePoints => "Battle Points",
+        WalletCurrency.RankTokens => "Rank Tokens",
+        _ => "Yen",
+    };
+
+    private static Vector4 WalletAccent(WalletCurrency currency) => currency switch
+    {
+        WalletCurrency.CollectionPoints => CompanionAccent,
+        WalletCurrency.BattlePoints => new(0.77f, 0.69f, 0.90f, 1),
+        WalletCurrency.RankTokens => new(0.88f, 0.68f, 0.52f, 1),
+        _ => new(0.88f, 0.77f, 0.50f, 1),
+    };
+
+    private void DrawTrainerWallet()
+    {
+        if (trainer is not { } current) return;
+        if (openTrainerWallet)
         {
-            DrawCurrencyHeading("RT / Rank Tokens", trainer.PvpProfile.RankTokens is { } tokens ? $"{tokens.Balance:N0} RT" : "Loading RT balance...", PokemonYellow);
-            DrawCurrencyExplanation("How to earn", "Play Online Battles > Ranked to earn rank points and climb from Rank Z towards A. RT is paid automatically when you reach a new rank, with the remaining reward paid at season end.");
-            DrawCurrencyExplanation("What it buys", "Permanent Legendary Sanctuary permits, plus Master Balls in Poké Mart > Rank Token Exchange. A fresh Sanctuary boss victory is still required for each capture.");
-            DrawCurrencyExplanation("Good to know", "Rank points track your seasonal rank. RT is the currency you spend. Casual and direct friend battles award no RT. Your RT balance carries across seasons.");
-            DrawRankTokenProgress();
-            DrawCurrencyLinks(PokemonYellow,
-                ("Play Ranked", () => { onlineView = pvpModeIndex = 1; pvpTeamError = string.Empty; mainSection = 4; }),
-                ("RT Exchange", () => OpenCurrencyShop("Rank Token Exchange")),
-                ("Sanctuaries", () => mainSection = 9));
-
-            DrawCurrencyHeading("¥ / Yen", $"¥ {trainer.Currency:N0}", PokemonGreen);
-            DrawCurrencyExplanation("How to earn", "Win reward-paying NPC battles in PvE League, including the Trainer circuit and League run. Cooperative Den victories also award ¥ when you are eligible for that den's rewards.");
-            DrawCurrencyExplanation("What it buys", "Poké Balls, medicine, evolution and training items, held items, move licenses and Prize Exchange Pokémon in the Poké Mart. Extra copies of unlocked starters also cost ¥.");
-            DrawCurrencyExplanation("Good to know", "This is Magitek Monsters money, separate from FFXIV gil. Check each battle's reward preview before starting.");
-            DrawCurrencyLinks(PokemonGreen,
-                ("PvE League", () => mainSection = 3),
-                ("Cooperative Dens", () => mainSection = 12),
-                ("Poké Mart", () => OpenCurrencyShop("Items")));
-
-            DrawCurrencyHeading("CP / Collection Points", $"{trainer.CollectionPoints.Balance:N0} CP", PokemonBlue);
-            DrawCurrencyExplanation("How to earn", "Register new species in your Pokédex to complete Collection goals: species milestones, type collections, evolution families and generation surveys. Each objective awards CP automatically once.");
-            DrawCurrencyExplanation("What it buys", "Permanent starter unlocks and the Shiny Charm in Poké Mart > Collection Exchange. Rewards can have extra collection requirements, shown in the exchange.");
-            DrawCurrencyExplanation("Good to know", "Repeat catches and alternate forms do not add species progress. Registrations stay recorded after release. CP comes from collection objectives rather than battle payouts.");
-            DrawCurrencyLinks(PokemonBlue,
-                ("Collection goals", () => mainSection = 7),
-                ("Collection Exchange", () => { openCollectionExchange = true; mainSection = 5; }));
-
-            DrawCurrencyHeading("BP / Battle Points", $"{trainer.Frontier.Balance:N0} BP", CompanionAccent);
-            DrawCurrencyExplanation("How to earn", "Win Battle Tower or Battle Factory fights in Battle Frontier. Both Accessible and Standard brackets award BP. Longer streaks, every seventh fight and one-time achievements add rewards.");
-            DrawCurrencyExplanation("What it buys", "Competitive supplies and move licenses in BP Exchange, unlocked Ultra Beast rewards and permanent Paradox Research permits in Battle Frontier.");
-            DrawCurrencyExplanation("Good to know", "Owned teams and rentals can earn BP. Losing or ending a run keeps BP already earned, achievements and permanent unlocks.");
-            DrawCurrencyLinks(CompanionAccent,
-                ("Battle Frontier", () => mainSection = 8),
-                ("BP Exchange", () => { openBpExchange = true; mainSection = 8; }));
-            ImGui.EndTable();
+            openTrainerWallet = false;
+            ImGui.SetScrollY(0);
+            ImGui.SetNextItemOpen(true, ImGuiCond.Always);
         }
-        ImGui.PopStyleVar();
-        ImGui.PopTextWrapPos();
-    }
+        if (!ImGui.CollapsingHeader("Wallet", ImGuiTreeNodeFlags.DefaultOpen)) return;
 
-    private static void DrawCurrencyHeading(string title, string balance, Vector4 accent)
-    {
-        ImGui.TableNextRow(); ImGui.TableNextColumn();
-        ImGui.TextColored(accent, title);
-        ImGui.TextWrapped($"Your balance: {balance}");
-        ImGui.Spacing();
-    }
-
-    private static void DrawCurrencyExplanation(string label, string text)
-    {
-        ImGui.TextColored(CompanionMuted, label);
-        ImGui.TextWrapped(text);
-        ImGui.Spacing();
-    }
-
-    private void DrawRankTokenProgress()
-    {
-        var profile = trainer!.PvpProfile;
-        if (profile.RankTokens is not { } tokens) return;
-        var season = profile.Season;
-        ImGui.TextColored(PokemonYellow, "Your ranked rewards");
-        ImGui.TextWrapped($"{season.Name} / Rank {profile.Rank} / {profile.RankPoints:N0} rank points");
-        ImGui.TextWrapped($"This season: {season.TokenRewardPerRank:N0} RT per rank climbed, with {season.PromotionRewardPercent}% paid through promotions.");
-        if (profile.NextRankAt is int next)
-            ImGui.TextWrapped($"Next promotion: {Math.Max(0, next - profile.RankPoints):N0} more rank points / +{tokens.NextPromotionTokens:N0} RT.");
-        else ImGui.TextWrapped("Rank A reached. You have earned this season's highest rank reward.");
-        ImGui.TextWrapped($"Already paid this season: {tokens.SeasonPaid:N0} RT. Remaining at your current rank: {tokens.SeasonRemaining:N0} RT at season end.");
-        if (DateTimeOffset.TryParse(season.EndsAt, out var end)) ImGui.TextWrapped($"Season ends {end.LocalDateTime:g}.");
-        ImGui.TextWrapped("Final payments arrive automatically after the season's results finish processing, including while you are offline.");
-        ImGui.Spacing();
-    }
-
-    private static void DrawCurrencyLinks(Vector4 accent, params (string Label, Action Open)[] links)
-    {
-        var gap = ImGui.GetStyle().ItemSpacing.X;
-        var buttonWidth = links.Max(link => ImGui.CalcTextSize(link.Label).X) + ImGui.GetStyle().FramePadding.X * 2;
-        var columns = Math.Clamp((int)((ImGui.GetContentRegionAvail().X + gap) / (buttonWidth + gap)), 1, links.Length);
-        ImGui.PushID(links[0].Label);
-        if (ImGui.BeginTable("CurrencyLinks", columns, ImGuiTableFlags.SizingStretchSame))
+        var balances = new[]
         {
-            foreach (var link in links)
+            $"¥ {current.Currency:N0}",
+            $"{current.CollectionPoints.Balance:N0} CP",
+            $"{current.Frontier.Balance:N0} BP",
+            current.PvpProfile.RankTokens is { } tokens ? $"{tokens.Balance:N0} RT" : "Loading...",
+        };
+        var scale = CompanionScale;
+        var padding = new Vector2(10, 7) * scale;
+        const float balanceScale = 1.18f;
+        var tileWidth = 0f;
+        for (var index = 0; index < WalletCurrencies.Length; index++)
+            tileWidth = Math.Max(tileWidth, Math.Max(ImGui.CalcTextSize(WalletName(WalletCurrencies[index])).X,
+                ImGui.CalcTextSize(balances[index]).X * balanceScale));
+        var gap = 7 * scale;
+        var available = ImGui.GetContentRegionAvail().X;
+        var minimum = tileWidth + padding.X * 2 + gap;
+        var columns = available >= minimum * 4 ? 4 : available >= minimum * 2 ? 2 : 1;
+        ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(gap / 2, 0));
+        if (ImGui.BeginTable("WalletBalances", columns, ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoPadOuterX))
+        {
+            for (var index = 0; index < WalletCurrencies.Length; index++)
             {
+                if (index % columns == 0) ImGui.TableNextRow();
                 ImGui.TableNextColumn();
-                var label = link.Label;
-                var padding = ImGui.GetStyle().FramePadding;
-                if (ImGui.CalcTextSize(label).X > ImGui.GetContentRegionAvail().X - padding.X * 2) label = label.Replace(' ', '\n');
-                var height = Math.Max(32 * CompanionScale, ImGui.CalcTextSize(label).Y + padding.Y * 2);
-                if (DrawAccentButton($"{label}##{link.Label}", new Vector2(-1, height), accent)) link.Open();
+                var currency = WalletCurrencies[index];
+                if (DrawWalletCard(currency, balances[index], walletCurrency == currency, padding, balanceScale))
+                    walletCurrency = currency;
+                ImGui.Dummy(new Vector2(0, 2 * scale));
             }
             ImGui.EndTable();
         }
-        ImGui.PopID(); ImGui.Spacing();
+        ImGui.PopStyleVar();
+
+        DrawWalletDetails(current.PvpProfile);
+        ImGui.Spacing();
+    }
+
+    private static bool DrawWalletCard(WalletCurrency currency, string balance, bool selected, Vector2 padding, float balanceScale)
+    {
+        var name = WalletName(currency);
+        var line = ImGui.GetTextLineHeightWithSpacing();
+        var balanceHeight = ImGui.GetTextLineHeight() * balanceScale;
+        var selectedBackground = Vector4.Lerp(CompanionSurface, CompanionAccent, 0.17f);
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 1f);
+        ImGui.PushStyleColor(ImGuiCol.Button, selected ? selectedBackground : CompanionSurface);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, selectedBackground);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, Vector4.Lerp(CompanionSurface, CompanionAccent, 0.25f));
+        ImGui.PushStyleColor(ImGuiCol.Border, CompanionAccent with { W = selected ? 0.85f : 0.24f });
+        ImGui.PushID((int)currency);
+        var clicked = ImGui.Button("##WalletCard", new Vector2(-1, padding.Y * 2 + line + balanceHeight));
+        ImGui.PopID();
+        ImGui.PopStyleColor(4);
+        ImGui.PopStyleVar();
+
+        var position = ImGui.GetItemRectMin() + padding;
+        var end = ImGui.GetItemRectMax() - padding;
+        var draw = ImGui.GetWindowDrawList();
+        draw.PushClipRect(position, Vector2.Max(position, end), true);
+        draw.AddText(position, ImGui.GetColorU32(ImGuiCol.Text), name);
+        draw.AddText(ImGui.GetFont(), ImGui.GetFontSize() * balanceScale, position + new Vector2(0, line),
+            ImGui.GetColorU32(WalletAccent(currency)), balance);
+        draw.PopClipRect();
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+            if (Math.Max(ImGui.CalcTextSize(name).X, ImGui.CalcTextSize(balance).X * balanceScale) > end.X - position.X)
+                ImGui.SetTooltip($"{name}\n{balance}");
+        }
+        return clicked;
+    }
+
+    private void DrawWalletDetails(PvpProfileDto profile)
+    {
+        var currency = walletCurrency;
+        var accent = WalletAccent(currency);
+        ImGui.PushID((int)currency);
+        ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(11, 9) * CompanionScale);
+        if (ImGui.BeginTable("WalletDetails", 1, ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.BordersOuter))
+        {
+            ImGui.TableNextColumn();
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(CompanionSurface));
+            ImGui.TextColored(accent, WalletName(currency));
+            switch (currency)
+            {
+                case WalletCurrency.Yen:
+                    DrawWalletWays("Win trainer battles and earn den rewards.", "Poké Balls, medicine, held items and prize Pokémon.",
+                        [("PvE League", () => mainSection = 3), ("Cooperative Dens", () => mainSection = 12)],
+                        [("Poké Mart", () => OpenCurrencyShop("Items")), ("Prize Exchange", () => OpenCurrencyShop("Prize Exchange"))]);
+                    break;
+                case WalletCurrency.CollectionPoints:
+                    DrawWalletWays("Register species to complete Pokédex goals.", "Permanently unlock starters and buy the Shiny Charm.",
+                        [("Collection goals", () => mainSection = 7)],
+                        [("Collection Exchange", () => OpenCurrencyShop("Collection Exchange"))]);
+                    break;
+                case WalletCurrency.BattlePoints:
+                    DrawWalletWays("Win Battle Tower and Battle Factory fights.", "Training items, Ultra Beast rewards and Paradox Research.",
+                        [("Battle Frontier", () => OpenFrontier())],
+                        [("BP Exchange", () => OpenFrontier(exchange: true))]);
+                    break;
+                case WalletCurrency.RankTokens:
+                    DrawWalletWays("Earn tokens on ranked promotions and at season end.", "Legendary Sanctuary permits and Master Balls.",
+                        [("Play Ranked", () => { onlineView = pvpModeIndex = 1; pvpTeamError = string.Empty; mainSection = 4; })],
+                        [("RT Exchange", () => OpenCurrencyShop("Rank Token Exchange")), ("Sanctuaries", () => mainSection = 9)]);
+                    break;
+            }
+            ImGui.Separator();
+            if (ImGui.CollapsingHeader(currency == WalletCurrency.RankTokens ? "Season payout details" : "How it works"))
+                DrawWalletRules(currency, profile);
+            ImGui.EndTable();
+        }
+        ImGui.PopStyleVar();
+        ImGui.PopID();
+    }
+
+    private static void DrawWalletWays(string earnText, string spendText,
+        (string Label, Action Open)[] earnLinks, (string Label, Action Open)[] spendLinks)
+    {
+        var wide = ImGui.GetContentRegionAvail().X >= 420 * CompanionScale;
+        if (!ImGui.BeginTable("WalletWays", wide ? 2 : 1, ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoPadOuterX)) return;
+        ImGui.TableNextColumn();
+        DrawWalletWay("EARN", earnText, earnLinks);
+        ImGui.TableNextColumn();
+        DrawWalletWay("SPEND", spendText, spendLinks);
+        ImGui.EndTable();
+    }
+
+    private static void DrawWalletWay(string heading, string description, (string Label, Action Open)[] links)
+    {
+        ImGui.TextColored(CompanionMuted, heading);
+        ImGui.TextWrapped(description);
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        var padding = ImGui.GetStyle().FramePadding;
+        for (var index = 0; index < links.Length; index++)
+        {
+            var link = links[index];
+            if (index > 0) SameLineIfFits(link.Label, right);
+            var label = ImGui.CalcTextSize(link.Label).X + padding.X * 2 <= ImGui.GetContentRegionAvail().X
+                ? link.Label : link.Label.Replace(' ', '\n');
+            if (DrawAccentButton($"{label}##{link.Label}", Vector2.Zero, CompanionAccent)) link.Open();
+        }
+    }
+
+    private static void DrawWalletRules(WalletCurrency currency, PvpProfileDto profile)
+    {
+        switch (currency)
+        {
+            case WalletCurrency.Yen:
+                ImGui.TextWrapped("¥ is Magitek Monsters money. Dens pay when you are eligible for rewards. Extra copies of unlocked starters also cost ¥.");
+                break;
+            case WalletCurrency.CollectionPoints:
+                ImGui.TextWrapped("Each goal pays once. Repeat catches and alternate forms do not add species progress. Registrations stay recorded after release.");
+                break;
+            case WalletCurrency.BattlePoints:
+                ImGui.TextWrapped("Owned teams and rentals can earn BP in both brackets. Streaks and achievements award bonuses. You keep earned BP after a run ends.");
+                break;
+            case WalletCurrency.RankTokens:
+                DrawRankTokenProgress(profile);
+                break;
+        }
+    }
+
+    private static void DrawRankTokenProgress(PvpProfileDto profile)
+    {
+        if (profile.RankTokens is not { } tokens)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, CompanionMuted);
+            ImGui.TextWrapped("Loading ranked rewards...");
+            ImGui.PopStyleColor();
+            return;
+        }
+
+        var season = profile.Season;
+        ImGui.TextWrapped($"{season.Name} / Rank {profile.Rank}");
+        if (DateTimeOffset.TryParse(season.EndsAt, out var end)) ImGui.TextWrapped($"Season ends {end.LocalDateTime:g}");
+        var columns = ImGui.GetContentRegionAvail().X >= 380 * CompanionScale ? 3 : 1;
+        if (ImGui.BeginTable("WalletRankPayout", columns, ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoPadOuterX))
+        {
+            ImGui.TableNextColumn();
+            ImGui.TextColored(CompanionMuted, "Next promotion");
+            if (profile.NextRankAt is int next)
+            {
+                ImGui.TextWrapped($"+{tokens.NextPromotionTokens:N0} RT");
+                ImGui.TextWrapped($"{Math.Max(0, next - profile.RankPoints):N0} rank points to go");
+            }
+            else ImGui.TextWrapped("Highest rank reached");
+            ImGui.TableNextColumn();
+            ImGui.TextColored(CompanionMuted, "Paid this season");
+            ImGui.TextWrapped($"{tokens.SeasonPaid:N0} RT");
+            ImGui.TableNextColumn();
+            ImGui.TextColored(CompanionMuted, "At season end");
+            ImGui.TextWrapped($"+{tokens.SeasonRemaining:N0} RT at your current rank");
+            ImGui.EndTable();
+        }
+
+        ImGui.TextWrapped($"{season.TokenRewardPerRank:N0} RT per rank climbed, with {season.PromotionRewardPercent}% paid on promotion. Payouts are automatic and balances carry over. Each Sanctuary capture requires a fresh boss victory.");
+    }
+
+    private void OpenCurrencyWallet(WalletCurrency currency)
+    {
+        walletCurrency = currency;
+        openTrainerProfileTab = false;
+        openTrainerWallet = true;
+        mainSection = 14;
     }
 
     private void OpenCurrencyShop(string tab)
@@ -119,6 +254,6 @@ public sealed partial class MainWindow
 
     private void DrawCurrencyGuideShortcut()
     {
-        if (DrawAccentSmallButton("How to earn currencies", CompanionAccent)) mainSection = 15;
+        if (DrawAccentSmallButton("How to earn currencies", CompanionAccent)) OpenCurrencyWallet(walletCurrency);
     }
 }

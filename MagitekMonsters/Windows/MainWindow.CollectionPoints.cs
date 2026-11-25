@@ -291,8 +291,6 @@ public sealed partial class MainWindow
         redemptionRequests.TryRemove(key, out _);
         if (trainer?.User.Id != owner) return;
         trainer = result;
-        RecordRecentAction("collection-reward:" + requestId, "reward", "Received collection reward",
-            collectionRewards.FirstOrDefault(reward => reward.Id == rewardId)?.Name ?? rewardId);
         await InSession(LoadPokedexCatalog());
         SetStatus("Collection reward received. Points and unlocks saved.");
     }

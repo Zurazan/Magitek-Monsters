@@ -15,19 +15,11 @@ public sealed partial class MainWindow
     {
         if (trainer is null) return;
         var scale = CompanionScale;
-        var circuits = PvePresentation.Circuits;
-        pveTierIndex = Math.Clamp(pveTierIndex, 0, circuits.Length - 1);
         var defeated = GetDefeatedOpponents();
-        ImGui.SetNextItemWidth(150 * scale);
-        if (ImGui.BeginCombo("Circuit", circuits[pveTierIndex].Label))
-        {
-            for (var index = 0; index < circuits.Length; index++)
-                if (ImGui.Selectable(circuits[index].Label, pveTierIndex == index)) { pveTierIndex = index; pveOpponentPage = 0; }
-            ImGui.EndCombo();
-        }
+        DrawPveCircuitFilters();
         var visible = GetCircuitOpponents();
         ImGui.Spacing();
-        ImGui.TextColored(CompanionMuted, $"{circuits[pveTierIndex].Label} circuit / {visible.Count(entry => defeated.Contains(entry.Id))} of {visible.Length} cleared");
+        ImGui.TextColored(CompanionMuted, $"{visible.Count(entry => defeated.Contains(entry.Id))} of {visible.Length} trainers cleared");
         DrawPager("PveOpponents", ref pveOpponentPage, visible.Length, 6);
         var page = visible.Skip(pveOpponentPage * 6).Take(6).ToArray();
         if (!page.Any(entry => entry.Id == selectedPveOpponent)) selectedPveOpponent = page.FirstOrDefault()?.Id;
@@ -55,6 +47,23 @@ public sealed partial class MainWindow
         ImGui.EndChild(); ImGui.PopStyleVar();
         var selected = page.FirstOrDefault(entry => entry.Id == selectedPveOpponent);
         if (selected is not null) DrawPveSelectedTrainer(selected, PvePresentation.LockReason(selected, defeated, opponents), layout.ActionHeight);
+    }
+
+    private void DrawPveCircuitFilters()
+    {
+        var circuits = PvePresentation.Circuits;
+        pveTierIndex = Math.Clamp(pveTierIndex, 0, circuits.Length - 1);
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        for (var index = 0; index < circuits.Length; index++)
+        {
+            var label = circuits[index].Label;
+            if (index > 0) SameLineIfFits(label, right);
+            if (DrawAccentSmallButton(label, pveTierIndex == index ? CompanionAccent : CompanionMuted))
+            {
+                pveTierIndex = index;
+                pveOpponentPage = 0;
+            }
+        }
     }
 
     private bool DrawPveTrainerCard(OpponentDto opponent, bool cleared, string? reason, float height)

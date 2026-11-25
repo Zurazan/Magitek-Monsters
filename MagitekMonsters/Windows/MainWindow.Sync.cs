@@ -50,7 +50,6 @@ public sealed partial class MainWindow
             || plugin.Connection.State != ServerConnectionState.Syncing) return;
         trainer = recovered.Trainer;
         pvpStatus = recovered.Pvp;
-        ObserveRecentBattle(pvpStatus.Battle, true);
         trainer.PvpProfile = recovered.Pvp.Profile;
         if (recovered.Battle is { } current) ApplyBattleResponse(current);
         else if (recovered.BattleChecked) battle = null;
@@ -170,7 +169,6 @@ public sealed partial class MainWindow
             {
                 if (next.Battle is { } match && LiveStateOrder.IsOlder(match, pvpStatus?.Battle)) next.Battle = pvpStatus!.Battle;
                 pvpStatus = next;
-                ObserveRecentBattle(next.Battle, true);
                 if (trainer is not null) trainer.PvpProfile = next.Profile;
                 nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(next.State == "idle" && next.Challenges.Count == 0 ? IdlePvpPollSeconds
                     : plugin.Connection.CanInvoke ? 10 : next.State == "queued" ? 2 : 1);
@@ -181,7 +179,6 @@ public sealed partial class MainWindow
     private void ApplyBattleResponse(BattleSnapshotDto next, string? choice = null)
     {
         if (LiveStateOrder.IsOlder(next, battle)) return;
-        ObserveRecentBattle(next, action: choice is not null);
         if (next.Id != battle?.Id) eventBattleId = string.Empty;
         if (next.Kind == "wild" && trainer?.ActiveEncounter is { } encounter && encounter.Id == next.Id && IsEventEncounter(encounter)) eventBattleId = next.Id;
         battle = next;

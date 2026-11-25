@@ -20,7 +20,6 @@ public sealed partial class MainWindow
     private int storageSort;
     private bool storageFavorites;
     private bool storageShiny;
-    private readonly Dictionary<string, string> nicknameInputs = [];
     private string challengeTrainerId = string.Empty;
     private string? pendingClipboard;
     private BattleHelpDto? battleHelp;
@@ -124,50 +123,8 @@ public sealed partial class MainWindow
         return storageFilteredPokemon;
     }
 
-    private void DrawPokemonCollection(PokemonDto pokemon)
-    {
-        ImGui.TextColored(PokemonBlue, "IDENTITY & CAPTURE HISTORY");
-        ImGui.BeginDisabled(CollectionLocked);
-        if (DrawAccentSmallButton(pokemon.Favorite ? $"Unmark favourite##{pokemon.Id}" : $"Mark favourite##{pokemon.Id}", PokemonYellow))
-            Run(() => UpdateCollection(plugin.Api.EditPokemon(pokemon.Id, favorite: !pokemon.Favorite), "Favourite updated."), "Updating favourite...");
-        if (!nicknameInputs.TryGetValue(pokemon.Id, out var nickname)) nickname = pokemon.Nickname;
-        ImGui.TextDisabled("Nickname");
-        ImGui.SetNextItemWidth(Math.Max(1, ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize("Save name").X - 24 * CompanionScale));
-        ImGui.InputText($"##Nickname{pokemon.Id}", ref nickname, 48);
-        nicknameInputs[pokemon.Id] = nickname;
-        ImGui.SameLine();
-        if (DrawAccentSmallButton($"Save name##{pokemon.Id}", PokemonGreen))
-        {
-            var name = nickname;
-            Run(() => UpdateCollection(plugin.Api.EditPokemon(pokemon.Id, name), "Nickname updated."), "Saving nickname...");
-        }
-        ImGui.EndDisabled();
-        ImGui.TextWrapped("Nicknames: 1-12 visible characters. Favourites cannot be released.");
-        var origin = pokemon.Origin;
-        var acquired = DateTimeOffset.TryParse(pokemon.CreatedAt, out var when) ? when.LocalDateTime.ToString("g") : "Unknown date";
-        ImGui.TextWrapped($"Obtained: {origin?.Method ?? pokemon.Source} | {acquired}");
-        ImGui.TextWrapped($"Location: {origin?.Location ?? "Not recorded"} | Capture level: {origin?.Level?.ToString() ?? "Not recorded"}");
-        ImGui.TextDisabled($"Ball: {pokemon.Pokeball}");
-        ImGui.BeginDisabled(busy);
-        if (DrawAccentSmallButton($"Copy Pokémon summary##{pokemon.Id}", PokemonBlue)) QueueTeamExport([pokemon.Id]);
-        ImGui.EndDisabled();
-        ImGui.Separator();
-        if (pokemon.PartySlot is null)
-        {
-            ImGui.BeginDisabled(CollectionLocked);
-            if (ImGui.BeginCombo($"Move to box##{pokemon.Id}", BoxLabel(pokemon.BoxNumber)))
-            {
-                for (var number = 1; number <= 100; number++)
-                    if (ImGui.Selectable(BoxLabel(number), pokemon.BoxNumber == number))
-                    {
-                        var target = number;
-                        Run(() => UpdateCollection(plugin.Api.MoveToBox(pokemon.Id, target), "Pokémon moved to box."), "Moving Pokémon...");
-                    }
-                ImGui.EndCombo();
-            }
-            ImGui.EndDisabled();
-        }
-    }
+    private void TogglePokemonFavourite(PokemonDto pokemon) =>
+        Run(() => UpdateCollection(plugin.Api.EditPokemon(pokemon.Id, favorite: !pokemon.Favorite), "Favourite updated."), "Updating favourite...");
 
     private string[] SelectedOnlineTeam() => SelectedOnlinePokemon(pvpTeamIds).Select(pokemon => pokemon.Id).ToArray();
 
@@ -241,7 +198,7 @@ public sealed partial class MainWindow
 
     private void ResetCollectionView()
     {
-        nicknameInputs.Clear(); pendingClipboard = null;
+        pendingClipboard = null;
         battleHelp = null; battleMoveHelp.Clear();
     }
 }

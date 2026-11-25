@@ -38,18 +38,8 @@ public sealed partial class MainWindow
         var scale = CompanionScale;
         var owned = OwnedBag();
         DrawSectionHeader("Bag", $"{owned.Count:N0} item types / {owned.Sum(entry => (long)entry.Quantity):N0} items owned");
-        bagPocket = Math.Clamp(bagPocket, 0, BagInventory.Pockets.Length - 1);
-        ImGui.SetNextItemWidth(Math.Min(240 * scale, ImGui.GetContentRegionAvail().X));
-        if (ImGui.BeginCombo("Pocket", BagInventory.Pockets[bagPocket].Label))
-        {
-            for (var index = 0; index < BagInventory.Pockets.Length; index++)
-            {
-                var pocket = BagInventory.Pockets[index];
-                var count = owned.Count(entry => pocket.Id.Length == 0 || BagInventory.Pocket(entry.Item) == pocket.Id);
-                if (ImGui.Selectable($"{pocket.Label} ({count})", bagPocket == index)) { bagPocket = index; bagPage = 0; }
-            }
-            ImGui.EndCombo();
-        }
+        DrawBagPockets(owned);
+        ImGui.Spacing();
         ImGui.SetNextItemWidth(-1);
         if (ImGui.InputTextWithHint("##BagSearch", "Search owned items or descriptions...", ref bagSearch, 100)) bagPage = 0;
         var entries = GetBagItems(owned);
@@ -74,6 +64,27 @@ public sealed partial class MainWindow
         else DrawBagDetails(selected);
         ImGui.EndChild();
         ImGui.PopStyleColor(); ImGui.PopStyleVar();
+    }
+
+    private void DrawBagPockets(List<BagEntry> owned)
+    {
+        bagPocket = Math.Clamp(bagPocket, 0, BagInventory.Pockets.Length - 1);
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        for (var index = 0; index < BagInventory.Pockets.Length; index++)
+        {
+            var pocket = BagInventory.Pockets[index];
+            if (index > 0) SameLineIfFits(pocket.Label, right);
+            if (DrawAccentSmallButton(pocket.Label, bagPocket == index ? CompanionAccent : CompanionMuted))
+            {
+                bagPocket = index;
+                bagPage = 0;
+            }
+            if (ImGui.IsItemHovered())
+            {
+                var count = pocket.Id.Length == 0 ? owned.Count : owned.Count(entry => BagInventory.Pocket(entry.Item) == pocket.Id);
+                ImGui.SetTooltip($"{count:N0} item type{(count == 1 ? "" : "s")}");
+            }
+        }
     }
 
     private bool DrawBagItemRow(BagEntry entry, bool selected)
@@ -159,7 +170,7 @@ public sealed partial class MainWindow
         var shopLabel = collectionItem ? "Open Collection Exchange" : item.BpOnly ? "Open BP Exchange" : item.Currency == "rank-tokens" ? "Open Rank Token Exchange" : "Open Poké Mart";
         if (DrawAccentButton(shopLabel, new Vector2(-1, 30 * scale), CompanionAccent))
         {
-            if (item.BpOnly) { openBpExchange = true; mainSection = 8; }
+            if (item.BpOnly) OpenFrontier(exchange: true);
             else if (collectionItem) { openCollectionExchange = true; mainSection = 5; }
             else
             {

@@ -109,7 +109,12 @@ public sealed partial class MainWindow
         if (ImGui.BeginTabBar("PveLeagueSections", ImGuiTabBarFlags.FittingPolicyResizeDown))
         {
             if (ImGui.BeginTabItem("Trainer circuit")) { DrawPveTrainerBoard(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("Regional Leagues")) { DrawRegionalLeagues(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("Regional Leagues", openRegionalLeagueTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
+            {
+                if (openRegionalLeagueTab) { ImGui.SetScrollY(0); openRegionalLeagueTab = false; }
+                DrawRegionalLeagues();
+                ImGui.EndTabItem();
+            }
             if (ImGui.BeginTabItem("Special trials")) { DrawSpecialTrials(); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
         }

@@ -10,7 +10,7 @@ namespace MagitekMonsters.Windows;
 public sealed partial class MainWindow
 {
     private readonly CompanionFeedback headerFeedback = new();
-    private sealed record HeaderCurrency(string Label, string Value, string Description, Vector4 Color);
+    private sealed record HeaderCurrency(WalletCurrency Currency, string Label, string Value);
 
     private bool DrawCompanionHeader()
     {
@@ -23,10 +23,10 @@ public sealed partial class MainWindow
         var number = plugin.Connection.State == ServerConnectionState.Connected && onlineTrainers >= 0 ? onlineTrainers.ToString("N0") : "?";
         var currencies = new[]
         {
-            new HeaderCurrency("¥", trainer.Currency.ToString("N0"), "Poké Mart currency", new Vector4(0.88f, 0.77f, 0.50f, 1)),
-            new HeaderCurrency("CP", trainer.CollectionPoints.Balance.ToString("N0"), "Collection Points", CompanionAccent),
-            new HeaderCurrency("BP", trainer.Frontier.Balance.ToString("N0"), "Battle Points", new Vector4(0.77f, 0.69f, 0.90f, 1)),
-            new HeaderCurrency("RT", (trainer.PvpProfile.RankTokens?.Balance ?? 0).ToString("N0"), "Rank Tokens", new Vector4(0.88f, 0.68f, 0.52f, 1))
+            new HeaderCurrency(WalletCurrency.Yen, "¥", trainer.Currency.ToString("N0")),
+            new HeaderCurrency(WalletCurrency.CollectionPoints, "CP", trainer.CollectionPoints.Balance.ToString("N0")),
+            new HeaderCurrency(WalletCurrency.BattlePoints, "BP", trainer.Frontier.Balance.ToString("N0")),
+            new HeaderCurrency(WalletCurrency.RankTokens, "RT", (trainer.PvpProfile.RankTokens?.Balance ?? 0).ToString("N0"))
         };
         var outerWidth = Math.Max(1, ImGui.GetContentRegionAvail().X);
         var identityCode = trainer.User.VanityCode ?? trainer.User.TrainerId;
@@ -114,16 +114,16 @@ public sealed partial class MainWindow
     {
         var min = origin + new Vector2(region.X, region.Y);
         ImGui.SetCursorScreenPos(min); ImGui.PushID(currency.Label);
-        if (ImGui.InvisibleButton("##HeaderCurrency", new Vector2(region.Width, region.Height))) mainSection = 15;
+        if (ImGui.InvisibleButton("##HeaderCurrency", new Vector2(region.Width, region.Height))) OpenCurrencyWallet(currency.Currency);
         var draw = ImGui.GetWindowDrawList();
         draw.PushClipRect(min, min + new Vector2(region.Width, region.Height), true);
-        draw.AddText(min, ImGui.GetColorU32(currency.Color), currency.Label);
+        draw.AddText(min, ImGui.GetColorU32(WalletAccent(currency.Currency)), currency.Label);
         draw.AddText(min + new Vector2(ImGui.CalcTextSize(currency.Label).X + 6 * CompanionScale, 0), ImGui.GetColorU32(ImGuiCol.Text), currency.Value);
         draw.PopClipRect();
         if (ImGui.IsItemHovered())
         {
             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-            ImGui.SetTooltip($"{currency.Description}: {currency.Value}\nClick to view currencies.");
+            ImGui.SetTooltip($"{WalletName(currency.Currency)}: {currency.Value}\nClick to view details.");
         }
         ImGui.PopID();
     }

@@ -6,7 +6,7 @@ namespace MagitekMonsters.Services;
 
 public static class FactoryPresentation
 {
-    public static int Columns(float width, float scale) => Math.Clamp((int)(Math.Max(1, width) / (310 * Math.Max(0.5f, scale))), 1, 3);
+    public static int Columns(float width, float scale) => Math.Clamp((int)(Math.Max(1, width) / (122 * Math.Max(0.5f, scale))), 1, 3);
     public static string SwapError(FrontierRunDto run, string outgoing, string incoming)
     {
         if (outgoing.Length == 0 || incoming.Length == 0) return "Choose one of your rentals and one opponent rental.";

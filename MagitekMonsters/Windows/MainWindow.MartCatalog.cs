@@ -71,7 +71,7 @@ public sealed partial class MainWindow
         var scale = CompanionScale;
         if (!rankTokensOnly)
         {
-            if (DrawAccentSmallButton("BP Exchange", CompanionMuted)) { openBpExchange = true; mainSection = 8; }
+            if (DrawAccentSmallButton("BP Exchange", CompanionMuted)) OpenFrontier(exchange: true);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Competitive rewards are in Battle Frontier > BP Exchange.");
             ImGui.SameLine();
         }

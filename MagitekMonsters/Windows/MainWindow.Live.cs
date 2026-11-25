@@ -24,7 +24,7 @@ public sealed partial class MainWindow
             {
                 if (pvpStatus?.Battle?.Id != next.Id) { serverPvpRefreshRequested = true; continue; }
                 if (LiveStateOrder.IsOlder(next, pvpStatus.Battle)) continue;
-                pvpStatus.Battle = next; ObserveRecentBattle(next, true);
+                pvpStatus.Battle = next;
                 nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(10);
                 if (next.Status != "active") { serverPvpRefreshRequested = true; refreshState.Trainer(); }
             }

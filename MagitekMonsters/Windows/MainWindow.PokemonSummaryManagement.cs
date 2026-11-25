@@ -46,12 +46,6 @@ public sealed partial class MainWindow
         }
         if (DrawPokemonSummarySection("Training", "Level, EVs, IVs, nature, ability, Tera", PokemonSummaryPanel.Training))
             DrawPokemonSummaryTraining(pokemon, locked);
-        if (DrawPokemonSummarySection("Collection", "Nickname, favourite, capture history", PokemonSummaryPanel.Collection))
-        {
-            ImGui.BeginDisabled(locked);
-            DrawPokemonCollection(pokemon);
-            ImGui.EndDisabled();
-        }
     }
 
     private bool DrawPokemonSummarySection(string label, string detail, PokemonSummaryPanel panel)

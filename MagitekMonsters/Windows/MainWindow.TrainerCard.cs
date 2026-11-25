@@ -21,30 +21,13 @@ public sealed partial class MainWindow
         if (!ImGui.BeginTabBar("TrainerCardTabs")) return;
         if (ImGui.BeginTabItem("Your card"))
         {
-            var card = TrainerCard.Resolve(trainer, trainerCardDirty ? preferences : trainer.Collection.TrainerCard ?? preferences, regionalLeagues);
-            if (trainerCardDirty) ImGui.TextDisabled("Previewing unsaved changes.");
-            DrawTrainerCardPreview(card);
-            ImGui.Spacing();
-            if (DrawAccentSmallButton("Copy card summary", CompanionAccent))
-            {
-                Interlocked.Exchange(ref pendingClipboard, TrainerCard.Summary(trainer, card));
-                SetStatus("Trainer card summary copied.");
-            }
+            DrawYourTrainerCard(preferences);
             ImGui.EndTabItem();
         }
-        if (ImGui.BeginTabItem("Progress & records"))
+        var progressFlags = openTrainerWallet ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
+        if (ImGui.BeginTabItem("Progress & currency", progressFlags))
         {
             DrawTrainerRecords();
-            ImGui.EndTabItem();
-        }
-        if (ImGui.BeginTabItem("Recent activity"))
-        {
-            DrawRecentActivity();
-            ImGui.EndTabItem();
-        }
-        if (ImGui.BeginTabItem("Customise"))
-        {
-            DrawTrainerCardCustomise(preferences);
             ImGui.EndTabItem();
         }
         var flags = openTrainerProfileTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
@@ -57,12 +40,19 @@ public sealed partial class MainWindow
         ImGui.EndTabBar();
     }
 
-    private void DrawTrainerCardCustomise(TrainerCardPreferences preferences)
+    private void DrawYourTrainerCard(TrainerCardPreferences preferences)
     {
-        var card = TrainerCard.Resolve(trainer, preferences, regionalLeagues);
+        if (trainer is not { } current) return;
+        var card = TrainerCard.Resolve(current, preferences, regionalLeagues);
         if (ImGui.CollapsingHeader("Card preview", ImGuiTreeNodeFlags.DefaultOpen))
         {
+            if (trainerCardDirty) ImGui.TextDisabled("Previewing unsaved changes.");
             DrawTrainerCardPreview(card);
+            if (DrawAccentSmallButton("Copy card summary", CompanionAccent))
+            {
+                Interlocked.Exchange(ref pendingClipboard, TrainerCard.Summary(current, card));
+                SetStatus("Trainer card summary copied.");
+            }
             ImGui.Spacing();
         }
         if (ImGui.CollapsingHeader("Card appearance & identity"))
@@ -78,13 +68,16 @@ public sealed partial class MainWindow
             ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
         }
         if (ImGui.CollapsingHeader("Showcase badges")) DrawShowcaseCatalog(preferences, card);
+        if (!trainerCardDirty && current.Collection.TrainerCard is not null) return;
         ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
         ImGui.BeginDisabled(busy);
-        ImGui.BeginDisabled(!trainerCardDirty && trainer.Collection.TrainerCard is not null);
         if (DrawAccentSmallButton("Save card", CompanionAccent)) Run(PublishTrainerCard, "Saving trainer card...");
-        ImGui.EndDisabled();
-        ImGui.SameLine();
-        if (DrawAccentSmallButton("Reset changes", CompanionMuted)) { trainerCardDirty = false; trainerCardDraft = null; }
+        if (trainerCardDirty)
+        {
+            SameLineIfFits("Reset changes", right);
+            if (DrawAccentSmallButton("Reset changes", CompanionMuted)) { trainerCardDirty = false; trainerCardDraft = null; }
+        }
         ImGui.EndDisabled();
     }
 
@@ -267,6 +260,7 @@ public sealed partial class MainWindow
     private void DrawTrainerRecords()
     {
         if (trainer is null) return;
+        DrawTrainerWallet();
         DrawFrontierProfile();
         if (ImGui.CollapsingHeader("Regional badge case", ImGuiTreeNodeFlags.DefaultOpen)) DrawRegionalBadgeCase();
         if (ImGui.CollapsingHeader($"Challenge medals ({trainer.PveProgress.Medals.Count})", ImGuiTreeNodeFlags.DefaultOpen))
@@ -279,13 +273,7 @@ public sealed partial class MainWindow
             }
             if (trainer.PveProgress.Medals.Count == 0) ImGui.TextWrapped("Clear a trainer normally, then return for optional challenges.");
         }
-        if (ImGui.CollapsingHeader("Battle records", ImGuiTreeNodeFlags.DefaultOpen))
-        {
-            var profile = trainer.PvpProfile;
-            ImGui.TextWrapped($"Trainer battles: {trainer.PveProgress.TotalWins:N0} wins / {trainer.PveProgress.TotalLosses:N0} losses / {trainer.PveProgress.TotalAttempts:N0} attempts");
-            ImGui.TextWrapped($"Ranked: {profile.RankedWins:N0} wins / {profile.RankedLosses:N0} losses / {profile.RankedDraws:N0} draws / Rank {profile.Rank}");
-            ImGui.TextWrapped($"Casual: {profile.CasualWins:N0} wins / {profile.CasualLosses:N0} losses / {profile.CasualDraws:N0} draws");
-        }
+        if (ImGui.CollapsingHeader("Battle records", ImGuiTreeNodeFlags.DefaultOpen)) DrawTrainerBattleRecords();
         ImGui.Spacing();
         ImGui.TextWrapped($"Collection: {trainer.CollectionPoints.CompletedObjectives:N0} objectives completed / {trainer.CollectionPoints.TotalEarned:N0} lifetime CP");
         if (DrawAccentSmallButton("Open collection goals", PokemonBlue)) mainSection = 7;

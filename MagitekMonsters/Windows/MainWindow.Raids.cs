@@ -43,8 +43,6 @@ public sealed partial class MainWindow
         if (raidRoom?.Id != next.Id) { raidCaptureRequest = null; raidCaptureBall = null; }
         var terminal = raidRoom?.Status is "lobby" or "active" && next.Status is not ("lobby" or "active");
         var awarded = raidRoom?.Receipt is null && next.Receipt is not null;
-        if (trainer is not null && (raidRoom?.Id == next.Id || trainer.ActiveRaidId == next.Id))
-            QueueRecentActivity(trainer.User.Id, Services.RecentActivity.RaidEntries(next, DateTimeOffset.UtcNow));
         raidRoom = next; raidObservedAt = DateTimeOffset.UtcNow; nextRaidPollAt = raidObservedAt.AddSeconds(2);
         if (trainer is not null)
         {

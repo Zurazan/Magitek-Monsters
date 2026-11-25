@@ -19,9 +19,7 @@ public sealed class TeamPresetDto
 public sealed class PokemonOriginDto
 {
     public string Method { get; set; } = string.Empty;
-    public string? Location { get; set; }
     public uint? TerritoryId { get; set; }
-    public int? Level { get; set; }
     public string? EventOccurrenceId { get; set; }
 }
 

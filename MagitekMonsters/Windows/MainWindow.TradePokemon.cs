@@ -100,7 +100,7 @@ public sealed partial class MainWindow
             ImGui.EndTable();
         }
         TradeText($"Original Trainer: {pokemon.OriginalTrainerName} / {pokemon.OriginalTrainerUid}", CompanionMuted);
-        TradeText($"Caught: {pokemon.Origin?.Location ?? pokemon.Source} / {TradingItemName(pokemon.Pokeball)}", CompanionMuted);
+        TradeText($"Ball: {TradingItemName(pokemon.Pokeball)}", CompanionMuted);
     }
 
     private void DrawTradingPicker()

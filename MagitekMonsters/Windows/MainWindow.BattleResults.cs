@@ -298,6 +298,7 @@ public sealed partial class MainWindow
         battle = null;
         eventBattleId = string.Empty;
         if (returnToEvents) mainSection = 10;
+        else if (current?.FrontierId is not null) OpenFrontier();
     }
 
     private void DrawBattleResultMovePopup()

@@ -39,8 +39,7 @@ public sealed partial class MainWindow : Window, IDisposable
         get => trainerState;
         set
         {
-            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetRecentActivity(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetTrading(); ResetFriends(); ResetBrowseCaches(); ResetSanctuaries(); ResetPokemonSummary(); }
-            ObserveTrainerActivity(trainerState, value);
+            if (trainerState?.User.Id != value?.User.Id) { searchCooldown.Observe(0); giftPage = 0; headerFeedback.Clear(); ResetTrainerProfiles(); ResetEvTrainingPlanner(); ResetTeamAnalysis(); ResetCollectionWishlist(); ResetStorageSearches(); ResetBattleLog(); ResetRegionalLeagues(); ResetFrontierDesk(); ResetMartCatalog(); ResetPokemonBuildCache(); ResetTrading(); ResetFriends(); ResetBrowseCaches(); ResetSanctuaries(); ResetPokemonSummary(); }
             navigationAlertTrainer = null;
             trainerState = value;
             if (value is not null) trainerProfiles.Invalidate(value.User.TrainerId);
@@ -274,8 +273,6 @@ public sealed partial class MainWindow : Window, IDisposable
         ResetEvTrainingPlanner();
         ResetTeamAnalysis();
         ResetCollectionWishlist();
-        FlushRecentActivity();
-        ResetRecentActivity();
         ResetStorageSearches();
         ResetBattleLog();
         foregroundGeneration++;
@@ -295,9 +292,6 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         while (backgroundResults.TryDequeue(out var result)) result();
         ApplyLiveUpdates();
-        if (battle?.Status == "active") ObserveRecentBattle(battle);
-        if (pvpStatus?.Battle?.Status == "active") ObserveRecentBattle(pvpStatus.Battle, true);
-        FlushRecentActivity();
         if (plugin.Api.Update.Required)
         {
             CancelBackgroundRefresh();
@@ -421,7 +415,6 @@ public sealed partial class MainWindow : Window, IDisposable
             ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
             ImGui.TextColored(CompanionMuted, "COLLECTION");
             DrawNavigationItem("Poké Mart", 5, 32 * scale);
-            DrawNavigationItem("Currencies", 15, 32 * scale);
             DrawNavigationItem("Bag", 11, 32 * scale);
             DrawNavigationItem("Pokédex", 6, 32 * scale);
             DrawNavigationItem("Collection goals", 7, 32 * scale);
@@ -459,7 +452,6 @@ public sealed partial class MainWindow : Window, IDisposable
                 case 12: DrawRaids(); break;
                 case 13: DrawMysteryGifts(); break;
                 case 14: DrawTrainerCard(); break;
-                case 15: DrawCurrencies(); break;
                 case 16: DrawTrading(); break;
                 case 17: DrawFriends(); break;
                 default: mainSection = 0; DrawAdventure(); break;
@@ -487,7 +479,8 @@ public sealed partial class MainWindow : Window, IDisposable
         if (ImGui.Button($"{label}##MainSection{section}", new Vector2(itemWidth, height)))
         {
             if (!selected && section == 4 && pvpStatus is not null) serverPvpRefreshRequested = true;
-            mainSection = section;
+            if (!selected && section == 8) OpenFrontier();
+            else mainSection = section;
         }
         ImGui.PopStyleVar();
         ImGui.PopStyleColor(3);
@@ -604,7 +597,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (FrontierBusy && mainSection != 8)
         {
             ImGui.TextWrapped("Your saved run is in Battle Frontier. Continue or end it before starting another challenge.");
-            if (DrawAccentButton("Open Battle Frontier", new Vector2(200, 34), PokemonBlue)) mainSection = 8;
+            if (DrawAccentButton("Open Battle Frontier", new Vector2(200, 34), PokemonBlue)) OpenFrontier();
             return;
         }
         if (battle is { Status: not "active", Kind: "trainer" }) { DrawBattleConsole(battle); return; }
@@ -992,7 +985,6 @@ public sealed partial class MainWindow : Window, IDisposable
                 ResetEvTrainingPlanner();
                 ResetTeamAnalysis();
                 ResetCollectionWishlist();
-                ResetRecentActivity();
                 ResetStorageSearches();
                 ResetBattleLog();
                 plugin.Connection.Start();
@@ -1084,9 +1076,6 @@ public sealed partial class MainWindow : Window, IDisposable
     private async Task UseTrainingItem(string pokemonId, string itemId, string? stat, int quantity = 1)
     {
         trainer = await InSession(plugin.Api.UseTrainingItem(pokemonId, itemId, stat, quantity));
-        var pokemon = trainer.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == pokemonId);
-        RecordRecentAction("training:" + Guid.NewGuid(), "training", "Trained " + (pokemon?.Nickname ?? "Pokémon"),
-            $"Used {quantity} x {itemCatalog.FirstOrDefault(item => item.Id == itemId)?.Name ?? itemId}");
         SetStatus($"Used {quantity} x {itemCatalog.FirstOrDefault(item => item.Id == itemId)?.Name ?? itemId}.");
     }
 
@@ -1094,7 +1083,6 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         trainer = await InSession(plugin.Api.UseRareCandy(pokemonId));
         var pokemon = trainer.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == pokemonId);
-        RecordRecentAction("candy:" + Guid.NewGuid(), "training", "Used a Rare Candy", pokemon is null ? "" : $"{pokemon.Nickname} / Lv. {pokemon.Level}");
         SetStatus(pokemon is null ? "Rare Candy used." : $"{pokemon.Nickname} grew to level {pokemon.Level}!");
     }
 
@@ -1162,7 +1150,6 @@ public sealed partial class MainWindow : Window, IDisposable
     private async Task RefreshPvp()
     {
         pvpStatus = await InSession(plugin.Api.GetPvpStatus());
-        ObserveRecentBattle(pvpStatus.Battle, true);
         if (trainer is not null)
             trainer.PvpProfile = pvpStatus.Profile;
         nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(pvpStatus.State == "idle" && pvpStatus.Challenges.Count == 0 ? IdlePvpPollSeconds
@@ -1214,7 +1201,6 @@ public sealed partial class MainWindow : Window, IDisposable
             pvpStatus.Battle = await InSession(plugin.Api.GetPvpBattle(pvpStatus.Battle.Id));
             SetStatus("The battle changed. Choose from the current actions."); return;
         }
-        ObserveRecentBattle(pvpStatus.Battle, true, true);
         nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(1);
         if (pvpStatus.Battle.Status != "active")
             await InSession(RefreshPvp());
@@ -1229,7 +1215,6 @@ public sealed partial class MainWindow : Window, IDisposable
         if (pvpStatus?.Battle is null)
             return;
         pvpStatus.Battle = await InSession(plugin.Api.ForfeitPvpBattle(pvpStatus.Battle.Id));
-        ObserveRecentBattle(pvpStatus.Battle, true, true);
         await InSession(RefreshPvp());
         SetStatus("The PvP match was forfeited.");
     }

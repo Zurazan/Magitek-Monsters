@@ -9,6 +9,7 @@ namespace MagitekMonsters.Windows;
 public sealed partial class MainWindow
 {
     private string badgeCaseRegionId = "";
+    private string? expandedBadgeCaseLineup;
 
     private void DrawRegionalBadgeCase()
     {
@@ -26,7 +27,7 @@ public sealed partial class MainWindow
         {
             foreach (var record in records)
                 if (ImGui.Selectable(record.Region.Name, selected.Region.Id == record.Region.Id))
-                { selected = record; badgeCaseRegionId = record.Region.Id; }
+                { selected = record; badgeCaseRegionId = record.Region.Id; expandedBadgeCaseLineup = null; }
             ImGui.EndCombo();
         }
         ImGui.TextWrapped(selected.Region.Format == "trials" ? "Trials and grand trials belong to the Island Challenge. They are not Gym badges."
@@ -43,16 +44,37 @@ public sealed partial class MainWindow
             ImGui.EndTable();
         }
         ImGui.Spacing();
-        ImGui.TextColored(CompanionAccent, "LEAGUE LINEUPS");
-        foreach (var circuit in selected.Region.Circuits)
+        DrawRegionalLineupRecords(selected);
+    }
+
+    private void DrawRegionalLineupRecords(TrainerLeagueRecord record)
+    {
+        var region = record.Region;
+        if (region.Circuits.Count == 0) return;
+        var clears = RegionalLeaguePresentation.Clears(trainer!);
+        var badgeLabel = region.Format == "trials" ? "trials" : "badges";
+        DrawGoalText($"League lineups / {record.CompletedCircuits.Count:N0} of {region.Circuits.Count:N0} cleared", CompanionAccent);
+        foreach (var circuit in region.Circuits)
         {
-            var complete = selected.CompletedCircuits.Any(entry => entry.Id == circuit.Id);
-            var label = complete ? "COMPLETE" : "NOT CLEARED";
-            var icon = ImGui.GetCursorScreenPos();
-            ImGui.Dummy(new Vector2(28 * CompanionScale));
-            DrawAchievementIconAt("champion:" + selected.Region.Id, icon, new Vector2(28 * CompanionScale), complete);
-            ImGui.SameLine();
-            ImGui.TextWrapped(label + " / " + circuit.Name);
+            var cleared = record.CompletedCircuits.Any(entry => entry.Id == circuit.Id);
+            var reason = cleared ? null : RegionalLeaguePresentation.LeagueLock(region, circuit, clears, false, regionalLeagues, opponents);
+            var status = cleared ? "Cleared" : reason is null ? "Ready" : "Locked";
+            var total = circuit.MilestoneIds.Count;
+            var earned = record.Milestones.Count(slot => slot.Earned && circuit.MilestoneIds.Contains(slot.Definition.Id));
+            var fights = $"{circuit.OpponentIds.Count:N0} {(circuit.OpponentIds.Count == 1 ? "fight" : "fights")}";
+            var summary = total == 0 ? $"{status} / {fights}" : $"{status} / {earned:N0}/{total:N0} {badgeLabel} / {fights}";
+            var expanded = expandedBadgeCaseLineup == circuit.Id;
+            ImGui.PushID(circuit.Id);
+            if (DrawProgressRecordRow("LeagueLineup", circuit.Name, summary, "champion:" + region.Id,
+                cleared ? PokemonGreen : reason is null ? CompanionAccent : CompanionMuted, cleared, expanded, total > 0 ? earned / (float)total : null))
+                expandedBadgeCaseLineup = expanded ? null : circuit.Id;
+            if (expandedBadgeCaseLineup == circuit.Id)
+            {
+                if (reason is not null) DrawGoalText(reason, CompanionMuted);
+                if (DrawAccentSmallButton("View lineup", CompanionAccent)) OpenRegionalLineup(circuit);
+                ImGui.Spacing();
+            }
+            ImGui.PopID();
         }
     }
 

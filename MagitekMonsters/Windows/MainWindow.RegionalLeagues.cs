@@ -16,11 +16,24 @@ public sealed partial class MainWindow
     private string regionalCircuitId = "kanto-classic";
     private string regionalLeaderId = string.Empty;
     private int regionalStage;
+    private bool openRegionalLeagueTab;
 
     private void ResetRegionalLeagues()
     {
         regionalRegionId = "kanto"; regionalCircuitId = "kanto-classic"; regionalLeaderId = ""; regionalStage = 0;
+        openRegionalLeagueTab = false;
         leagueRematch = false; leagueEntryCircuitId = null; pveSetupCircuitId = null; pveSetupOpponentId = null;
+    }
+
+    private void OpenRegionalLineup(RegionalCircuitDto circuit)
+    {
+        regionalRegionId = circuit.RegionId;
+        regionalCircuitId = circuit.Id;
+        regionalLeaderId = string.Empty;
+        regionalStage = 1;
+        leagueRematch = false;
+        openRegionalLeagueTab = true;
+        mainSection = 3;
     }
 
     private RegionalCircuitDto? SelectedRegionalCircuit => regionalLeagues.SelectMany(region => region.Circuits).FirstOrDefault(circuit => circuit.Id == regionalCircuitId);

@@ -22,6 +22,10 @@ public sealed partial class MainWindow
     {
         ResetShowcase();
         badgeCaseRegionId = "";
+        expandedBadgeCaseLineup = null;
+        frontierAchievementView = FrontierAchievementView.Next;
+        frontierAchievementPage = 0;
+        expandedFrontierAchievementId = null;
         identityDraftOwner = uidPromptOwner = string.Empty;
         requestUidPrompt = false;
         trainerProfiles.Clear();
@@ -31,6 +35,8 @@ public sealed partial class MainWindow
         trainerProfileId = trainerProfileError = string.Empty;
         viewedTrainerProfile = null;
         openTrainerProfileTab = false;
+        openTrainerWallet = false;
+        walletCurrency = WalletCurrency.Yen;
     }
 
     private void PrepareTrainerCard()
@@ -80,6 +86,7 @@ public sealed partial class MainWindow
     private void OpenTrainerProfile(string id)
     {
         trainerProfileId = id;
+        openTrainerWallet = false;
         openTrainerProfileTab = true;
         mainSection = 14;
         Run(LoadTrainerProfile, "Loading trainer card...");

@@ -462,7 +462,7 @@ public sealed partial class MainWindow
                 ImGui.SameLine(0, 6 * scale);
                 ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || pokemon.FusionHostId.Length > 0 || pokemon.TradeLockId is not null);
                 if (DrawAccentButton("★##StorageFavourite", new Vector2(favouriteWidth, 24 * scale), pokemon.Favorite ? PokemonYellow : CompanionMuted))
-                    Run(() => UpdateCollection(plugin.Api.EditPokemon(pokemon.Id, favorite: !pokemon.Favorite), "Favourite updated."), "Updating favourite...");
+                    TogglePokemonFavourite(pokemon);
                 ImGui.EndDisabled();
                 if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(pokemon.Favorite ? "Unmark favourite" : "Mark favourite");
                 DrawCollectionEditNotice();

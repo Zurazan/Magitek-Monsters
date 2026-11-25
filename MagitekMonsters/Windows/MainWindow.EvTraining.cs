@@ -193,9 +193,6 @@ public sealed partial class MainWindow
         evTrainingConfirmation = null;
         trainer = await InSession(plugin.Api.ApplyEvTraining(command.PokemonId, new(command.Target), command.UseResetItem,
             command.Plan.PreviewHash, command.RequestId));
-        var pokemon = trainer.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == command.PokemonId);
-        RecordRecentAction("ev-plan:" + command.RequestId, "training", "Applied EV training to " + (pokemon?.Nickname ?? "Pokémon"),
-            string.Join(" / ", BuildStats.Where(stat => command.Target[stat.Id] > 0).Select(stat => $"{command.Target[stat.Id]} {stat.Label}")));
         evTrainingDraft = null;
         SetStatus("EV training applied.");
     }
