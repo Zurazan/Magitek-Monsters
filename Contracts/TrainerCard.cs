@@ -27,6 +27,14 @@ public static class TrainerCard
     public const int MaximumBadges = 3;
     public static IReadOnlyList<string> ColorNames { get; } = Array.AsReadOnly<string>(
         ["Blue", "Red", "Green", "Gold", "Purple", "Pink", "Teal", "Orange", "Silver", "Cyan", "Lavender", "Rose"]);
+    public static IReadOnlyList<(string Id, string Name, string Requirement)> SpecialTitles { get; } =
+        Array.AsReadOnly<(string, string, string)>(
+        [
+            ("developer", "Developer", "Awarded to the developer of Magitek Monsters."),
+            ("beta-tester", "Beta Tester", "Joined Magitek Monsters during beta testing."),
+            ("magitek-industries", "Magitek Industries", "Awarded by a Magitek Monsters admin."),
+            ("lightless", "Lightless", "Awarded by a Magitek Monsters admin.")
+        ]);
 
     public static TrainerProfileDto Profile(TrainerSnapshotDto trainer, TrainerCardPreferences preferences, IReadOnlyList<RegionalLeagueDto>? regions = null)
     {
@@ -81,10 +89,10 @@ public static class TrainerCard
         new("challenger", "Frontier Challenger", "Win 25 Frontier battles.", trainer.Frontier.LifetimeWins >= 25),
         new("veteran", "Frontier Veteran", "Reach a Standard Frontier streak of 21.", trainer.Frontier.BestStandard >= 21),
         new("badges", "Badge Collector", "Earn every Gym badge required by one regional League lineup.", leagues.Any(league => league.CompletedChallenge(badgesOnly: true))),
-        new("island-challenger", "Island Challenger", "Complete an Alola lineup's trials and grand trials.", leagues.Any(league => league.Region.Format == "trials" && league.CompletedChallenge())),
-        new("developer", "Developer", "Awarded to the developer of Magitek Monsters.", trainer.TitleIds.Contains("developer", StringComparer.Ordinal)),
-        new("beta-tester", "Beta Tester", "Joined Magitek Monsters during beta testing.", trainer.TitleIds.Contains("beta-tester", StringComparer.Ordinal))
+        new("island-challenger", "Island Challenger", "Complete an Alola lineup's trials and grand trials.", leagues.Any(league => league.Region.Format == "trials" && league.CompletedChallenge()))
         };
+        titles.AddRange(SpecialTitles.Select(title => new TrainerCardTitle(title.Id, title.Name, title.Requirement,
+            trainer.TitleIds.Contains(title.Id, StringComparer.Ordinal))));
         titles.AddRange(leagues.Select(league => new TrainerCardTitle("champion:" + league.Region.Id,
             league.Region.Id == "blueberry" ? "Blueberry Champion" : league.Region.Name + " Champion",
             "Complete a full " + league.Region.Name + " League lineup. Exhibition battles do not count.", league.Champion)));
