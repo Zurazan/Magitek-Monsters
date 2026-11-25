@@ -49,7 +49,7 @@ public sealed partial class MainWindow
         var portraitWidth = 112 * scale;
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0, (ImGui.GetContentRegionAvail().X - portraitWidth) / 2));
         DrawPokemonImage(pokemon.Appearance, pokemon.Shiny, new Vector2(portraitWidth));
-        DrawCenteredCompanionText(pokemon.Nickname, ImGui.GetStyle().Colors[(int)ImGuiCol.Text]);
+        DrawGenderedPokemonText(pokemon.Nickname, pokemon.Gender, ImGui.GetStyle().Colors[(int)ImGuiCol.Text], centered: true);
         DrawCenteredCompanionText($"{(pokemon.Nickname != pokemon.DisplaySpecies ? pokemon.DisplaySpecies + " / " : "")}Lv. {pokemon.Level}", CompanionMuted);
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0, (ImGui.GetContentRegionAvail().X - (pokemon.Types.Count * 64 + Math.Max(0, pokemon.Types.Count - 1) * 5) * scale) / 2));
         DrawStarterTypeBadges(pokemon.Types.ToArray(), 64 * scale, scale);

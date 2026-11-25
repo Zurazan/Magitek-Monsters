@@ -59,8 +59,8 @@ public sealed partial class MainWindow
 
     private void DrawTradeInspection(PokemonDto pokemon)
     {
-        TradeText(pokemon.DisplaySpecies, CompanionAccent);
-        TradeText($"Nature: {pokemon.Nature}{(pokemon.MintNature.Length > 0 ? " / Mint: " + pokemon.MintNature : "")} / Gender: {pokemon.Gender}", CompanionMuted);
+        DrawGenderedPokemonText(pokemon.DisplaySpecies, pokemon.Gender, CompanionAccent);
+        TradeText($"Nature: {pokemon.Nature}{(pokemon.MintNature.Length > 0 ? " / Mint: " + pokemon.MintNature : "")}", CompanionMuted);
         TradeText($"Ability: {pokemon.Ability} / Tera: {pokemon.TeraType}", CompanionMuted);
         TradeText("Held item: " + TradingItemName(pokemon.HeldItem), CompanionMuted);
         var compact = ImGui.GetContentRegionAvail().X < 310 * CompanionScale;

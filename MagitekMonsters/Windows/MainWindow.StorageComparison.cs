@@ -65,13 +65,14 @@ public sealed partial class MainWindow
                 if (pokemon is not null)
                 {
                     DrawPokemonImage(pokemon.Appearance, pokemon.Shiny, new Vector2(78 * scale));
-                    ImGui.TextWrapped($"{(pokemon.Shiny ? "★ " : "")}{pokemon.DisplaySpecies} / Lv. {pokemon.Level}");
+                    DrawGenderedPokemonText($"{(pokemon.Shiny ? "★ " : "")}{pokemon.DisplaySpecies} / Lv. {pokemon.Level}", pokemon.Gender,
+                        ImGui.GetStyle().Colors[(int)ImGuiCol.Text]);
                     DrawStarterTypeBadges(pokemon.Types.ToArray(), 64 * scale, scale);
                     ImGui.TextWrapped($"Nature: {(pokemon.MintNature.Length > 0 ? pokemon.MintNature + " (mint)" : pokemon.Nature)}");
                     ImGui.TextWrapped($"Ability: {pokemon.Ability}");
                     if (ImGui.IsItemHovered()) DrawAbilityTooltip(pokemon);
                     ImGui.TextWrapped($"Held: {itemCatalog.FirstOrDefault(item => item.Id == pokemon.HeldItem)?.Name ?? (pokemon.HeldItem.Length > 0 ? pokemon.HeldItem : "None")}");
-                    ImGui.TextWrapped($"Tera: {pokemon.TeraType} / {pokemon.Gender}");
+                    ImGui.TextWrapped($"Tera: {pokemon.TeraType}");
                     ImGui.TextColored(CompanionMuted, $"IV total {StorageBrowser.IvTotal(pokemon)}/186 / {StorageBrowser.PerfectIvs(pokemon)} perfect");
                     ImGui.TextColored(CompanionMuted, $"EV total {pokemon.Evs.Values.Sum()}/510");
                     ImGui.TextWrapped(string.Join(" / ", pokemon.Moves));

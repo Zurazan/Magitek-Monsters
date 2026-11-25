@@ -197,6 +197,7 @@ public sealed partial class MainWindow
             var image = Math.Min(Math.Min(size.X, size.Y) - 4 * scale, 68 * scale);
             image = Math.Max(1, image);
             DrawPokemonIconAt(pokemon.Appearance, pokemon.Shiny, min + (size - new Vector2(image)) / 2, new Vector2(image));
+            DrawStorageGenderMark(pokemon, min, size);
             var marks = (pokemon.Shiny ? "★" : "") + (pokemon.Favorite ? "F" : "") + (pokemon.FusionHostId.Length > 0 ? "L" : "") + (pokemon.TradeLockId is not null ? " T" : "");
             if (marks.Length > 0) draw.AddText(min + new Vector2(Math.Max(2 * scale, size.X - ImGui.CalcTextSize(marks).X - 3 * scale), 2 * scale), ImGui.GetColorU32(PokemonYellow), marks);
             if (marked) draw.AddText(min + new Vector2(3 * scale, Math.Max(0, size.Y - ImGui.GetTextLineHeight())), ImGui.GetColorU32(PokemonYellow), "✓");
@@ -221,7 +222,8 @@ public sealed partial class MainWindow
     private void DrawStoragePokemonTooltip(PokemonDto pokemon)
     {
         ImGui.BeginTooltip();
-        ImGui.TextUnformatted($"{pokemon.Nickname} / {pokemon.DisplaySpecies} / Lv. {pokemon.Level}");
+        var gender = PokemonGenderMark(pokemon.Gender);
+        ImGui.TextUnformatted($"{pokemon.Nickname} / {pokemon.DisplaySpecies} / Lv. {pokemon.Level}{(gender is { } mark ? $" / {mark.Label}" : "")}");
         ImGui.TextUnformatted($"{string.Join(" / ", pokemon.Types)} / {pokemon.Ability}");
         ImGui.TextUnformatted($"{(pokemon.MintNature.Length > 0 ? pokemon.MintNature : pokemon.Nature)} / IV {StorageBrowser.IvTotal(pokemon)}/186 / {StorageBrowser.PerfectIvs(pokemon)} perfect");
         var copies = storageDuplicates.GetValueOrDefault(StorageBrowser.Variant(pokemon));
@@ -231,6 +233,17 @@ public sealed partial class MainWindow
         if (pokemon.TradeLockId is not null) ImGui.TextColored(PokemonOrange, "Reserved for trading / Open Trading to cancel or withdraw.");
         if (pokemon.FusionHostId.Length > 0) ImGui.TextWrapped("Fusion partner / Unfuse the host to manage this Pokémon.");
         ImGui.EndTooltip();
+    }
+
+    private static void DrawStorageGenderMark(PokemonDto pokemon, Vector2 origin, Vector2 size)
+    {
+        if (PokemonGenderMark(pokemon.Gender) is not { } mark) return;
+        var scale = CompanionScale;
+        var edge = Math.Min(16 * scale, Math.Min(size.X, size.Y) * .4f);
+        var position = origin + new Vector2(2 * scale);
+        ImGui.GetWindowDrawList().AddRectFilled(position, position + new Vector2(edge),
+            ImGui.GetColorU32(new Vector4(.07f, .09f, .13f, .92f)), 3 * scale);
+        DrawPokemonGenderMark(mark, position, edge);
     }
 
     private void DrawStorageBoxShortcuts(float width, bool empty)
@@ -379,6 +392,7 @@ public sealed partial class MainWindow
             var artHeight = Math.Max(1, size.Y - ImGui.GetTextLineHeight() - 6 * scale);
             var image = Math.Max(1, Math.Min(44 * scale, Math.Min(size.X - 8 * scale, artHeight)));
             DrawPokemonIconAt(pokemon.Appearance, pokemon.Shiny, min + new Vector2((size.X - image) / 2, 2 * scale + (artHeight - image) / 2), new Vector2(image));
+            DrawStorageGenderMark(pokemon, min, size);
             var label = $"Lv. {pokemon.Level}";
             draw.AddText(min + new Vector2(Math.Max(0, (size.X - ImGui.CalcTextSize(label).X) / 2), size.Y - ImGui.GetTextLineHeight() - 2 * scale), ImGui.GetColorU32(CompanionMuted), label);
             if (hovered) DrawStoragePokemonTooltip(pokemon);
@@ -421,7 +435,7 @@ public sealed partial class MainWindow
                 var portrait = Math.Min(100 * scale, ImGui.GetContentRegionAvail().X);
                 ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0, (ImGui.GetContentRegionAvail().X - portrait) / 2));
                 DrawPokemonImage(pokemon.Appearance, pokemon.Shiny, new Vector2(portrait));
-                DrawCenteredCompanionText(pokemon.Nickname, CompanionAccent);
+                DrawGenderedPokemonText(pokemon.Nickname, pokemon.Gender, CompanionAccent, centered: true);
                 DrawClippedText($"{(pokemon.Nickname == pokemon.DisplaySpecies ? "" : pokemon.DisplaySpecies + " / ")}Lv. {pokemon.Level}", ImGui.GetContentRegionAvail().X, CompanionMuted);
                 ImGui.Spacing();
                 DrawStarterTypeBadges(pokemon.Types.ToArray(), 60 * scale, scale);

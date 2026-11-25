@@ -101,12 +101,14 @@ public sealed partial class MainWindow
         var width = ImGui.GetContentRegionAvail().X;
         var textWidth = Math.Max(1, width - art - 3 * pad);
         var name = pokemon is null ? $"Empty slot {index + 1}" : PartyPokemonName(pokemon);
+        var gender = PokemonGenderMark(pokemon?.Gender);
+        var nameWidth = Math.Max(1, textWidth - (gender is null ? 0 : line + gap));
         var role = pokemon is null ? "" : $"{(index == 0 ? "Lead" : $"Slot {index + 1}")} / Lv. {pokemon.Level}";
         var vital = pokemon is null ? null : CompanionVital(pokemon);
         var condition = vital is not null ? PartyHealthStatus(vital) : "";
         var hasMove = pokemon is not null && trainer!.PendingMoves.Any(move => move.PokemonId == pokemon.Id);
         var notice = hasMove && condition.Length > 0 ? $"{condition} / Move ready" : hasMove ? "Move ready" : condition;
-        var nameHeight = ImGui.CalcTextSize(name, false, textWidth).Y;
+        var nameHeight = ImGui.CalcTextSize(name, false, nameWidth).Y;
         var roleHeight = ImGui.CalcTextSize(role, false, textWidth).Y;
         var noticeHeight = notice.Length > 0 ? ImGui.CalcTextSize(notice, false, textWidth).Y : line;
         var headingHeight = Math.Max(art, Math.Max(line, nameHeight) + Math.Max(line, roleHeight) + noticeHeight + 2 * gap);
@@ -116,8 +118,8 @@ public sealed partial class MainWindow
         var clicked = DrawPveCardSurface("PartySlot", height, selected, out var min, out _, out var after, pokemon is not null);
         if (pokemon is null)
         {
-            var nameWidth = ImGui.CalcTextSize(name).X;
-            ImGui.GetWindowDrawList().AddText(min + new Vector2(Math.Max(pad, (width - nameWidth) / 2), (height - line) / 2),
+            var emptyWidth = ImGui.CalcTextSize(name).X;
+            ImGui.GetWindowDrawList().AddText(min + new Vector2(Math.Max(pad, (width - emptyWidth) / 2), (height - line) / 2),
                 ImGui.GetColorU32(CompanionMuted), name);
             ImGui.PopID();
             return false;
@@ -125,11 +127,13 @@ public sealed partial class MainWindow
 
         var (experience, experienceLabel) = ExperienceProgress(pokemon);
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip($"{name}\n{role}\n{experienceLabel}");
+            ImGui.SetTooltip($"{name}{(gender is { } mark ? $" / {mark.Label}" : "")}\n{role}\n{experienceLabel}");
         DrawPokemonIconAt(pokemon.Appearance, pokemon.Shiny, min + new Vector2(pad, pad), new Vector2(art));
         var content = min + new Vector2(art + 2 * pad, pad);
         var draw = ImGui.GetWindowDrawList();
-        draw.AddText(ImGui.GetFont(), ImGui.GetFontSize(), content, ImGui.GetColorU32(selected ? CompanionAccent : ImGui.GetStyle().Colors[(int)ImGuiCol.Text]), name, textWidth);
+        draw.AddText(ImGui.GetFont(), ImGui.GetFontSize(), content, ImGui.GetColorU32(selected ? CompanionAccent : ImGui.GetStyle().Colors[(int)ImGuiCol.Text]), name, nameWidth);
+        if (gender is { } icon)
+            DrawPokemonGenderMark(icon, min + new Vector2(width - pad - line, pad), line);
         content.Y += nameHeight + gap;
         draw.AddText(ImGui.GetFont(), ImGui.GetFontSize(), content, ImGui.GetColorU32(index == 0 ? CompanionAccent : CompanionMuted), role, textWidth);
         content.Y += roleHeight + gap;
@@ -225,7 +229,7 @@ public sealed partial class MainWindow
         DrawPokemonIcon(pokemon.Appearance, pokemon.Shiny, new Vector2(44 * scale));
         ImGui.SameLine();
         ImGui.BeginGroup();
-        ImGui.TextWrapped(PartyPokemonName(pokemon));
+        DrawGenderedPokemonText(PartyPokemonName(pokemon), pokemon.Gender, ImGui.GetStyle().Colors[(int)ImGuiCol.Text]);
         if (pokemon.Types.Count > 0)
             DrawStarterTypeBadges(pokemon.Types.ToArray(), Math.Max(1, Math.Min(58 * scale,
                 (ImGui.GetContentRegionAvail().X - (pokemon.Types.Count - 1) * 5 * scale) / pokemon.Types.Count)), scale);
