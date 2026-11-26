@@ -95,10 +95,14 @@ public sealed partial class MainWindow
             if (!ImGui.TreeNode($"Review move##{learning.Id}")) return;
         }
         else ImGui.TextColored(CompanionAccent, "New move available");
+        DrawLearningMoveDetails(learning.Move);
         ImGui.TextWrapped($"{pokemon.Nickname} can learn {learning.Move}, unlocked at level {learning.Level}. Choose a move to forget.");
         foreach (var move in pokemon.Moves)
+        {
             if (DrawAccentButton($"Forget {move}", new Vector2(-1, 28 * CompanionScale), PokemonOrange))
                 Run(() => ResolveMoveLearning(learning.Id, move), $"Teaching {learning.Move}...");
+            DrawBattleMoveTooltip(move);
+        }
         if (ImGui.Button("Keep current moves")) Run(() => ResolveMoveLearning(learning.Id, null), $"Skipping {learning.Move}...");
         if (compact) ImGui.TreePop();
         ImGui.Spacing();

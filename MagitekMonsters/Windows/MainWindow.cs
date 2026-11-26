@@ -770,16 +770,19 @@ public sealed partial class MainWindow : Window, IDisposable
         ImGui.TextWrapped("Relearn any level-up move this Pokémon has already unlocked.");
         foreach (var move in pokemon.RelearnableMoves)
         {
+            var review = ImGui.TreeNode($"{move}##ChooseRelearn{pokemon.Id}{move}");
+            DrawBattleMoveTooltip(move);
+            if (!review) continue;
+            DrawLearningMoveDetails(move);
             if (pokemon.Moves.Count < 4)
             {
                 if (DrawAccentButton($"Relearn {move}##Relearn{pokemon.Id}{move}", Vector2.Zero, PokemonBlue))
                     Run(() => RelearnMove(pokemon.Id, move, null), $"Relearning {move}...");
+                ImGui.TreePop();
                 continue;
             }
 
-            if (!ImGui.TreeNode($"Relearn {move}##ChooseForgotten{pokemon.Id}{move}"))
-                continue;
-            ImGui.TextDisabled("Choose the move to forget:");
+            ImGui.TextDisabled("Choose a move to forget");
             var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
             for (var index = 0; index < pokemon.Moves.Count; index++)
             {
@@ -787,6 +790,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 if (index > 0) SameLineIfFits(knownMove, right);
                 if (DrawAccentSmallButton($"{knownMove}##RelearnForget{pokemon.Id}{move}{knownMove}", PokemonOrange))
                     Run(() => RelearnMove(pokemon.Id, move, knownMove), $"Relearning {move}...");
+                DrawBattleMoveTooltip(knownMove);
             }
             ImGui.TreePop();
         }

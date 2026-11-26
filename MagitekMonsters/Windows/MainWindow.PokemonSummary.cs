@@ -368,15 +368,20 @@ public sealed partial class MainWindow
 
         var replacement = summaryReplacement is { } selected && selected.LearningId == pending.Id && pokemon.Moves.Contains(selected.Move)
             ? selected.Move : null;
+        DrawLearningMoveDetails(pending.Move);
         ImGui.TextWrapped($"Unlocked at level {pending.Level}. Choose a move to replace.");
         ImGui.SetNextItemWidth(-1);
         if (ImGui.BeginCombo("##MoveToReplace", replacement ?? "Choose a known move"))
         {
             foreach (var move in pokemon.Moves)
+            {
                 if (ImGui.Selectable(move, move == replacement))
                     summaryReplacement = (pending.Id, replacement = move);
+                DrawBattleMoveTooltip(move);
+            }
             ImGui.EndCombo();
         }
+        if (replacement is not null) DrawBattleMoveTooltip(replacement);
         ImGui.BeginDisabled(replacement is null);
         if (DrawAccentButton($"Learn {pending.Move}", Vector2.Zero, PokemonGreen))
             Run(() => ResolveMoveLearning(pending.Id, replacement), $"Teaching {pending.Move}...");

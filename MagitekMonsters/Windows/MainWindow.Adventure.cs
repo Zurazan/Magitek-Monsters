@@ -143,7 +143,6 @@ public sealed partial class MainWindow
         ImGui.EndChild();
         ImGui.PopStyleVar();
         DrawAdventureSearchBar(territoryId, context, layout);
-        DrawAdventureLead(layout.LeadHeight);
     }
 
     private void DrawAdventureRaidEntry()
@@ -249,6 +248,7 @@ public sealed partial class MainWindow
     {
         var scale = CompanionScale;
         var target = targetIndex == 0 ? null : habitat!.Species[targetIndex - 1];
+        var partyReady = trainer!.Party.Any(pokemon => pokemon.Vitals is null || pokemon.Vitals.Hp > 0);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12, 10) * scale);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.13f, 0.15f, 0.18f, 1));
         if (ImGui.BeginChild("AdventureSearchBar", new Vector2(0, layout.ActionHeight), true,
@@ -259,17 +259,17 @@ public sealed partial class MainWindow
                 min + new Vector2(3 * scale, ImGui.GetWindowSize().Y - 4 * scale), ImGui.GetColorU32(CompanionAccent), scale);
             if (layout.StackedActions)
             {
-                DrawAdventureTarget(target);
-                DrawAdventureSearchButton(territoryId, context, target, ImGui.GetContentRegionAvail().X);
+                DrawAdventureTarget(target, partyReady);
+                DrawAdventureSearchButton(territoryId, context, target, ImGui.GetContentRegionAvail().X, partyReady);
             }
             else if (ImGui.BeginTable("AdventureSearchLayout", 2, ImGuiTableFlags.SizingStretchProp))
             {
                 ImGui.TableSetupColumn("Target", ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("Search", ImGuiTableColumnFlags.WidthFixed, 220 * scale);
-                ImGui.TableNextColumn(); DrawAdventureTarget(target);
+                ImGui.TableNextColumn(); DrawAdventureTarget(target, partyReady);
                 ImGui.TableNextColumn();
                 ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 6 * scale);
-                DrawAdventureSearchButton(territoryId, context, target, ImGui.GetContentRegionAvail().X);
+                DrawAdventureSearchButton(territoryId, context, target, ImGui.GetContentRegionAvail().X, partyReady);
                 ImGui.EndTable();
             }
         }
@@ -277,8 +277,15 @@ public sealed partial class MainWindow
         ImGui.PopStyleColor(); ImGui.PopStyleVar();
     }
 
-    private static void DrawAdventureTarget(string? target)
+    private void DrawAdventureTarget(string? target, bool partyReady)
     {
+        if (!partyReady)
+        {
+            var empty = trainer!.Party.Count == 0;
+            ImGui.TextColored(empty ? CompanionMuted : CenterAccent, empty ? "Your party is empty." : "Your party has fainted.");
+            return;
+        }
+
         DrawClippedText(target is null ? "Any species" : $"Targeting {SpeciesDisplayCatalog.Name(target)}",
             ImGui.GetContentRegionAvail().X, ImGui.GetStyle().Colors[(int)ImGuiCol.Text]);
         ImGui.PushStyleColor(ImGuiCol.Text, CompanionMuted);
@@ -286,66 +293,30 @@ public sealed partial class MainWindow
         ImGui.PopStyleColor();
     }
 
-    private void DrawAdventureSearchButton(uint territoryId, TerritoryContextInfo context, string? target, float width)
+    private void DrawAdventureSearchButton(uint territoryId, TerritoryContextInfo context, string? target, float width, bool partyReady)
     {
         var scale = CompanionScale;
+        var size = new Vector2(Math.Max(1, width), 34 * scale);
+        if (!partyReady)
+        {
+            var empty = trainer!.Party.Count == 0;
+            if (DrawAccentButton(empty ? "Open PC Storage" : "Pokémon Center", size, empty ? CompanionAccent : CenterAccent))
+                mainSection = empty ? 2 : 1;
+            return;
+        }
+
         var waitSeconds = searchCooldown.RemainingSeconds;
-        var ready = trainer!.Party.Any(pokemon => pokemon.Vitals is null || pokemon.Vitals.Hp > 0);
         var label = waitSeconds > 0 ? $"Search again in {waitSeconds}s" : target is null ? "Search for wild Pokémon" : $"Search for {SpeciesDisplayCatalog.Name(target)}";
         if (ImGui.CalcTextSize(label).X + ImGui.GetStyle().FramePadding.X * 2 > width && waitSeconds == 0 && target is not null) label = "Search for target";
-        ImGui.BeginDisabled(busy || CollectionLocked || waitSeconds > 0 || !ready || habitat!.Species.Count == 0);
+        ImGui.BeginDisabled(busy || CollectionLocked || waitSeconds > 0 || habitat!.Species.Count == 0);
         ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.44f, 0.26f, 0.30f, 1));
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.53f, 0.32f, 0.36f, 1));
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.39f, 0.22f, 0.26f, 1));
-        if (ImGui.Button($"{label}###WildSearch", new Vector2(Math.Max(1, width), 34 * scale)))
+        if (ImGui.Button($"{label}###WildSearch", size))
             Run(() => Search(territoryId, context, target), $"Searching {context.LocalizedName}...");
         ImGui.PopStyleColor(3);
         ImGui.EndDisabled();
-        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(!ready
-            ? "Add a healthy Pokémon or heal at the Pokémon Center in Party before searching."
-            : waitSeconds > 0 ? "The search cooldown is shared across all areas and targets."
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(waitSeconds > 0 ? "The search cooldown is shared across all areas and targets."
             : target is null ? "Start a wild battle from this territory's pool." : $"Search for {SpeciesDisplayCatalog.Name(target)}. Targeting is not guaranteed.");
-    }
-
-    private void DrawAdventureLead(float height)
-    {
-        var scale = CompanionScale;
-        var lead = trainer!.Party.OrderBy(pokemon => pokemon.PartySlot).FirstOrDefault(pokemon => pokemon.Vitals is null || pokemon.Vitals.Hp > 0);
-        ImGui.Separator();
-        if (lead is null)
-        {
-            if (trainer.Party.Count == 0) ImGui.TextColored(CompanionMuted, "Your party is empty. Add a Pokémon from PC Storage.");
-            else
-            {
-                ImGui.AlignTextToFramePadding(); ImGui.TextColored(CenterAccent, "Your party has fainted.");
-                var buttonWidth = ImGui.CalcTextSize("Pokémon Center").X + 20 * scale;
-                if (ImGui.GetContentRegionAvail().X >= buttonWidth + 160 * scale) ImGui.SameLine();
-                if (DrawAccentButton("Pokémon Center", new Vector2(Math.Min(buttonWidth, ImGui.GetContentRegionAvail().X), 28 * scale), CenterAccent)) mainSection = 1;
-            }
-            return;
-        }
-        var origin = ImGui.GetCursorScreenPos();
-        var width = ImGui.GetContentRegionAvail().X;
-        ImGui.Dummy(new Vector2(width, height - ImGui.GetStyle().ItemSpacing.Y));
-        var after = ImGui.GetCursorScreenPos();
-        var vital = CompanionVital(lead);
-        var hpLabel = vital is null ? "HP unavailable" : $"{vital.Hp} / {vital.MaxHp} HP{HealthStatus(vital)}";
-        var hpWidth = ImGui.CalcTextSize(hpLabel).X;
-        var stacked = width < 420 * scale;
-        ImGui.SetCursorScreenPos(origin);
-        DrawPokemonIcon(lead.Appearance, lead.Shiny, new Vector2(40 * scale));
-        ImGui.SetCursorScreenPos(origin + new Vector2(48, 4) * scale);
-        ImGui.BeginGroup();
-        var nameWidth = Math.Max(1, width - (stacked ? 58 * scale : hpWidth + 66 * scale));
-        DrawClippedText($"Lead: {lead.Nickname} / Lv. {lead.Level}", nameWidth, CompanionMuted);
-        if (stacked) DrawClippedText(hpLabel, nameWidth, CompanionMuted);
-        DrawProgressBar(vital is null ? 0 : vital.Hp / (float)Math.Max(1, vital.MaxHp), new Vector2(Math.Min(nameWidth, 120 * scale), 5 * scale), "", HpBarRed);
-        ImGui.EndGroup();
-        if (!stacked)
-        {
-            ImGui.SetCursorScreenPos(new Vector2(origin.X + width - hpWidth, origin.Y + 8 * scale));
-            ImGui.TextColored(CompanionMuted, hpLabel);
-        }
-        ImGui.SetCursorScreenPos(after);
     }
 }

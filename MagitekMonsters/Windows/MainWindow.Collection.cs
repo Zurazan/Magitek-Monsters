@@ -157,17 +157,7 @@ public sealed partial class MainWindow
         if (move is null && preview is null) return;
         ImGui.BeginTooltip();
         ImGui.PushTextWrapPos(ImGui.GetFontSize() * 28);
-        if (move is not null)
-        {
-            ImGui.TextColored(PokemonBlue, $"{move.Name} | {move.Type} | {move.Category}");
-            var power = label.Power ?? move.Power;
-            ImGui.Text($"Power: {(power > 0 ? power.ToString() : "N/A")} | Accuracy: {move.Accuracy?.ToString() ?? "Always"} | Base PP: {move.Pp}");
-            if (label.Power is not null)
-                ImGui.TextWrapped(label.Name == "Return"
-                    ? "Power rises with friendship, up to 102. EV-reset berries also raise friendship."
-                    : "Power falls as friendship rises, from a maximum of 102.");
-            ImGui.TextWrapped(move.Description);
-        }
+        if (move is not null) DrawMoveDetails(move, label.Power, showName: true);
         else ImGui.TextUnformatted(label.ButtonText);
         if (preview is not null)
         {
@@ -177,6 +167,26 @@ public sealed partial class MainWindow
         }
         ImGui.PopTextWrapPos();
         ImGui.EndTooltip();
+    }
+
+    private void DrawLearningMoveDetails(string name)
+    {
+        if (battleMoveHelp.TryGetValue(name, out var move)) DrawMoveDetails(move);
+        else ImGui.TextDisabled("Move details unavailable.");
+    }
+
+    private static void DrawMoveDetails(MoveDetailsDto move, int? currentPower = null, bool showName = false)
+    {
+        var heading = $"{move.Type} / {move.Category}";
+        ImGui.TextColored(TypeColor(move.Type), showName ? $"{move.Name} / {heading}" : heading);
+        var power = currentPower ?? move.Power;
+        var accuracy = move.Accuracy is int percent ? $"{percent}%" : "Always";
+        ImGui.TextWrapped($"Power {(power > 0 ? power.ToString() : "N/A")} / Accuracy {accuracy} / PP {move.Pp}");
+        if (currentPower is not null)
+            ImGui.TextWrapped(move.Name.Equals("Return", StringComparison.OrdinalIgnoreCase)
+                ? "Power rises with friendship, up to 102. EV-reset berries also raise friendship."
+                : "Power falls as friendship rises, from a maximum of 102.");
+        if (!string.IsNullOrWhiteSpace(move.Description)) ImGui.TextWrapped(move.Description);
     }
 
     private static void DrawBattleGuide()

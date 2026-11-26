@@ -310,10 +310,14 @@ public sealed partial class MainWindow
         var pokemon = trainer?.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == learning?.PokemonId);
         if (learning is null || pokemon is null) { ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return; }
         ImGui.TextColored(CompanionAccent, $"{learning.Move} / Unlocked at Lv. {learning.Level}");
+        DrawLearningMoveDetails(learning.Move);
         ImGui.TextWrapped($"Choose a move for {pokemon.Nickname} to forget.");
         ImGui.Spacing(); ImGui.BeginDisabled(CollectionLocked);
         foreach (var move in pokemon.Moves)
+        {
             if (DrawAccentButton(move, new Vector2(-1, 29 * CompanionScale), resultForgetMove == move ? CompanionAccent : CompanionMuted)) resultForgetMove = move;
+            DrawBattleMoveTooltip(move);
+        }
         ImGui.Separator();
         ImGui.BeginDisabled(resultForgetMove.Length == 0);
         if (DrawAccentButton(resultForgetMove.Length == 0 ? "Choose a move" : $"Replace {resultForgetMove}", new Vector2(-1, 30 * CompanionScale), CompanionAccent))
