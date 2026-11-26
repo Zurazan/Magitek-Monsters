@@ -31,7 +31,8 @@ public static class TrainerCard
         Array.AsReadOnly<(string, string, string)>(
         [
             ("developer", "Developer", "Awarded to the developer of Magitek Monsters."),
-            ("beta-tester", "Beta Tester", "Joined Magitek Monsters during beta testing."),
+            ("alpha-tester", "Alpha Tester", "Joined Magitek Monsters during alpha testing."),
+            ("beta-tester", "Beta Tester", "Chose a starter before the 1.0.0.0 release."),
             ("magitek-industries", "Magitek Industries", "Awarded by a Magitek Monsters admin."),
             ("lightless", "Lightless", "Awarded by a Magitek Monsters admin.")
         ]);
