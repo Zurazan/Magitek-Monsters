@@ -24,7 +24,7 @@ public sealed partial class MainWindow
         ImGui.PushStyleVar(ImGuiStyleVar.WindowTitleAlign, new Vector2(0, 0.5f));
     }
 
-    private static bool BeginConfirmationModal(string name)
+    internal static bool BeginConfirmationModal(string name)
     {
         PrepareConfirmationModal();
         if (BeginCenteredModal(name, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoSavedSettings))
@@ -36,14 +36,14 @@ public sealed partial class MainWindow
         return false;
     }
 
-    private static void EndConfirmationModal()
+    internal static void EndConfirmationModal()
     {
         ImGui.PopTextWrapPos();
         ImGui.EndPopup();
         ImGui.PopStyleVar(ConfirmationStyleCount);
     }
 
-    private static bool DrawConfirmationActions(string? confirmLabel, Vector4 accent, bool disabled = false,
+    internal static bool DrawConfirmationActions(string? confirmLabel, Vector4 accent, bool disabled = false,
         string cancelLabel = "Cancel", Action? onCancel = null)
     {
         ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();

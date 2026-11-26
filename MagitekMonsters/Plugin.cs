@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Command;
+using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -31,6 +33,7 @@ public sealed class Plugin : IDalamudPlugin
     public AnimatedPokemonSprites AnimatedSprites { get; }
     public ServerConnection Connection { get; }
     public DalamudNotifications Notifications { get; }
+    internal BattleLogArchive BattleLogs { get; }
 
     public readonly WindowSystem WindowSystem = new("MagitekMonsters");
     private ConfigWindow ConfigWindow { get; }
@@ -49,10 +52,24 @@ public sealed class Plugin : IDalamudPlugin
             exception => Log.Warning(exception, "Magitek Monsters server event connection was interrupted."));
         Api.Live = Connection;
         Assets = new AssetCatalog(assemblyDirectory);
-        AnimatedSprites = new AnimatedPokemonSprites(Path.Combine(PluginInterface.GetPluginConfigDirectory(), "AnimatedSprites"), Assets);
+        var configDirectory = PluginInterface.GetPluginConfigDirectory();
+        AnimatedSprites = new AnimatedPokemonSprites(Path.Combine(configDirectory, "AnimatedSprites"), Assets);
+        BattleLogs = new(configDirectory, exception => Log.Warning(exception, "Magitek Monsters battle log file operation failed."),
+            retentionDays: Configuration.BattleLogRetentionDays);
 
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this);
+        MainWindow.TitleBarButtons.Add(new()
+        {
+            Icon = FontAwesomeIcon.Cog,
+            ShowTooltip = () => ImGui.SetTooltip("Settings"),
+            Click = button =>
+            {
+                if (button != ImGuiMouseButton.Left) return;
+                ConfigWindow.IsOpen = true;
+                ConfigWindow.BringToFront();
+            }
+        });
         Notifications = new DalamudNotifications(NotificationManager, MainWindow.OpenNotification, () => MainWindow.NotificationScope, MainWindow.NotificationAction);
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);

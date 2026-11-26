@@ -90,6 +90,7 @@ public sealed partial class MainWindow : Window, IDisposable
         : base("Magitek Monsters###MagitekMonstersMain")
     {
         this.plugin = plugin;
+        battleLogArchive = plugin.BattleLogs;
         SizeConstraints = new WindowSizeConstraints
         {
             MinimumSize = new Vector2(780, 560),
@@ -292,6 +293,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         while (backgroundResults.TryDequeue(out var result)) result();
         ApplyLiveUpdates();
+        ObserveBattleLogs();
         if (plugin.Api.Update.Required)
         {
             CancelBackgroundRefresh();
@@ -412,6 +414,7 @@ public sealed partial class MainWindow : Window, IDisposable
             DrawNavigationItem("Cooperative Dens", 12, 32 * scale);
             DrawNavigationItem("Sanctuaries", 9, 32 * scale);
             DrawNavigationItem("Online Battles", 4, 32 * scale);
+            DrawLastBattleLog();
             ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
             ImGui.TextColored(CompanionMuted, "COLLECTION");
             DrawNavigationItem("Poké Mart", 5, 32 * scale);
@@ -1400,7 +1403,7 @@ public sealed partial class MainWindow : Window, IDisposable
             "switch" when parts.Length > 3 => parts[2].StartsWith(ownSide, StringComparison.Ordinal)
                 ? $"You sent out {CleanIdent(parts[2])}!"
                 : $"The opponent sent out {CleanIdent(parts[2])}!",
-            "-damage" when parts.Length > 3 => $"{BattleActor(parts[2])} now has {parts[3]} HP.",
+            "-damage" when parts.Length > 3 => FormatBattleDamage(BattleActor(parts[2]), parts),
             "-heal" when parts.Length > 3 => $"{BattleActor(parts[2])} recovered to {parts[3]} HP.",
             "faint" when parts.Length > 2 => $"{BattleActor(parts[2])} fainted!",
             "-supereffective" when parts.Length > 2 => "It's super effective!",
@@ -1428,6 +1431,22 @@ public sealed partial class MainWindow : Window, IDisposable
             "tie" => "The battle ended in a draw.",
             _ => string.Empty
         };
+    }
+
+    private static string FormatBattleDamage(string actor, string[] parts)
+    {
+        const string from = "[from] ";
+        var hp = parts[3].Split(' ', 2)[0];
+        var source = parts.Skip(4).FirstOrDefault(part => part.StartsWith(from, StringComparison.Ordinal));
+        if (source is null) return $"{actor} now has {hp} HP.";
+        var cause = CleanIdent(source[from.Length..]) switch
+        {
+            "Recoil" => "recoil",
+            "brn" => "burn",
+            "psn" or "tox" => "poison",
+            var effect => effect
+        };
+        return $"{actor} took damage from {cause} ({hp} HP left).";
     }
 
     private static string WeatherHint(string weather) => weather switch

@@ -37,7 +37,13 @@ public sealed partial class MainWindow
                 .Where(line => !string.IsNullOrWhiteSpace(line.Text)).ToArray();
         }
         var start = ImGui.GetCursorPosY();
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
         ImGui.TextColored(CompanionAccent, "Battle log");
+        if (lines.Count > 0 && battleLogArchive is not null)
+        {
+            SameLineIfFits("Copy log", right);
+            DrawCopyBattleLog(id);
+        }
         var following = battleLogFollow.Following;
         if (ImGui.Checkbox("Follow latest", ref following)) battleLogFollow.Following = following;
         if (ImGui.IsItemHovered()) ImGui.SetTooltip("Scroll up to read earlier messages. Enable Follow latest to jump back to the newest message.");

@@ -142,7 +142,7 @@ public sealed partial class MainWindow
         ImGui.EndChild();
         ImGui.SetCursorPos(origin + new Vector2(layout.MainWidth + layout.Gap, 0));
         ImGui.BeginChild("RaidHistoryRail", new Vector2(layout.LogWidth, available.Y), false, FixedBattlePanel);
-        DrawPermanentBattleLog("raid:" + room.Id, room.Snapshot?.Log ?? [], available.Y);
+        DrawPermanentBattleLog("raid:" + room.Id, room.Snapshot?.Log ?? [], available.Y, room.Status);
         ImGui.EndChild(); ImGui.PopStyleVar();
     }
     private void DrawRaidDen(RaidDenDto den, bool hasPokemon)

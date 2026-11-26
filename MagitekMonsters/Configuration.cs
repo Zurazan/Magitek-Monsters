@@ -13,6 +13,7 @@ public sealed class Configuration : IPluginConfiguration
     public int Version { get; set; } = 1;
     public bool NotificationsEnabled { get; set; } = true;
     public bool MoveTypeHintsEnabled { get; set; } = true;
+    public int BattleLogRetentionDays { get; set; } = BattleLogArchive.DefaultRetentionDays;
 
     // Stored with Windows DPAPI.
     public string ProtectedAccessToken { get; set; } = string.Empty;
