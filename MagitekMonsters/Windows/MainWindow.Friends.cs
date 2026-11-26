@@ -4,6 +4,7 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using MagitekMonsters.Contracts;
 using MagitekMonsters.Models;
 using MagitekMonsters.Services;
 
@@ -21,6 +22,7 @@ public sealed partial class MainWindow
     private bool openFriendPicker;
     private int friendsTab;
     private (string InviteId, string Message)? denInviteError;
+    private StoragePicker? denInvitePicker;
     private readonly Dictionary<string, bool> searchFriendGroups = [];
     private FriendEntryDto? friendConfirmation;
     private bool openFriendConfirmation;
@@ -31,7 +33,7 @@ public sealed partial class MainWindow
         friendPages.Clear(); friendInbox = null; selectedFriend = null;
         friendsRefreshRequested = true; nextFriendsPollAt = DateTimeOffset.MinValue;
         friendSearch = friendAddCode = friendPickerSearch = ""; friendsTab = 0;
-        denInviteError = null;
+        denInviteError = null; denInvitePicker = null;
         friendPickerPurpose = null; openFriendPicker = false; friendConfirmation = null; openFriendConfirmation = false;
         searchFriendGroups.Clear();
     }
@@ -124,6 +126,7 @@ public sealed partial class MainWindow
         ImGui.BeginChild("FriendDetails", new Vector2(0, available.Y), true);
         DrawFriendDetails(); ImGui.EndChild();
         DrawFriendConfirmation();
+        DrawStoragePicker(ref denInvitePicker, "Join invited den");
     }
     private bool FriendGroupOpen(string group, string search)
     {
@@ -278,16 +281,19 @@ public sealed partial class MainWindow
     {
         if (busy || friend.RequestId is not { } id) return;
         mainSection = 17; friendsTab = 1; selectedFriendGroup = "dens"; selectedFriend = friend;
-        denInviteError = null;
+        denInviteError = null; denInvitePicker = null;
         Run(async () =>
         {
             if (friend.ExpiresAt <= DateTimeOffset.UtcNow)
             { ShowDenInviteError(id, "This den invitation expired."); return; }
+            var minimumLevel = 0;
             if (friend.Stars > 0)
             {
                 var board = await InSession(plugin.Api.GetRaids(disposeCancellation.Token));
-                if (board.Dens.FirstOrDefault(den => den.Stars == friend.Stars)?.LockReason is { Length: > 0 } reason)
+                var den = board.Dens.FirstOrDefault(den => den.Stars == friend.Stars);
+                if (den?.LockReason is { Length: > 0 } reason)
                 { ShowDenInviteError(id, reason); return; }
+                minimumLevel = den?.MinimumLevel ?? 0;
             }
             FriendDenInviteDto invite;
             try { invite = await InSession(plugin.Api.ReviewDenInvitation(id)); }
@@ -295,12 +301,30 @@ public sealed partial class MainWindow
             { ShowDenInviteError(id, exception.Message); return; }
             if (invite.ExpiresAt <= DateTimeOffset.UtcNow)
             { ShowDenInviteError(id, "This den invitation expired."); return; }
-            if (raidRoom is { Status: "lobby" or "active" } current && current.Id != invite.RoomId)
-            { ShowDenInviteError(id, "Leave your current den before joining another lobby."); return; }
-            if (raidRoom is not null && raidRoom.Status is not ("lobby" or "active")) raidRoom = null;
-            raidJoinCode = invite.Code; mainSection = 12; OpenRaidPicker();
-            SetStatus("Choose your Pokémon, then join the invited den.");
+            if (raidRoom is { Status: "lobby" or "active" } current)
+            {
+                if (current.Id == invite.RoomId) { mainSection = 12; return; }
+                ShowDenInviteError(id, "Leave your current den before joining another lobby.");
+                return;
+            }
+            denInvitePicker = CreateStoragePicker(StoragePickerMode.Raid, raidRoom?.Id, SelectedRaidPokemon(), invite, minimumLevel);
+            SetStatus("Choose a Pokémon to join the den.", quiet: true);
         }, "Reviewing den invitation...");
+    }
+    private void JoinInvitedDen(FriendDenInviteDto invite, PokemonDto pokemon)
+    {
+        denInvitePicker = null;
+        mainSection = 12;
+        Run(async () =>
+        {
+            try { await RaidAction("join", new RaidJoinRequest(pokemon.Id, Code: invite.Code), true); }
+            catch (ApiException exception) when (exception.StatusCode is 400 or 404 or 409 or 429
+                && exception.Code != "mutation_committed" && raidRoom?.Id != invite.RoomId)
+            {
+                if (mainSection == 12) { mainSection = 17; friendsTab = 1; }
+                ShowDenInviteError(invite.InviteId, exception.Message);
+            }
+        }, "Joining the invited den...");
     }
     private void ShowDenInviteError(string id, string message)
     {

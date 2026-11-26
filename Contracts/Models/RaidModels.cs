@@ -17,6 +17,7 @@ public sealed class RaidDenDto
     public string TeraType { get; set; } = "";
     public int Stars { get; set; }
     public int Level { get; set; }
+    public int MinimumLevel { get; set; }
     public int Currency { get; set; }
     public int Experience { get; set; }
     public string Medicine { get; set; } = "";

@@ -87,7 +87,7 @@ public sealed partial class MainWindow
         else ApplyRaid(result);
         if (action == "join") friendsRefreshRequested = true;
         trainer = await InSession(plugin.Api.GetMe(disposeCancellation.Token));
-        SetStatus(action switch { "choose" => "Raid action saved.", "catch" => "Caught! Your Pokémon is saved.", "skip" => "Capture skipped.", "leave" => "You left the raid.", _ => "Raid updated." });
+        SetStatus(action switch { "join" => "Joined the den lobby.", "choose" => "Raid action saved.", "catch" => "Caught! Your Pokémon is saved.", "skip" => "Capture skipped.", "leave" => "You left the raid.", _ => "Raid updated." });
     }
     private void DrawRaids()
     {
@@ -113,18 +113,20 @@ public sealed partial class MainWindow
                 return;
             }
             ImGui.TextColored(CompanionMuted, $"{raidBoard.Progress.Wins:N0} victories / Best: {raidBoard.Progress.BestStars} stars / Dens rotate every 6 hours (UTC)");
-            var hasPokemon = DrawRaidPokemonChoice();
+            var pokemon = DrawRaidPokemonChoice();
             ImGui.Checkbox("Private lobby", ref raidPrivate);
             ImGui.SameLine(); ImGui.SetNextItemWidth(125 * CompanionScale);
             ImGui.InputTextWithHint("##RaidCode", "Lobby code", ref raidJoinCode, 8);
-            ImGui.SameLine(); ImGui.BeginDisabled(CollectionLocked || !hasPokemon || raidJoinCode.Trim().Length != 8);
+            ImGui.SameLine(); ImGui.BeginDisabled(CollectionLocked || pokemon is null || raidJoinCode.Trim().Length != 8);
             if (DrawAccentSmallButton("Join code", PokemonBlue)) Run(() => RaidAction("join", new RaidJoinRequest(raidPokemonId, Code: raidJoinCode.Trim().ToUpperInvariant()), true), "Joining raid...");
             ImGui.EndDisabled();
-            ImGui.TextWrapped("No entry cost or loss penalty. Loot and one catch per den per rotation. Replays help friends without repeat rewards.");
+            ImGui.TextWrapped(raidBoard.Dens.Any(den => den.MinimumLevel > 0)
+                ? "Win 10 raids at a tier to unlock the next. Repeat clears count. Loot and one catch per den per rotation."
+                : "Loot and one catch per den per rotation. Replays help friends without repeat rewards.");
             DrawPager("RaidDens", ref raidDenPage, raidBoard.Dens.Count, 4);
             if (ImGui.BeginTable("RaidDenGrid", ImGui.GetContentRegionAvail().X > 480 * CompanionScale ? 2 : 1, ImGuiTableFlags.SizingStretchSame))
             {
-                foreach (var den in raidBoard.Dens.Skip(raidDenPage * 4).Take(4)) { ImGui.TableNextColumn(); DrawRaidDen(den, hasPokemon); }
+                foreach (var den in raidBoard.Dens.Skip(raidDenPage * 4).Take(4)) { ImGui.TableNextColumn(); DrawRaidDen(den, pokemon); }
                 ImGui.EndTable();
             }
         }
@@ -146,19 +148,27 @@ public sealed partial class MainWindow
         DrawPermanentBattleLog("raid:" + room.Id, room.Snapshot?.Log ?? [], available.Y, room.Status);
         ImGui.EndChild(); ImGui.PopStyleVar();
     }
-    private void DrawRaidDen(RaidDenDto den, bool hasPokemon)
+    private void DrawRaidDen(RaidDenDto den, PokemonDto? pokemon)
     {
         ImGui.PushID(den.Key);
         ImGui.BeginChild("Den", new Vector2(0, 232 * CompanionScale), true, ImGuiWindowFlags.NoScrollbar);
-        ImGui.TextColored(PokemonYellow, $"{new string('*', den.Stars)} / Battle Lv. {den.Level}");
+        ImGui.TextColored(PokemonYellow, den.MinimumLevel > 0 ? $"{new string('*', den.Stars)} / Min. Lv. {den.MinimumLevel}"
+            : $"{new string('*', den.Stars)} / Battle Lv. {den.Level}");
         DrawPokemonIcon(den.Species, false, new Vector2(60 * CompanionScale)); ImGui.SameLine(); ImGui.BeginGroup();
         ImGui.TextUnformatted(den.Species); ImGui.TextColored(CompanionMuted, den.Theme);
         DrawStarterTypeBadges(den.Stars >= 3 ? [den.TeraType] : Services.SpeciesDisplayCatalog.Get(den.Species)?.Types ?? [], 65 * CompanionScale, CompanionScale);
         ImGui.EndGroup();
         ImGui.TextWrapped(den.RewardClaimed ? "Reward collected. You can still help other trainers." : $"¥ {den.Currency:N0} / {den.Experience:N0} EXP / Medicine + ball / Guaranteed catch");
-        if (den.LockReason.Length > 0) ImGui.TextWrapped(den.LockReason);
+        var levelReason = pokemon is null ? null : RaidLevelRestriction(pokemon, den.MinimumLevel);
+        var reason = den.LockReason.Length > 0 ? den.LockReason : levelReason;
+        if (reason is not null)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, PokemonOrange);
+            ImGui.TextWrapped(reason);
+            ImGui.PopStyleColor();
+        }
         var rooms = raidBoard!.Rooms.Where(entry => entry.DenKey == den.Key).ToList();
-        ImGui.BeginDisabled(CollectionLocked || !hasPokemon || den.LockReason.Length > 0);
+        ImGui.BeginDisabled(CollectionLocked || pokemon is null || reason is not null);
         if (DrawAccentButton("Host raid", new Vector2(-1, 28 * CompanionScale), PokemonBlue)) Run(() => RaidAction("create", new RaidCreateRequest(den.Key, raidPokemonId, raidPrivate), true), "Opening raid lobby...");
         if (rooms.Count > 0 && ImGui.BeginCombo("Join public lobby", $"{rooms.Count} waiting"))
         {
@@ -168,7 +178,7 @@ public sealed partial class MainWindow
         }
         ImGui.EndDisabled(); ImGui.EndChild(); ImGui.PopID();
     }
-    private bool DrawRaidPokemonChoice()
+    private PokemonDto? DrawRaidPokemonChoice()
     {
         var pokemon = SelectedRaidPokemon();
         if (pokemon is null)
@@ -179,7 +189,7 @@ public sealed partial class MainWindow
         }
         if (DrawAccentButton(pokemon is null ? "Choose Pokémon from party or PC" : $"{pokemon.Nickname} / Lv. {pokemon.Level} / Change Pokémon", new Vector2(-1, 32 * CompanionScale), pokemon is null ? PokemonYellow : PokemonBlue))
             OpenRaidPicker();
-        return pokemon is not null;
+        return pokemon;
     }
 
     private PokemonDto? SelectedRaidPokemon()
@@ -189,7 +199,7 @@ public sealed partial class MainWindow
     }
 
     private void OpenRaidPicker() =>
-        raidPicker = CreateStoragePicker(StoragePickerMode.Raid, raidRoom?.Id, SelectedRaidPokemon());
+        raidPicker = CreateStoragePicker(StoragePickerMode.Raid, raidRoom?.Id, SelectedRaidPokemon(), minimumLevel: raidRoom?.Den.MinimumLevel ?? 0);
 
     private void DrawRaidPicker()
     {
@@ -197,12 +207,15 @@ public sealed partial class MainWindow
         DrawStoragePicker(ref raidPicker, "Raid Pokémon");
     }
 
-    private string? RaidPokemonRestriction(PokemonDto? pokemon)
+    private string? RaidPokemonRestriction(PokemonDto? pokemon, int minimumLevel)
     {
         if (busy) return "Wait for the current action to finish.";
         if (pokemon is null) return "Choose a Pokémon from your party or PC Storage.";
-        return pokemon.FusionHostId.Length > 0 ? "Unfuse this Pokémon's host before bringing it to a den." : null;
+        return pokemon.FusionHostId.Length > 0 ? "Unfuse this Pokémon's host before bringing it to a den." : RaidLevelRestriction(pokemon, minimumLevel);
     }
+
+    private static string? RaidLevelRestriction(PokemonDto pokemon, int minimumLevel) => pokemon.Level < minimumLevel
+        ? $"Requires Lv. {minimumLevel}. Selected Pokémon is Lv. {pokemon.Level}." : null;
 
     private void ChooseRaidPokemon(PokemonDto pokemon)
     {
@@ -235,11 +248,15 @@ public sealed partial class MainWindow
             ImGui.PopID();
         }
         raidPokemonId = room.SelectedPokemon.Id; DrawRaidPokemonChoice();
+        var levelReason = RaidLevelRestriction(room.SelectedPokemon, room.Den.MinimumLevel);
+        if (levelReason is not null) ImGui.TextColored(PokemonOrange, levelReason);
         ImGui.BeginDisabled(busy);
+        ImGui.BeginDisabled(!room.Ready && levelReason is not null);
         if (DrawAccentButton(room.Ready ? "Cancel ready" : "Ready", new Vector2(-1, 34 * CompanionScale), room.Ready ? PokemonOrange : PokemonGreen)) Run(() => RaidAction("ready", new RaidReadyRequest(!room.Ready)), "Updating readiness...");
+        ImGui.EndDisabled();
         if (room.Host)
         {
-            ImGui.BeginDisabled(!room.Players.All(player => player.Ready));
+            ImGui.BeginDisabled(!room.Players.All(player => player.Ready && player.Level >= room.Den.MinimumLevel));
             if (DrawAccentButton("Start raid with NPC fill", new Vector2(-1, 34 * CompanionScale), PokemonRed)) Run(() => RaidAction("start", EmptyRequest.Instance), "Entering the den...");
             ImGui.EndDisabled();
         }
@@ -316,24 +333,31 @@ public sealed partial class MainWindow
             ImGui.TextColored(PokemonYellow, $"{(own.Species.EndsWith("-Gmax", StringComparison.Ordinal) ? "Gigantamax" : "Dynamax")} / {own.DynamaxTurns} rounds remaining");
             return;
         }
-        var options = new List<(string Id, string Label)> { ("", "Normal move") };
+        var options = new List<(string Id, string Label)>();
         if (own.CanMega) options.Add(("mega", "Mega Evolve"));
         if (own.CanUltra) options.Add(("ultra", "Ultra Burst"));
         if (own.CanTera) options.Add(("terastallize", "Terastallize"));
         if (own.CanDynamax) options.Add(("dynamax", own.MaxMoves?.Gigantamax is { Length: > 0 } ? "Gigantamax" : "Dynamax"));
         if (own.ZMoves?.Any(move => move is not null) == true) options.Add(("zmove", "Use Z-Move"));
         if (!options.Any(option => option.Id == raidModifier)) raidModifier = "";
-        if (options.Count > 1)
+        if (options.Count == 0) return;
+
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        var style = ImGui.GetStyle();
+        var nextX = right;
+        foreach (var (id, label) in options)
         {
-            ImGui.SetNextItemWidth(-1);
-            if (ImGui.BeginCombo("##RaidModifier", options.First(option => option.Id == raidModifier).Label))
-            {
-                foreach (var option in options) if (ImGui.Selectable(option.Label, raidModifier == option.Id)) raidModifier = option.Id;
-                ImGui.EndCombo();
-            }
+            var width = ImGui.CalcTextSize(label).X + style.FramePadding.X * 2;
+            if (nextX + width <= right) ImGui.SameLine();
+            var selected = raidModifier == id;
+            PushAccentButtonStyle(selected ? PokemonYellow : CompanionAccent);
+            if (selected) ImGui.PushStyleColor(ImGuiCol.Button, Vector4.Lerp(CompanionSurface, PokemonYellow, 0.32f));
+            var buttonWidth = Math.Max(1, Math.Min(width, ImGui.GetContentRegionAvail().X));
+            if (ImGui.Button($"{label}##RaidModifier{id}", new Vector2(buttonWidth, 0))) raidModifier = selected ? "" : id;
+            ImGui.PopStyleColor(selected ? 6 : 5);
+            ImGui.PopStyleVar();
+            nextX = ImGui.GetItemRectMax().X + style.ItemSpacing.X;
         }
-        var spent = own.Transformation.Length > 0 ? $"{RaidTransformationLabel(own.Transformation)} used" : "Transformation unused";
-        DrawClippedText($"{spent} / Z-Move {(own.ZMoveUsed ? "used" : "unused")}", ImGui.GetContentRegionAvail().X, CompanionMuted);
     }
     private static string RaidTransformationLabel(string value) => value switch {
         "mega" => "Mega", "ultra" => "Ultra Burst", "terastallize" => "Tera", "dynamax" => "Dynamax", _ => value
