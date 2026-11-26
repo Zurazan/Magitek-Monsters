@@ -20,7 +20,6 @@ public sealed partial class MainWindow
     private long? resultMoveGeneration;
     private string? resultMoveOutcome;
     private bool requestResultEvolution;
-    private float resultBodyContentHeight;
     private string eventBattleId = string.Empty;
 
     private static bool IsEventEncounter(EncounterDto encounter) => encounter.HabitatId.StartsWith("event:", StringComparison.Ordinal)
@@ -36,10 +35,10 @@ public sealed partial class MainWindow
 
     private void DrawBattleResults(BattleSnapshotDto current)
     {
-        if (resultObservedBattle != current.Id)
+        var newResult = resultObservedBattle != current.Id;
+        if (newResult)
         {
             resultObservedBattle = current.Id;
-            resultBodyContentHeight = 0;
             CloseBattleResultMoveReview();
             resultMoveOutcome = null;
             resultEvolutionPokemon = resultEvolutionTarget = string.Empty;
@@ -61,9 +60,9 @@ public sealed partial class MainWindow
         var partyActionsInline = rematch is not null && width >= 210 * scale + spacing;
         var footerRows = footerInline ? 1 : rematch is null || partyActionsInline ? 2 : 3;
         var footerHeight = footerRows * (31 * scale + ImGui.GetStyle().ItemSpacing.Y) + ImGui.GetTextLineHeightWithSpacing() + 20 * scale;
-        var maximumBodyHeight = Math.Max(1, ImGui.GetContentRegionAvail().Y - footerHeight);
-        var bodyHeight = Math.Min(maximumBodyHeight, resultBodyContentHeight > 0 ? resultBodyContentHeight : maximumBodyHeight);
-        var bodyVisible = ImGui.BeginChild("BattleResultBody", new Vector2(0, bodyHeight), false);
+        var bodyHeight = Math.Max(1, ImGui.GetContentRegionAvail().Y - footerHeight);
+        ImGui.BeginChild("BattleResultBody", new Vector2(0, bodyHeight), false, ImGuiWindowFlags.AlwaysVerticalScrollbar);
+        if (newResult) ImGui.SetScrollY(0);
         if (current.Result is { } result)
         {
             var ids = result.Party.Select(entry => entry.PokemonId).ToHashSet();
@@ -94,7 +93,6 @@ public sealed partial class MainWindow
             ImGui.TextWrapped(current.Status == "caught" ? "Your new Pokémon is saved to your collection." : "Your battle progress is saved.");
             ImGui.TextWrapped("Return to your party to review its current levels, moves and evolution options.");
         }
-        if (bodyVisible) resultBodyContentHeight = Math.Max(1, ImGui.GetCursorPosY() + 4 * scale);
         ImGui.EndChild();
         ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
         DrawBattleResultFooter(current, rematch, footerInline, partyActionsInline);

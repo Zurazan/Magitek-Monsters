@@ -136,7 +136,9 @@ public sealed partial class MainWindow
     {
         if (CollectionLocked) return "Finish your battle, run or matchmaking before offering Pokémon.";
         if (pokemon is null) return "Choose a Pokémon from your party or PC Storage.";
-        if (!CanOfferPokemon(pokemon)) return "This Pokémon cannot be offered. Choose another.";
+        if (pokemon.TradeLockId is not null) return "This Pokémon is already reserved for trading.";
+        if (pokemon.Fusion is not null || pokemon.FusionHostId.Length > 0) return "Unfuse this Pokémon before trading it.";
+        if (IsRestrictedTradeSpecies(pokemon)) return "Legendary and Mythical Pokémon cannot be traded.";
         return pokemon.PartySlot is not null && trainer!.Party.Count <= 1 ? "Keep at least one Pokémon in your party." : null;
     }
 
@@ -144,7 +146,7 @@ public sealed partial class MainWindow
     {
         ImGui.BeginDisabled(busy || CollectionLocked);
         if (DrawAccentSmallButton(wonder ? "Choose Pokémon##Wonder" : trading?.Active is null ? "Choose Pokémon##Direct" : "Change offer", CompanionAccent))
-        { pickerForWonder = wonder; tradePickerPage = 0; requestTradePicker = true; }
+            OpenTradePicker(wonder);
         ImGui.EndDisabled();
     }
 

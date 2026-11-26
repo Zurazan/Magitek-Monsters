@@ -88,26 +88,32 @@ public sealed partial class MainWindow
 
     private void DrawStorageFilters()
     {
-        if (trainer is null) return;
+        if (DrawStorageFilterOptions(ref storageFavorites, ref storageShiny, ref storageDuplicatesOnly, ref storageType, ref storageGeneration))
+            ShowStorageOverview();
+        var scale = CompanionScale;
+        ImGui.SetNextItemWidth(Math.Min(240 * scale, ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize("Sort").X - 8 * scale));
+        string[] sorts = ["Box order", "Species", "Level: highest first", "Newest first", "IV total: highest first", "Perfect IVs: most first"];
+        if (ImGui.Combo("Sort##StorageSort", ref storageSort, sorts, sorts.Length)) storageScrollToTop = true;
+    }
+
+    private static bool DrawStorageFilterOptions(ref bool favorites, ref bool shiny, ref bool duplicates, ref int type, ref int generation)
+    {
         var scale = CompanionScale;
         var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
-        if (ImGui.Checkbox("Favourites", ref storageFavorites)) ShowStorageOverview();
+        var changed = ImGui.Checkbox("Favourites", ref favorites);
         StorageSameLine(right, ImGui.GetFrameHeight() + ImGui.GetStyle().ItemInnerSpacing.X + ImGui.CalcTextSize("Shiny only").X);
-        if (ImGui.Checkbox("Shiny only", ref storageShiny)) ShowStorageOverview();
+        changed |= ImGui.Checkbox("Shiny only", ref shiny);
         StorageSameLine(right, ImGui.GetFrameHeight() + ImGui.GetStyle().ItemInnerSpacing.X + ImGui.CalcTextSize("Duplicates only").X);
-        if (ImGui.Checkbox("Duplicates only", ref storageDuplicatesOnly)) ShowStorageOverview();
+        changed |= ImGui.Checkbox("Duplicates only", ref duplicates);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip("Same appearance and shiny variant, including copies in your party.");
         StorageSameLine(right, 150 * scale);
         ImGui.SetNextItemWidth(Math.Min(150 * scale, ImGui.GetContentRegionAvail().X));
         var types = new[] { "Any type" }.Concat(ChallengeTypes).ToArray();
-        if (ImGui.Combo("##StorageType", ref storageType, types, types.Length)) ShowStorageOverview();
+        changed |= ImGui.Combo("##StorageType", ref type, types, types.Length);
         StorageSameLine(right, 150 * scale);
         ImGui.SetNextItemWidth(Math.Min(150 * scale, ImGui.GetContentRegionAvail().X));
         string[] generations = ["Any generation", "Gen 1", "Gen 2", "Gen 3", "Gen 4", "Gen 5", "Gen 6", "Gen 7", "Gen 8", "Gen 9"];
-        if (ImGui.Combo("##StorageGen", ref storageGeneration, generations, generations.Length)) ShowStorageOverview();
-        ImGui.SetNextItemWidth(Math.Min(240 * scale, ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize("Sort").X - 8 * scale));
-        string[] sorts = ["Box order", "Species", "Level: highest first", "Newest first", "IV total: highest first", "Perfect IVs: most first"];
-        if (ImGui.Combo("Sort##StorageSort", ref storageSort, sorts, sorts.Length)) storageScrollToTop = true;
+        return ImGui.Combo("##StorageGen", ref generation, generations, generations.Length) || changed;
     }
 
     private List<PokemonDto> FilterStorage()

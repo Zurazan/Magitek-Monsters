@@ -55,7 +55,7 @@ public sealed partial class MainWindow
         storageBoxContents = trainer.Storage.GroupBy(pokemon => pokemon.BoxNumber)
             .ToDictionary(group => group.Key, group => group.OrderBy(pokemon => pokemon.BoxSlot).ToList());
         var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-        if (elapsed >= 4) Plugin.Log.Debug("PC index: {PokemonCount} Pokemon in {ElapsedMs:F1} ms", trainer.Storage.Count, elapsed);
+        if (elapsed >= 4) Plugin.Log?.Debug("PC index: {PokemonCount} Pokemon in {ElapsedMs:F1} ms", trainer.Storage.Count, elapsed);
     }
 
     private void DrawStorageTools(List<PokemonDto> filtered)

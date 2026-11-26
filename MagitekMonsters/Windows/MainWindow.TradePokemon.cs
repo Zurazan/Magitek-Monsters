@@ -12,7 +12,7 @@ public sealed partial class MainWindow
 {
     private string TradingItemName(string id) => id.Length == 0 ? "None" : itemCatalog.FirstOrDefault(item => item.Id == id)?.Name ?? id;
 
-    private bool DrawTradingPokemon(PokemonDto? pokemon, string role, bool pickable = false)
+    private void DrawTradingPokemon(PokemonDto? pokemon, string role)
     {
         var scale = CompanionScale; var line = ImGui.GetTextLineHeight(); var gap = 4 * scale;
         var width = Math.Max(1, ImGui.GetContentRegionAvail().X); var content = Math.Max(1, width - 16 * scale);
@@ -24,8 +24,8 @@ public sealed partial class MainWindow
         var held = "Held item: " + (pokemon is null ? "None" : TradingItemName(pokemon.HeldItem));
         var height = pokemon is null ? Math.Max(126 * scale, ImGui.CalcTextSize(name, false, content).Y + ImGui.CalcTextSize(traits, false, content).Y + line + 32 * scale)
             : 16 * scale + line + header + Math.Max(14 * scale, line) + ImGui.CalcTextSize(traits, false, content).Y + ImGui.CalcTextSize(held, false, content).Y + 5 * gap;
-        var clicked = DrawPveCardSurface("TradePokemon##" + role, height, false, out var min, out var max, out var after, pickable);
-        var hovered = ImGui.IsItemHovered(); var y = min.Y + 8 * scale;
+        DrawPveCardSurface("TradePokemon##" + role, height, false, out var min, out _, out var after, false);
+        var y = min.Y + 8 * scale;
         At(role, CompanionAccent, content); y += line + gap;
         if (pokemon is null)
         {
@@ -44,9 +44,8 @@ public sealed partial class MainWindow
             y += Math.Max(14 * scale, line) + gap;
             At(traits, CompanionMuted, content); y += ImGui.CalcTextSize(traits, false, content).Y + gap;
             At(held, CompanionMuted, content);
-            if (hovered && pickable) ImGui.SetTooltip($"{pokemon.DisplaySpecies} / {(pokemon.PartySlot is int slot ? "Party " + slot : "Box " + pokemon.BoxNumber)}\n{pokemon.Nature} / {pokemon.Ability}\nIV total: {pokemon.Ivs.Values.Sum()}/186\nHeld item: {TradingItemName(pokemon.HeldItem)}");
         }
-        ImGui.SetCursorScreenPos(after); return clicked;
+        ImGui.SetCursorScreenPos(after);
 
         void At(string text, Vector4 color, float available)
         { ImGui.SetCursorScreenPos(new Vector2(min.X + 8 * scale, y)); Wrapped(text, available, color); }
@@ -103,51 +102,4 @@ public sealed partial class MainWindow
         TradeText($"Ball: {TradingItemName(pokemon.Pokeball)}", CompanionMuted);
     }
 
-    private void DrawTradingPicker()
-    {
-        if (requestTradePicker) { ImGui.OpenPopup("Choose trade Pokémon"); requestTradePicker = false; }
-        var scale = CompanionScale; var work = ImGui.GetMainViewport().WorkSize;
-        ImGui.SetNextWindowSize(new Vector2(Math.Min(700 * scale, work.X * .9f), Math.Min(660 * scale, work.Y * .9f)), ImGuiCond.Appearing);
-        if (!BeginCenteredModal("Choose trade Pokémon")) return;
-        TradeText("Choose from Party or PC Storage. Reserved, fused, Legendary and Mythical Pokémon are excluded.", CompanionMuted);
-        ImGui.SetNextItemWidth(-1);
-        if (ImGui.InputTextWithHint("##TradeSearch", "Search species or nickname...", ref tradePickerSearch, 80)) tradePickerPage = 0;
-        var rebuilt = !ReferenceEquals(tradePickerSource, trainer) || !ReferenceEquals(tradingBossSource, legendaryBosses);
-        if (rebuilt) { tradePickerOwned = trainer!.Party.Concat(trainer.Storage).Where(CanOfferPokemon).ToList(); tradePickerSource = trainer; }
-        if (rebuilt || tradePickerQuery != tradePickerSearch)
-        {
-            tradePickerQuery = tradePickerSearch;
-            tradePickerFiltered = tradePickerOwned.Where(pokemon => pokemon.DisplaySpecies.Contains(tradePickerSearch, StringComparison.OrdinalIgnoreCase) || pokemon.Nickname.Contains(tradePickerSearch, StringComparison.OrdinalIgnoreCase)).ToList();
-        }
-        DrawPager("TradePick", ref tradePickerPage, tradePickerFiltered.Count, 6);
-        ImGui.BeginChild("TradePickerBody", new Vector2(0, -ImGui.GetFrameHeight() - 12 * scale), false);
-        if (tradePickerFiltered.Count == 0) TradeText("No eligible Pokémon found.", CompanionMuted);
-        if (ImGui.BeginTable("TradePickCards", ImGui.GetContentRegionAvail().X >= 540 * scale ? 3 : ImGui.GetContentRegionAvail().X >= 340 * scale ? 2 : 1, ImGuiTableFlags.SizingStretchSame))
-        {
-            foreach (var pokemon in tradePickerFiltered.Skip(tradePickerPage * 6).Take(6))
-            {
-                ImGui.TableNextColumn(); ImGui.PushID(pokemon.Id);
-                ImGui.BeginDisabled(TradeOfferRestriction(pokemon) is not null);
-                if (DrawTradingPokemon(pokemon, pokemon.PartySlot is int slot ? $"PARTY {slot}" : $"BOX {pokemon.BoxNumber}", true))
-                {
-                    if (pickerForWonder) wonderPokemonId = pokemon.Id;
-                    else
-                    {
-                        tradePokemonId = pokemon.Id;
-                        if (trading?.Active is { } active)
-                        {
-                            var id = pokemon.Id; var tradeId = active.Id; var revision = active.Revision;
-                            Run(() => SaveTrade(() => plugin.Api.OfferTrade(tradeId, id, revision)), "Updating trade offer...");
-                        }
-                    }
-                    ImGui.CloseCurrentPopup();
-                }
-                ImGui.EndDisabled(); ImGui.PopID();
-            }
-            ImGui.EndTable();
-        }
-        ImGui.EndChild();
-        if (DrawAccentButton("Close", new Vector2(-1, 0), CompanionAccent)) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
-    }
 }

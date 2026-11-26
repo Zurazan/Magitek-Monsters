@@ -16,21 +16,15 @@ public sealed partial class MainWindow
     private string tradeTrainerCode = "";
     private string tradePokemonId = "";
     private string wonderPokemonId = "";
-    private string tradePickerSearch = "";
-    private int tradePickerPage;
     private int tradeHistoryPage;
     private bool requestTradePicker;
-    private bool pickerForWonder;
+    private TradePicker? tradePicker;
     private bool requestTradeConfirmation;
     private string tradeConfirmationId = "";
     private int tradeConfirmationRevision;
     private bool requestWonderConfirmation;
     private List<LegendaryBossDto>? tradingBossSource;
     private HashSet<string> tradingRestricted = [];
-    private TrainerSnapshotDto? tradePickerSource;
-    private List<PokemonDto> tradePickerOwned = [];
-    private List<PokemonDto> tradePickerFiltered = [];
-    private string tradePickerQuery = "";
     private TrainerSnapshotDto? tradeSelectionSource;
     private string? cachedTradeId, cachedWonderId;
     private PokemonDto? cachedTradePokemon, cachedWonderPokemon;
@@ -38,13 +32,12 @@ public sealed partial class MainWindow
     private void ResetTrading()
     {
         trading = null; tradeRefreshRequested = false; nextTradePollAt = DateTimeOffset.MinValue;
-        tradeTrainerCode = tradePokemonId = wonderPokemonId = tradePickerSearch = tradeConfirmationId = "";
-        tradePickerPage = tradeHistoryPage = 0;
+        tradeTrainerCode = tradePokemonId = wonderPokemonId = tradeConfirmationId = "";
+        tradeHistoryPage = 0;
         tradeHistoryOpen = requestTradeHistory = false;
         requestTradePicker = requestTradeConfirmation = requestWonderConfirmation = false;
         requestTradeCancellation = false; tradeCancellationId = "";
-        tradePickerSource = null; tradePickerOwned = []; tradingBossSource = null; tradingRestricted = [];
-        tradePickerFiltered = []; tradePickerQuery = "";
+        tradePicker = null; tradingBossSource = null; tradingRestricted = [];
         tradeSelectionSource = null; cachedTradeId = cachedWonderId = null;
         cachedTradePokemon = cachedWonderPokemon = null;
     }
@@ -97,17 +90,15 @@ public sealed partial class MainWindow
         else { cachedTradeId = id; cachedTradePokemon = selected; }
         return selected;
     }
-    private bool CanOfferPokemon(PokemonDto pokemon)
+    private bool IsRestrictedTradeSpecies(PokemonDto pokemon)
     {
-        if (pokemon.TradeLockId is not null || pokemon.Fusion is not null || pokemon.FusionHostId.Length > 0) return false;
         if (!ReferenceEquals(tradingBossSource, legendaryBosses))
         {
             tradingBossSource = legendaryBosses;
             tradingRestricted = legendaryBosses.Select(boss => SpeciesDisplayCatalog.Get(boss.Species)?.BaseSpecies ?? boss.Species).ToHashSet(StringComparer.Ordinal);
-            tradePickerSource = null;
         }
         var species = SpeciesDisplayCatalog.Get(pokemon.DisplaySpecies)?.BaseSpecies ?? pokemon.Species;
-        return !tradingRestricted.Contains(species);
+        return tradingRestricted.Contains(species);
     }
     private async Task ViewTradedPokemon(TradeReceiptDto receipt)
     {
