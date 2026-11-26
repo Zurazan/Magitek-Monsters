@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -16,7 +17,8 @@ public sealed partial class MainWindow
     private string resultForgetMove = string.Empty;
     private string resultEvolutionPokemon = string.Empty;
     private string resultEvolutionTarget = string.Empty;
-    private bool requestResultMove;
+    private long? resultMoveGeneration;
+    private string? resultMoveOutcome;
     private bool requestResultEvolution;
     private float resultBodyContentHeight;
     private string eventBattleId = string.Empty;
@@ -38,7 +40,9 @@ public sealed partial class MainWindow
         {
             resultObservedBattle = current.Id;
             resultBodyContentHeight = 0;
-            resultMoveId = resultForgetMove = resultEvolutionPokemon = resultEvolutionTarget = string.Empty;
+            CloseBattleResultMoveReview();
+            resultMoveOutcome = null;
+            resultEvolutionPokemon = resultEvolutionTarget = string.Empty;
             if (resultTrainerBattle != current.Id) refreshState.Trainer();
         }
         var scale = CompanionScale;
@@ -63,23 +67,26 @@ public sealed partial class MainWindow
         if (current.Result is { } result)
         {
             var ids = result.Party.Select(entry => entry.PokemonId).ToHashSet();
+            var resultTrainer = resultTrainerBattle == current.Id ? trainer : null;
+            var pending = resultTrainer?.PendingMoves.Where(move => ids.Contains(move.PokemonId)).ToArray() ?? [];
             var milestones = result.Capture is not null || result.CaptureAvailable || result.Badges.Count > 0
                 || result.Medals.Count > 0 || result.CollectionPoints > 0 || result.Party.Any(entry => entry.LearnedMoves.Count > 0)
-                || resultTrainerBattle == current.Id && trainer is not null && (trainer.EvolutionOptions.Any(option => option.Ready && ids.Contains(option.PokemonId))
-                    || trainer.PendingMoves.Any(move => ids.Contains(move.PokemonId)));
-            var split = width >= 900 * scale && milestones;
-            if (split && ImGui.BeginTable("BattleResultColumns", 2, ImGuiTableFlags.SizingStretchProp))
+                || resultTrainer?.EvolutionOptions.Any(option => option.Ready && ids.Contains(option.PokemonId)) == true;
+            var split = width >= 900 * scale && milestones && ImGui.BeginTable("BattleResultColumns", 2, ImGuiTableFlags.SizingStretchProp);
+            if (split)
             {
                 ImGui.TableSetupColumn("Party", ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("Milestones", ImGuiTableColumnFlags.WidthFixed, 205 * scale);
                 ImGui.TableNextColumn(); DrawBattleResultParty(current, result);
-                ImGui.TableNextColumn(); DrawBattleResultMilestones(current, result);
+                ImGui.TableNextColumn(); DrawBattleResultMilestones(current, result, ids, pending.Length > 0);
                 ImGui.EndTable();
             }
-            else if (!split)
+            else DrawBattleResultParty(current, result);
+
+            if (resultTrainer is not null) DrawBattleResultMoves(current.Id, resultTrainer, pending);
+            if (!split)
             {
-                DrawBattleResultParty(current, result);
-                ImGui.Spacing(); DrawBattleResultMilestones(current, result);
+                ImGui.Spacing(); DrawBattleResultMilestones(current, result, ids, pending.Length > 0);
             }
         }
         else
@@ -91,7 +98,6 @@ public sealed partial class MainWindow
         ImGui.EndChild();
         ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
         DrawBattleResultFooter(current, rematch, footerInline, partyActionsInline);
-        DrawBattleResultMovePopup();
         DrawBattleResultEvolutionPopup();
         DrawBattleConsolePopups(current);
     }
@@ -185,7 +191,7 @@ public sealed partial class MainWindow
         DrawProgressBar(ratio, new Vector2(width, height), "", fillColor);
     }
 
-    private void DrawBattleResultMilestones(BattleSnapshotDto current, BattleResultDto result)
+    private void DrawBattleResultMilestones(BattleSnapshotDto current, BattleResultDto result, HashSet<string> ids, bool hasPendingMoves)
     {
         var synchronized = resultTrainerBattle == current.Id;
         if (result.Capture is { } capture)
@@ -216,16 +222,15 @@ public sealed partial class MainWindow
                 Run(async () => { await InSession(ResumeWildBattle(encounter.Id, IsEventBattle(current))); mainSection = 0; }, "Opening your capture opportunity...");
             ImGui.EndDisabled(); ImGui.Spacing();
         }
-        if (!synchronized)
+        if (!synchronized || trainer is not { } resultTrainer)
         {
             ImGui.TextColored(CompanionMuted, "Updating your party...");
             return;
         }
-        var ids = result.Party.Select(entry => entry.PokemonId).ToHashSet();
-        var ready = trainer!.EvolutionOptions.Where(option => ids.Contains(option.PokemonId) && option.Ready).GroupBy(option => option.PokemonId).ToList();
+        var ready = resultTrainer.EvolutionOptions.Where(option => ids.Contains(option.PokemonId) && option.Ready).GroupBy(option => option.PokemonId).ToList();
         foreach (var group in ready)
         {
-            var pokemon = trainer.Party.Concat(trainer.Storage).FirstOrDefault(pokemon => pokemon.Id == group.Key);
+            var pokemon = resultTrainer.Party.Concat(resultTrainer.Storage).FirstOrDefault(pokemon => pokemon.Id == group.Key);
             if (pokemon is null) continue;
             ImGui.PushID($"ResultEvolution{group.Key}");
             ImGui.TextColored(PokemonYellow, "EVOLUTION AVAILABLE");
@@ -235,25 +240,15 @@ public sealed partial class MainWindow
             { resultEvolutionPokemon = pokemon.Id; resultEvolutionTarget = group.First().TargetSpecies; requestResultEvolution = true; }
             ImGui.EndDisabled(); ImGui.Spacing(); ImGui.PopID();
         }
-        foreach (var learning in trainer.PendingMoves.Where(learning => ids.Contains(learning.PokemonId)))
-        {
-            ImGui.PushID(learning.Id);
-            ImGui.TextColored(CompanionAccent, "NEW MOVE AVAILABLE");
-            ImGui.TextWrapped($"{learning.PokemonName} / {learning.Move}");
-            ImGui.BeginDisabled(CollectionLocked);
-            if (DrawAccentButton("Review move", new Vector2(-1, 29 * CompanionScale), CompanionAccent))
-            { resultMoveId = learning.Id; resultForgetMove = string.Empty; requestResultMove = true; }
-            ImGui.EndDisabled(); ImGui.Spacing(); ImGui.PopID();
-        }
         foreach (var entry in result.Party.Where(entry => entry.LearnedMoves.Count > 0))
         {
             ImGui.TextColored(PokemonGreen, "MOVE LEARNED");
             ImGui.TextWrapped($"{entry.Name}: {string.Join(", ", entry.LearnedMoves)}");
             ImGui.Spacing();
         }
-        if (CollectionLocked) ImGui.TextWrapped("Finish your capture opportunity, run or matchmaking before changing moves or evolving.");
-        else if (ready.Count > 0 || trainer.PendingMoves.Any(learning => ids.Contains(learning.PokemonId))) ImGui.TextWrapped("You can also evolve or relearn moves later from your Pokémon’s menu.");
-        else if (result.Capture is null && !result.CaptureAvailable && result.Badges.Count == 0 && result.Medals.Count == 0)
+        if (ready.Count > 0 && CollectionEditRestriction is { } restriction) ImGui.TextWrapped(restriction);
+        else if (ready.Count > 0) ImGui.TextWrapped("You can also evolve later from your Pokémon’s menu.");
+        else if (!hasPendingMoves && resultMoveOutcome is null && result.Capture is null && !result.CaptureAvailable && result.Badges.Count == 0 && result.Medals.Count == 0)
             ImGui.TextWrapped(current.Status == "lost" ? "Your progress is saved. Rest your party before trying again." : "Party progress saved. Ready for your next challenge.");
     }
 
@@ -301,33 +296,145 @@ public sealed partial class MainWindow
         else if (current?.FrontierId is not null) OpenFrontier();
     }
 
-    private void DrawBattleResultMovePopup()
+    private void CloseBattleResultMoveReview()
     {
-        if (requestResultMove) { ImGui.OpenPopup("Learn battle move"); requestResultMove = false; }
-        ImGui.SetNextWindowSize(new Vector2(420, 0) * CompanionScale, ImGuiCond.Appearing);
-        if (!BeginCenteredModal("Learn battle move", ImGuiWindowFlags.AlwaysAutoResize)) return;
-        var learning = trainer?.PendingMoves.FirstOrDefault(entry => entry.Id == resultMoveId);
-        var pokemon = trainer?.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == learning?.PokemonId);
-        if (learning is null || pokemon is null) { ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return; }
-        ImGui.TextColored(CompanionAccent, $"{learning.Move} / Unlocked at Lv. {learning.Level}");
-        DrawLearningMoveDetails(learning.Move);
-        ImGui.TextWrapped($"Choose a move for {pokemon.Nickname} to forget.");
-        ImGui.Spacing(); ImGui.BeginDisabled(CollectionLocked);
-        foreach (var move in pokemon.Moves)
+        resultMoveId = resultForgetMove = string.Empty;
+        resultMoveGeneration = null;
+    }
+
+    private void DrawBattleResultMoves(string battleId, TrainerSnapshotDto resultTrainer, PendingMoveDto[] pending)
+    {
+        if (!pending.Any(move => move.Id == resultMoveId)) CloseBattleResultMoveReview();
+        if (resultMoveOutcome is { } outcome) DrawGoalText(outcome, PokemonGreen);
+        foreach (var learning in pending)
         {
-            if (DrawAccentButton(move, new Vector2(-1, 29 * CompanionScale), resultForgetMove == move ? CompanionAccent : CompanionMuted)) resultForgetMove = move;
-            DrawBattleMoveTooltip(move);
+            var pokemon = resultTrainer.Party.Concat(resultTrainer.Storage).FirstOrDefault(entry => entry.Id == learning.PokemonId);
+            if (pokemon is null) continue;
+            ImGui.Spacing();
+            DrawBattleResultMoveReview(battleId, learning, pokemon);
         }
+    }
+
+    private void DrawBattleResultMoveReview(string battleId, PendingMoveDto learning, PokemonDto pokemon)
+    {
+        var scale = CompanionScale;
+        ImGui.PushID(learning.Id);
+        ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(10, 8) * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(8, 4) * scale);
+        ImGui.PushStyleColor(ImGuiCol.TableBorderStrong, resultMoveId == learning.Id ? CompanionAccent with { W = .65f } : ImGui.GetStyle().Colors[(int)ImGuiCol.Border]);
+        if (ImGui.BeginTable("ResultMoveReview", 1, ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.BordersOuter))
+        {
+            ImGui.TableNextColumn();
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(CompanionSurface));
+            var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+            ImGui.TextColored(CompanionAccent, "NEW MOVE AVAILABLE");
+            ImGui.TextWrapped($"{pokemon.Nickname} can learn {learning.Move}");
+            if (resultMoveId != learning.Id)
+            {
+                var space = right - ImGui.GetItemRectMax().X - GoalButtonWidth("Review move");
+                if (space >= ImGui.GetStyle().ItemSpacing.X) ImGui.SameLine(0, space);
+                if (DrawAccentButton("Review move", Vector2.Zero, CompanionAccent))
+                {
+                    CloseBattleResultMoveReview();
+                    resultMoveId = learning.Id;
+                    ImGui.SetScrollHereY(0f);
+                }
+            }
+            if (resultMoveId == learning.Id) DrawBattleResultMoveEditor(battleId, learning, pokemon);
+            ImGui.EndTable();
+        }
+        ImGui.PopStyleColor();
+        ImGui.PopStyleVar(2);
+        ImGui.PopID();
+    }
+
+    private void DrawBattleResultMoveEditor(string battleId, PendingMoveDto learning, PokemonDto pokemon)
+    {
+        var scale = CompanionScale;
+        var restriction = CollectionEditRestriction;
+        var locked = busy || restriction is not null;
+        var replacement = pokemon.Moves.Contains(resultForgetMove) ? resultForgetMove : null;
+
         ImGui.Separator();
-        ImGui.BeginDisabled(resultForgetMove.Length == 0);
-        if (DrawAccentButton(resultForgetMove.Length == 0 ? "Choose a move" : $"Replace {resultForgetMove}", new Vector2(-1, 30 * CompanionScale), CompanionAccent))
-        { ImGui.CloseCurrentPopup(); Run(() => ResolveMoveLearning(learning.Id, resultForgetMove), $"Teaching {learning.Move}..."); }
+        var split = ImGui.GetContentRegionAvail().X >= 520 * scale &&
+            ImGui.BeginTable("ResultMoveDetails", 2, ImGuiTableFlags.SizingStretchSame);
+        if (split) ImGui.TableNextColumn();
+        ImGui.TextColored(CompanionMuted, $"Unlocked at Lv. {learning.Level}");
+        DrawLearningMoveDetails(learning.Move);
+        if (split) ImGui.TableNextColumn();
+        else ImGui.Spacing();
+        ImGui.TextUnformatted("Choose a move to replace");
+        ImGui.BeginDisabled(locked);
+        replacement = DrawBattleResultMoveChoices(pokemon, replacement);
         ImGui.EndDisabled();
-        if (DrawAccentButton("Keep current moves", new Vector2(-1, 29 * CompanionScale), CompanionMuted))
-        { ImGui.CloseCurrentPopup(); Run(() => ResolveMoveLearning(learning.Id, null), $"Skipping {learning.Move}..."); }
+        if (split) ImGui.EndTable();
+
+        var feedback = restriction ?? (resultMoveGeneration == foregroundGeneration ? status : null);
+        if (feedback is not null) DrawGoalText(feedback, restriction is not null || statusIsError ? PokemonRed : CompanionMuted);
+        ImGui.Separator();
+        var gap = ImGui.GetStyle().ItemSpacing.X;
+        var actionsWidth = GoalButtonWidth("Skip this move") + GoalButtonWidth("Decide later") + GoalButtonWidth("Learn move") + 2 * gap;
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        if (replacement is not null)
+        {
+            ImGui.AlignTextToFramePadding();
+            DrawGoalText($"{replacement} → {learning.Move}", CompanionAccent);
+            var space = right - ImGui.GetItemRectMax().X - actionsWidth;
+            if (space >= gap) ImGui.SameLine(0, space);
+        }
+        var extraWidth = ImGui.GetContentRegionAvail().X - actionsWidth;
+        if (extraWidth > 0) ImGui.SetCursorPosX(ImGui.GetCursorPosX() + extraWidth);
+
+        ImGui.BeginDisabled(locked);
+        if (DrawAccentButton("Skip this move", Vector2.Zero, CompanionMuted))
+            SubmitBattleResultMove(battleId, learning, pokemon.Nickname, null);
         ImGui.EndDisabled();
-        if (ImGui.Button("Decide later")) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
+        SameLineIfFits("Decide later", right);
+        ImGui.BeginDisabled(busy);
+        if (DrawAccentButton("Decide later", Vector2.Zero, CompanionMuted)) CloseBattleResultMoveReview();
+        ImGui.EndDisabled();
+        SameLineIfFits("Learn move", right);
+        ImGui.BeginDisabled(locked || replacement is null);
+        if (DrawAccentButton("Learn move", Vector2.Zero, PokemonGreen) && replacement is not null)
+            SubmitBattleResultMove(battleId, learning, pokemon.Nickname, replacement);
+        ImGui.EndDisabled();
+    }
+
+    private string? DrawBattleResultMoveChoices(PokemonDto pokemon, string? replacement)
+    {
+        var scale = CompanionScale;
+        var columns = pokemon.Moves.Count > 1 &&
+            ImGui.GetContentRegionAvail().X >= 2 * Math.Max(118 * scale, pokemon.Moves.Max(move => ImGui.CalcTextSize(move).X) + 25 * scale) ? 2 : 1;
+        ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(3, 2) * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, new Vector2(0, .5f));
+        if (ImGui.BeginTable("ResultMoveChoices", columns, ImGuiTableFlags.SizingStretchSame))
+        {
+            var height = 2 * ImGui.GetTextLineHeight() + 8 * scale;
+            foreach (var move in pokemon.Moves)
+            {
+                ImGui.TableNextColumn();
+                var label = move;
+                if (battleMoveHelp.TryGetValue(move, out var details))
+                    label += $"\n{details.Type} / {(details.Power > 0 ? $"Power {details.Power}" : details.Category)}";
+                if (DrawAccentButton(label, new Vector2(-1, height), replacement == move ? CompanionAccent : CompanionMuted))
+                    resultForgetMove = replacement = move;
+                DrawBattleMoveTooltip(move);
+            }
+            ImGui.EndTable();
+        }
+        ImGui.PopStyleVar(2);
+        return replacement;
+    }
+
+    private void SubmitBattleResultMove(string battleId, PendingMoveDto learning, string pokemonName, string? replacement)
+    {
+        resultMoveGeneration = foregroundGeneration + 1;
+        Run(async () =>
+        {
+            await ResolveMoveLearning(learning.Id, replacement);
+            if (resultObservedBattle == battleId)
+                resultMoveOutcome = replacement is null ? $"{pokemonName} kept its current moves." : $"{pokemonName} learned {learning.Move}.";
+        }, replacement is null ? $"Skipping {learning.Move}..." : $"Teaching {learning.Move}...");
     }
 
     private void DrawBattleResultEvolutionPopup()
