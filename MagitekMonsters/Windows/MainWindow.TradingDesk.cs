@@ -43,7 +43,7 @@ public sealed partial class MainWindow
             TradeText("Both trainers confirm the same offers before ownership changes. Changing either offer clears both confirmations. Completed trades are permanent.", CompanionMuted);
             TradeText("Evolution stays optional. Trade evolutions still use the Linking Cord.", CompanionMuted);
         }
-        DrawTradingPicker(); DrawTradeConfirmations();
+        DrawStoragePicker(ref tradePicker, "Choose trade Pokémon"); DrawTradeConfirmations();
     }
 
     private void DrawTradingSection(bool wonder)

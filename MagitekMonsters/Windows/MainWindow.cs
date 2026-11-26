@@ -1361,7 +1361,7 @@ public sealed partial class MainWindow : Window, IDisposable
         ResetTrading();
         ResetFriends();
         pvpStatus = null;
-        raidRoom = null; raidBoard = null; raidPokemonId = ""; raidJoinCode = ""; raidRefreshRequested = false;
+        raidRoom = null; raidBoard = null; raidPicker = null; raidPokemonId = ""; raidJoinCode = ""; raidRefreshRequested = false;
         pendingRaidChoice = null; raidCaptureRequest = null; raidTargetMove = null;
         pvpTeamIds.Clear();
         friendlyTeamIds.Clear();

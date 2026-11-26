@@ -37,9 +37,6 @@ public sealed partial class MainWindow
     private string? onlineCandidateSearch;
     private int onlineCandidateMode;
     private int onlineCandidateBox;
-    private List<PokemonDto>? raidCandidateSource;
-    private List<PokemonDto>? raidCandidates;
-    private string? raidCandidateSearch;
     private TrainerSnapshotDto? savedTeamsTrainer;
     private IReadOnlyList<SavedTeamView>? savedTeamViews;
     private List<ShopItemDto>? martSource;
@@ -169,7 +166,7 @@ public sealed partial class MainWindow
         expandFirstObjective = true;
         overviewGroups = null; overviewBoxes = null;
         onlineOwnedTrainer = savedTeamsTrainer = null;
-        onlineOwned = onlineCandidateSource = onlineCandidates = raidCandidateSource = raidCandidates = null;
+        onlineOwned = onlineCandidateSource = onlineCandidates = null;
         savedTeamViews = null;
         martSource = martItems = null; bagFilterSource = filteredBagItems = null;
         synchronizedIds = synchronizedSelection = selectedRosterIds = selectedRosterKeys = null;
@@ -190,15 +187,6 @@ public sealed partial class MainWindow
         onlineCandidateSource = owned; onlineCandidateSearch = onlineRosterSearch;
         onlineCandidateMode = onlineRosterSource; onlineCandidateBox = onlineRosterBox;
         return onlineCandidates = PvpRoster.Filter(owned, onlineRosterSource, onlineRosterBox, onlineRosterSearch);
-    }
-
-    private List<PokemonDto> GetRaidCandidates()
-    {
-        var owned = OnlineOwnedPokemon();
-        if (raidCandidates is not null && ReferenceEquals(raidCandidateSource, owned) && raidCandidateSearch == raidRosterSearch) return raidCandidates;
-        raidCandidateSource = owned; raidCandidateSearch = raidRosterSearch;
-        return raidCandidates = owned.Where(pokemon => pokemon.Nickname.Contains(raidRosterSearch, StringComparison.OrdinalIgnoreCase)
-            || pokemon.Species.Contains(raidRosterSearch, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
     private IReadOnlyList<SavedTeamView> GetSavedTeams()

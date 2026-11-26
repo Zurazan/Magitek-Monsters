@@ -19,11 +19,9 @@ public sealed partial class MainWindow
     private DateTimeOffset raidObservedAt;
     private string raidPokemonId = "";
     private string raidJoinCode = "";
-    private string raidRosterSearch = "";
     private int raidDenPage;
-    private int raidRosterPage;
     private bool raidPrivate;
-    private bool raidRosterOpen;
+    private StoragePicker? raidPicker;
     private string raidModifier = "";
     private RaidMoveDto? raidTargetMove;
     private bool raidTargetOpen;
@@ -97,7 +95,7 @@ public sealed partial class MainWindow
         if (raidRoom is { } room)
         {
             if (room.Status == "lobby") DrawRaidLobby(room);
-            else { DrawRaidWithLog(room); return; }
+            else { DrawRaidWithLog(room); DrawRaidPicker(); return; }
         }
         else
         {
@@ -110,6 +108,8 @@ public sealed partial class MainWindow
             if (raidBoard.ActiveRoomId is { } saved)
             {
                 if (DrawAccentButton("Resume saved raid", new Vector2(-1, 34), PokemonBlue)) Run(async () => ApplyRaid(await InSession(plugin.Api.GetRaid(saved))), "Resuming raid...");
+                raidPicker = null;
+                DrawRaidPicker();
                 return;
             }
             ImGui.TextColored(CompanionMuted, $"{raidBoard.Progress.Wins:N0} victories / Best: {raidBoard.Progress.BestStars} stars / Dens rotate every 6 hours (UTC)");
@@ -128,7 +128,7 @@ public sealed partial class MainWindow
                 ImGui.EndTable();
             }
         }
-        DrawRaidRoster(); DrawRaidPopups();
+        DrawRaidPicker(); DrawRaidPopups();
     }
 
     private void DrawRaidWithLog(RaidRoomDto room)
@@ -170,42 +170,49 @@ public sealed partial class MainWindow
     }
     private bool DrawRaidPokemonChoice()
     {
-        var pokemon = OnlineOwnedPokemon().FirstOrDefault(entry => entry.Id == raidPokemonId);
+        var pokemon = SelectedRaidPokemon();
         if (pokemon is null)
         {
             ImGui.PushStyleColor(ImGuiCol.Text, PokemonOrange);
             ImGui.TextWrapped("Choose a Pokémon to host or join a den.");
             ImGui.PopStyleColor();
         }
-        if (DrawAccentButton(pokemon is null ? "Choose Pokémon from party or PC" : $"{pokemon.Nickname} / Lv. {pokemon.Level} / Change Pokémon", new Vector2(-1, 32 * CompanionScale), pokemon is null ? PokemonYellow : PokemonBlue)) raidRosterOpen = true;
+        if (DrawAccentButton(pokemon is null ? "Choose Pokémon from party or PC" : $"{pokemon.Nickname} / Lv. {pokemon.Level} / Change Pokémon", new Vector2(-1, 32 * CompanionScale), pokemon is null ? PokemonYellow : PokemonBlue))
+            OpenRaidPicker();
         return pokemon is not null;
     }
-    private void DrawRaidRoster()
+
+    private PokemonDto? SelectedRaidPokemon()
     {
-        if (raidRosterOpen) { ImGui.OpenPopup("Raid Pokémon"); raidRosterOpen = false; }
-        ImGui.SetNextWindowSize(new Vector2(620, 520) * CompanionScale, ImGuiCond.Appearing);
-        var open = true;
-        if (!BeginCenteredModal("Raid Pokémon", ref open)) return;
-        ImGui.TextWrapped("One Pokémon per trainer. Builds are frozen for the raid. Both high and low levels sync to the den's advertised level.");
-        ImGui.SetNextItemWidth(-1);
-        if (ImGui.InputTextWithHint("##RaidRosterSearch", "Search party and PC...", ref raidRosterSearch, 80)) raidRosterPage = 0;
-        var candidates = GetRaidCandidates();
-        DrawPager("RaidRoster", ref raidRosterPage, candidates.Count, 8);
-        ImGui.BeginChild("RaidRosterList", new Vector2(0, -40 * CompanionScale), false);
-        foreach (var pokemon in candidates.Skip(raidRosterPage * 8).Take(8))
+        var id = raidRoom is { Status: "lobby" } room ? room.SelectedPokemon.Id : raidPokemonId;
+        return id.Length == 0 ? null : OnlineOwnedPokemon().FirstOrDefault(pokemon => pokemon.Id == id);
+    }
+
+    private void OpenRaidPicker() =>
+        raidPicker = CreateStoragePicker(StoragePickerMode.Raid, raidRoom?.Id, SelectedRaidPokemon());
+
+    private void DrawRaidPicker()
+    {
+        if (raidRoom is { Status: not "lobby" }) raidPicker = null;
+        DrawStoragePicker(ref raidPicker, "Raid Pokémon");
+    }
+
+    private string? RaidPokemonRestriction(PokemonDto? pokemon)
+    {
+        if (busy) return "Wait for the current action to finish.";
+        if (pokemon is null) return "Choose a Pokémon from your party or PC Storage.";
+        return pokemon.FusionHostId.Length > 0 ? "Unfuse this Pokémon's host before bringing it to a den." : null;
+    }
+
+    private void ChooseRaidPokemon(PokemonDto pokemon)
+    {
+        if (raidRoom is { Status: "lobby" })
+            Run(() => RaidAction("ready", new RaidReadyRequest(false, pokemon.Id)), "Changing raid Pokémon...");
+        else
         {
-            ImGui.BeginDisabled(busy);
-            if (ImGui.Selectable($"{pokemon.Nickname} / {pokemon.DisplaySpecies} / Lv. {pokemon.Level} / {(pokemon.PartySlot is null ? $"PC Box {pokemon.BoxNumber}" : "Party")}##{pokemon.Id}", raidPokemonId == pokemon.Id, ImGuiSelectableFlags.None, new Vector2(0, 32 * CompanionScale)))
-            {
-                raidPokemonId = pokemon.Id; ImGui.CloseCurrentPopup();
-                SetStatus($"{pokemon.Nickname} selected for raids.");
-                if (raidRoom?.Status == "lobby") Run(() => RaidAction("ready", new RaidReadyRequest(false, raidPokemonId)), "Changing raid Pokémon...");
-            }
-            ImGui.EndDisabled();
+            raidPokemonId = pokemon.Id;
+            SetStatus($"{pokemon.Nickname} selected for raids.");
         }
-        ImGui.EndChild();
-        if (DrawAccentButton("Close", new Vector2(-1, 28 * CompanionScale), CompanionAccent)) ImGui.CloseCurrentPopup();
-        ImGui.EndPopup();
     }
     private void DrawRaidLobby(RaidRoomDto room)
     {

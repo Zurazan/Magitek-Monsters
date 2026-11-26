@@ -20,6 +20,7 @@ public sealed partial class MainWindow
     private string? friendPickerPurpose;
     private bool openFriendPicker;
     private int friendsTab;
+    private (string InviteId, string Message)? denInviteError;
     private readonly Dictionary<string, bool> searchFriendGroups = [];
     private FriendEntryDto? friendConfirmation;
     private bool openFriendConfirmation;
@@ -30,6 +31,7 @@ public sealed partial class MainWindow
         friendPages.Clear(); friendInbox = null; selectedFriend = null;
         friendsRefreshRequested = true; nextFriendsPollAt = DateTimeOffset.MinValue;
         friendSearch = friendAddCode = friendPickerSearch = ""; friendsTab = 0;
+        denInviteError = null;
         friendPickerPurpose = null; openFriendPicker = false; friendConfirmation = null; openFriendConfirmation = false;
         searchFriendGroups.Clear();
     }
@@ -210,8 +212,14 @@ public sealed partial class MainWindow
         }
         else if (selectedFriendGroup == "dens")
         {
-            ImGui.TextWrapped($"{friend.DenSpecies} / {friend.Stars} stars. Choose a Pokémon before joining.");
-            if (DrawAccentButton("Review den invitation", new Vector2(-1, 0), PokemonGreen) && friend.RequestId is { } id) ReviewFriendDen(id);
+            ImGui.TextWrapped($"{friend.DenSpecies} / {friend.Stars} stars");
+            if (denInviteError is { } error && error.InviteId == friend.RequestId)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Text, PokemonRed);
+                ImGui.TextWrapped(error.Message);
+                ImGui.PopStyleColor();
+            }
+            if (DrawAccentButton("Review den invitation", new Vector2(-1, 0), PokemonGreen)) ReviewFriendDen(friend);
             if (DrawAccentButton("Decline invitation", new Vector2(-1, 0), CompanionMuted) && friend.RequestId is { } decline)
                 Run(async () => { await InSession(plugin.Api.DeclineDenInvitation(decline)); friendsRefreshRequested = true; SetStatus("Invitation declined."); }, "Declining invitation...");
         }
@@ -266,18 +274,38 @@ public sealed partial class MainWindow
         if (raidRoom is not { Status: "lobby" } room) return;
         ChangeFriend(() => plugin.Api.InviteFriendToDen(friend.UserId, room.Id), "Inviting friend to den...");
     }
-    private void ReviewFriendDen(string id)
+    private void ReviewFriendDen(FriendEntryDto friend)
     {
+        if (busy || friend.RequestId is not { } id) return;
+        mainSection = 17; friendsTab = 1; selectedFriendGroup = "dens"; selectedFriend = friend;
+        denInviteError = null;
         Run(async () =>
         {
-            var invite = await InSession(plugin.Api.ReviewDenInvitation(id));
-            if (invite.ExpiresAt <= DateTimeOffset.UtcNow) return;
+            if (friend.ExpiresAt <= DateTimeOffset.UtcNow)
+            { ShowDenInviteError(id, "This den invitation expired."); return; }
+            if (friend.Stars > 0)
+            {
+                var board = await InSession(plugin.Api.GetRaids(disposeCancellation.Token));
+                if (board.Dens.FirstOrDefault(den => den.Stars == friend.Stars)?.LockReason is { Length: > 0 } reason)
+                { ShowDenInviteError(id, reason); return; }
+            }
+            FriendDenInviteDto invite;
+            try { invite = await InSession(plugin.Api.ReviewDenInvitation(id)); }
+            catch (ApiException exception) when (exception.Code is "raid_locked" or "friend_request_not_found" or "raid_lobby_closed")
+            { ShowDenInviteError(id, exception.Message); return; }
+            if (invite.ExpiresAt <= DateTimeOffset.UtcNow)
+            { ShowDenInviteError(id, "This den invitation expired."); return; }
             if (raidRoom is { Status: "lobby" or "active" } current && current.Id != invite.RoomId)
-            { SetStatus("Leave your current den before joining another lobby."); mainSection = 12; return; }
+            { ShowDenInviteError(id, "Leave your current den before joining another lobby."); return; }
             if (raidRoom is not null && raidRoom.Status is not ("lobby" or "active")) raidRoom = null;
-            raidJoinCode = invite.Code; mainSection = 12; raidRosterOpen = true;
+            raidJoinCode = invite.Code; mainSection = 12; OpenRaidPicker();
             SetStatus("Choose your Pokémon, then join the invited den.");
         }, "Reviewing den invitation...");
+    }
+    private void ShowDenInviteError(string id, string message)
+    {
+        denInviteError = (id, message);
+        SetStatus(message, isError: true, quiet: mainSection == 17 && friendsTab == 1 && selectedFriend?.RequestId == id);
     }
     private void OpenFriendPicker(string purpose) { friendPickerPurpose = purpose; friendPickerSearch = ""; openFriendPicker = true; }
     private bool CanPickFriend(FriendEntryDto friend) => friend.Mutual && friend.Online == true

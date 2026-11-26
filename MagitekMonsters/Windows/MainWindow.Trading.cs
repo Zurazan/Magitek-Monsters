@@ -17,8 +17,7 @@ public sealed partial class MainWindow
     private string tradePokemonId = "";
     private string wonderPokemonId = "";
     private int tradeHistoryPage;
-    private bool requestTradePicker;
-    private TradePicker? tradePicker;
+    private StoragePicker? tradePicker;
     private bool requestTradeConfirmation;
     private string tradeConfirmationId = "";
     private int tradeConfirmationRevision;
@@ -35,7 +34,7 @@ public sealed partial class MainWindow
         tradeTrainerCode = tradePokemonId = wonderPokemonId = tradeConfirmationId = "";
         tradeHistoryPage = 0;
         tradeHistoryOpen = requestTradeHistory = false;
-        requestTradePicker = requestTradeConfirmation = requestWonderConfirmation = false;
+        requestTradeConfirmation = requestWonderConfirmation = false;
         requestTradeCancellation = false; tradeCancellationId = "";
         tradePicker = null; tradingBossSource = null; tradingRestricted = [];
         tradeSelectionSource = null; cachedTradeId = cachedWonderId = null;

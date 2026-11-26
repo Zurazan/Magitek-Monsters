@@ -52,8 +52,8 @@ public sealed partial class MainWindow
         {
             case GameNoticeTarget.Friends: if (trainer is not null) { mainSection = 17; friendsTab = 1; friendsRefreshRequested = true; } break;
             case GameNoticeTarget.DenInvitation:
-                if (notice.Subject is { } invite && friendInbox?.Dens.Any(entry => entry.RequestId == invite && entry.ExpiresAt > DateTimeOffset.UtcNow) == true && !busy) ReviewFriendDen(invite);
-                else if (trainer is not null) { mainSection = 17; friendsTab = 1; }
+                if (notice.Subject is { } id && !busy && friendInbox?.Dens.FirstOrDefault(entry => entry.RequestId == id) is { } invite) ReviewFriendDen(invite);
+                else if (trainer is not null) { mainSection = 17; friendsTab = 1; friendsRefreshRequested = true; }
                 break;
             case GameNoticeTarget.Trades: if (trainer is not null) { mainSection = 16; requestTradeHistory = notice.Kind == GameNoticeKind.Success; tradeRefreshRequested = true; } break;
             case GameNoticeTarget.Gifts: if (trainer is not null) { mainSection = 13; giftPage = 0; } break;

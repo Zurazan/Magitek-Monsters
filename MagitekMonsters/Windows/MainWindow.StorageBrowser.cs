@@ -121,7 +121,7 @@ public sealed partial class MainWindow
 
     private static bool DrawStorageToolbarButton(string label, Vector4 accent) => DrawAccentButton(label, new Vector2(0, 32 * CompanionScale), accent);
 
-    private void DrawStorageBoxJump(int box, TradePicker? picker = null)
+    private void DrawStorageBoxJump(int box, StoragePicker? picker = null)
     {
         ImGui.SetNextItemWidth(Math.Max(1, Math.Min(180 * CompanionScale, ImGui.GetContentRegionAvail().X)));
         if (!ImGui.BeginCombo("##StorageJump", box == 0 ? "Jump to box..." : BoxLabel(box))) return;
@@ -148,7 +148,7 @@ public sealed partial class MainWindow
         if (!contents.Any(pokemon => pokemon.Id == selectedStoragePokemon)) selectedStoragePokemon = contents.FirstOrDefault()?.Id;
     }
 
-    private void BrowseStorageBox(int number, TradePicker? picker)
+    private void BrowseStorageBox(int number, StoragePicker? picker)
     {
         if (picker is null) OpenStorageBox(number);
         else
@@ -158,7 +158,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private void DrawStorageBoxGrid(List<PokemonDto> filtered, float width, float height, float cellHeight, TradePicker? picker = null)
+    private void DrawStorageBoxGrid(List<PokemonDto> filtered, float width, float height, float cellHeight, StoragePicker? picker = null)
     {
         var scale = CompanionScale;
         var box = picker?.Box ?? storageBox;
@@ -191,7 +191,7 @@ public sealed partial class MainWindow
         ImGui.EndChild(); ImGui.PopStyleColor(); ImGui.PopStyleVar();
     }
 
-    private void DrawStorageSlot(PokemonDto? pokemon, Vector2 size, int? slot, TradePicker? picker = null)
+    private void DrawStorageSlot(PokemonDto? pokemon, Vector2 size, int? slot, StoragePicker? picker = null)
     {
         var scale = CompanionScale;
         var min = ImGui.GetCursorScreenPos();
@@ -220,7 +220,7 @@ public sealed partial class MainWindow
             }
             if (marked) draw.AddText(min + new Vector2(3 * scale, Math.Max(0, size.Y - ImGui.GetTextLineHeight())), ImGui.GetColorU32(PokemonYellow), "✓");
             if (GetPokemonAlerts(pokemon.Id) != default) DrawStorageAlertCorner(min, size, scale);
-            var restriction = picker is null ? null : TradeOfferRestriction(pokemon);
+            var restriction = picker is null ? null : StoragePickerPokemonRestriction(picker, pokemon);
             if (restriction is not null && !selected)
                 draw.AddRectFilled(min, min + size, ImGui.GetColorU32(PanelSurface with { W = 0.52f }), 4 * scale);
             if (clicked && picker is not null) picker.Pokemon = pokemon;
@@ -261,7 +261,7 @@ public sealed partial class MainWindow
         draw.AddText(ImGui.GetFont(), fontSize, center - textSize / 2, ImGui.GetColorU32(PanelSurface), "!");
     }
 
-    private void DrawStoragePokemonTooltip(PokemonDto pokemon, string? tradeRestriction = null)
+    private void DrawStoragePokemonTooltip(PokemonDto pokemon, string? pickerRestriction = null)
     {
         ImGui.BeginTooltip();
         var gender = PokemonGenderMark(pokemon.Gender);
@@ -277,7 +277,7 @@ public sealed partial class MainWindow
         if (evolutions > 0) ImGui.TextColored(PokemonYellow, "Evolution ready");
         if ((moves > 0 || evolutions > 0) && CollectionEditRestriction is { } reason)
             ImGui.TextColored(PokemonRed, reason);
-        if (tradeRestriction is not null) ImGui.TextColored(PokemonOrange, tradeRestriction);
+        if (pickerRestriction is not null) ImGui.TextColored(PokemonOrange, pickerRestriction);
         else
         {
             if (pokemon.TradeLockId is not null) ImGui.TextColored(PokemonOrange, "Reserved for trading / Open Trading to cancel or withdraw.");
@@ -294,7 +294,7 @@ public sealed partial class MainWindow
         return edge + 2 * scale;
     }
 
-    private void DrawStorageBoxShortcuts(float width, bool empty, TradePicker? picker = null)
+    private void DrawStorageBoxShortcuts(float width, bool empty, StoragePicker? picker = null)
     {
         var scale = CompanionScale;
         var box = picker?.Box ?? storageBox;
@@ -336,7 +336,7 @@ public sealed partial class MainWindow
         DrawStorageThumbnails(groups, boxes, 0, height);
     }
 
-    private void DrawStorageThumbnails(Dictionary<int, List<PokemonDto>> groups, int[] boxes, float width, float height, TradePicker? picker = null)
+    private void DrawStorageThumbnails(Dictionary<int, List<PokemonDto>> groups, int[] boxes, float width, float height, StoragePicker? picker = null)
     {
         var scale = CompanionScale;
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
@@ -365,7 +365,7 @@ public sealed partial class MainWindow
         ImGui.EndChild(); ImGui.PopStyleVar();
     }
 
-    private void DrawStorageBoxThumbnail(int number, List<PokemonDto> pokemon, Vector2 size, TradePicker? picker = null)
+    private void DrawStorageBoxThumbnail(int number, List<PokemonDto> pokemon, Vector2 size, StoragePicker? picker = null)
     {
         var scale = CompanionScale;
         var min = ImGui.GetCursorScreenPos();
@@ -406,7 +406,7 @@ public sealed partial class MainWindow
         if (clicked) BrowseStorageBox(number, picker);
     }
 
-    private void DrawStoragePartyRail(float width, float height, TradePicker? picker = null)
+    private void DrawStoragePartyRail(float width, float height, StoragePicker? picker = null)
     {
         var scale = CompanionScale;
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(9 * scale));
@@ -428,7 +428,7 @@ public sealed partial class MainWindow
         ImGui.EndChild(); ImGui.PopStyleColor(); ImGui.PopStyleVar();
     }
 
-    private void DrawStoragePartyTray(TradePicker? picker = null)
+    private void DrawStoragePartyTray(StoragePicker? picker = null)
     {
         var scale = CompanionScale;
         ImGui.TextColored(CompanionAccent, $"Your party / {trainer!.Party.Count}/6");
@@ -441,7 +441,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private void DrawStoragePartySlot(PokemonDto? pokemon, int slot, Vector2 size, TradePicker? picker)
+    private void DrawStoragePartySlot(PokemonDto? pokemon, int slot, Vector2 size, StoragePicker? picker)
     {
         var scale = CompanionScale;
         ImGui.PushID($"StorageParty{slot}");
@@ -460,7 +460,7 @@ public sealed partial class MainWindow
             DrawStorageGenderMark(pokemon, min, size, scale);
             var label = $"Lv. {pokemon.Level}";
             draw.AddText(min + new Vector2(Math.Max(0, (size.X - ImGui.CalcTextSize(label).X) / 2), size.Y - ImGui.GetTextLineHeight() - 2 * scale), ImGui.GetColorU32(CompanionMuted), label);
-            var restriction = picker is null ? null : TradeOfferRestriction(pokemon);
+            var restriction = picker is null ? null : StoragePickerPokemonRestriction(picker, pokemon);
             if (restriction is not null && !selected)
                 draw.AddRectFilled(min, min + size, ImGui.GetColorU32(PanelSurface with { W = 0.52f }), 4 * scale);
             if (picker is not null && (selected || hovered))
