@@ -41,6 +41,8 @@ public sealed class ConfigWindow : Window, IDisposable
         if (ImGui.Checkbox("Dalamud notifications", ref notifications)) { configuration.NotificationsEnabled = notifications; configuration.Save(); }
         var typeHints = configuration.MoveTypeHintsEnabled;
         if (ImGui.Checkbox("Move type effectiveness badges", ref typeHints)) { configuration.MoveTypeHintsEnabled = typeHints; configuration.Save(); }
+        var moveAnimations = configuration.BattleMoveAnimationsEnabled;
+        if (ImGui.Checkbox("Battle move animations", ref moveAnimations)) { configuration.BattleMoveAnimationsEnabled = moveAnimations; configuration.Save(); }
         ImGui.Spacing();
         DrawBattleLogs();
         ImGui.Spacing();
@@ -69,20 +71,17 @@ public sealed class ConfigWindow : Window, IDisposable
         ImGui.Separator();
         ImGui.Text("Battle logs");
         DrawLogRetention();
-        if (ImGui.Button("Open logs folder"))
-        {
-            try
-            {
-                Directory.CreateDirectory(battleLogs.LogDirectory);
-                using var opened = Process.Start(new ProcessStartInfo(battleLogs.LogDirectory) { UseShellExecute = true });
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or Win32Exception or InvalidOperationException)
-            {
-                battleLogStatus = "Could not open the battle logs folder.";
-                Plugin.Log.Warning(exception, "Magitek Monsters could not open the battle logs folder.");
-            }
-        }
-        ImGui.SameLine();
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        if (ImGui.Button("Open logs folder")) OpenLogPath(battleLogs.LogDirectory, directory: true);
+        MainWindow.SameLineIfFits("Open latest log", right);
+        var latest = battleLogs.LastLogPath;
+        ImGui.BeginDisabled(latest is null);
+        if (ImGui.Button("Open latest log") && latest is not null) OpenLogPath(latest);
+        ImGui.EndDisabled();
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(latest is null ? "There are no saved battle logs yet." : "Open the newest daily battle log.");
+
+        MainWindow.SameLineIfFits("Clear saved logs", right);
         ImGui.BeginDisabled(clearingBattleLogs is not null);
         if (ImGui.Button("Clear saved logs")) ImGui.OpenPopup(confirm);
         ImGui.EndDisabled();
@@ -97,6 +96,21 @@ public sealed class ConfigWindow : Window, IDisposable
             ImGui.CloseCurrentPopup();
         }
         MainWindow.EndConfirmationModal();
+    }
+
+    private void OpenLogPath(string path, bool directory = false)
+    {
+        try
+        {
+            if (directory) Directory.CreateDirectory(path);
+            using var opened = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            battleLogStatus = null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or Win32Exception or InvalidOperationException)
+        {
+            battleLogStatus = directory ? "Could not open the battle logs folder." : "Could not open the latest battle log.";
+            Plugin.Log.Warning(exception, battleLogStatus);
+        }
     }
 
     private void DrawLogRetention()

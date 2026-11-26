@@ -414,7 +414,6 @@ public sealed partial class MainWindow : Window, IDisposable
             DrawNavigationItem("Cooperative Dens", 12, 32 * scale);
             DrawNavigationItem("Sanctuaries", 9, 32 * scale);
             DrawNavigationItem("Online Battles", 4, 32 * scale);
-            DrawLastBattleLog();
             ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
             ImGui.TextColored(CompanionMuted, "COLLECTION");
             DrawNavigationItem("Poké Mart", 5, 32 * scale);
@@ -825,14 +824,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void DrawPokemonBattleImage(string species, bool shiny, Vector2 size)
     {
-        var animatedTexture = plugin.AnimatedSprites.GetCurrentFrame(species, shiny);
-        if (animatedTexture is { } frame)
-        {
-            DrawFittedSprite(frame.Texture, frame.Region, size);
-            return;
-        }
-
-        DrawFrontSprite(species, shiny, size);
+        if (GetBattleSprite(species, shiny) is { } sprite) DrawFittedSprite(sprite.Texture, sprite.Region, size);
+        else ImGui.Dummy(size);
     }
 
     private void DrawPokemonIcon(string species, bool shiny, Vector2 size)

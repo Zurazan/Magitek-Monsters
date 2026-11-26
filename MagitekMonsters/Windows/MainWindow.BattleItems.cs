@@ -14,7 +14,7 @@ public sealed partial class MainWindow
     private int battleItemPage;
     private int battleBallPage;
 
-    private void DrawCompactTrayCombatant(BattleCombatantDto? pokemon, bool ours, bool wild, bool captured, string role, float width)
+    private void DrawCompactTrayCombatant(BattleCombatantDto? pokemon, bool ours, bool wild, bool captured, string role, float width, int actor)
     {
         var caught = pokemon is not null && (captured || IsSpeciesRegistered(pokemon.Species));
         DrawClippedText(wild && !ours ? caught ? "CAUGHT" : "NOT CAUGHT" : role, width,
@@ -25,9 +25,10 @@ public sealed partial class MainWindow
         var art = Math.Min(34 * CompanionScale, ImGui.GetContentRegionAvail().Y - 2 * CompanionScale);
         if (width > 145 * CompanionScale && art > 0)
         {
-            DrawPokemonBattleImage(pokemon.Species, pokemon.Shiny, new Vector2(art));
+            DrawBattleMoveSprite(actor, pokemon.Species, pokemon.Name, pokemon.Shiny, new Vector2(art));
             ImGui.SetCursorScreenPos(origin + new Vector2(art + 5 * CompanionScale, 0));
         }
+        else MarkMoveEffectActor(actor, origin + new Vector2(width / 2, ImGui.GetTextLineHeight()), Math.Max(20 * CompanionScale, art));
         var textWidth = width - (ImGui.GetCursorScreenPos().X - origin.X);
         var textX = ImGui.GetCursorScreenPos().X;
         DrawClippedText($"{pokemon.Name} / Lv. {pokemon.Level}", textWidth, Vector4.One);

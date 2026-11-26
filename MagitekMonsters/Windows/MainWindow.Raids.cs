@@ -135,9 +135,10 @@ public sealed partial class MainWindow
     {
         var available = ImGui.GetContentRegionAvail(); var origin = ImGui.GetCursorPos();
         var layout = BattleLayout.Console(available.X, available.Y, CompanionScale, false);
+        var playingMove = UpdateMoveEffects("raid:" + room.Id, room.Revision, room.Snapshot?.Log ?? [], room.Status != "active");
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         ImGui.BeginChild("RaidBattleMain", new Vector2(layout.MainWidth, available.Y), false);
-        if (room.Status == "active") DrawRaidBattle(room); else DrawRaidResult(room);
+        if (room.Status == "active" || playingMove) DrawRaidBattle(room); else DrawRaidResult(room);
         DrawRaidPopups();
         ImGui.EndChild();
         ImGui.SetCursorPos(origin + new Vector2(layout.MainWidth + layout.Gap, 0));
@@ -247,12 +248,18 @@ public sealed partial class MainWindow
         var seconds = Math.Max(0, room.SecondsRemaining - (DateTimeOffset.UtcNow - raidObservedAt).TotalSeconds);
         DrawClippedText($"{room.Den.Stars}-STAR DEN / Round {battleState.Turn}/{battleState.RoundLimit} / Lives: {battleState.LivesRemaining}{(battleState.ShieldRounds > 0 ? $" / Shield: {battleState.ShieldRounds}" : "")}", ImGui.GetContentRegionAvail().X, CompanionAccent);
         DrawClippedText(room.Paused ? "Battle service unavailable. Your raid is saved; waiting to reconnect." : $"{Math.Ceiling(seconds):N0}s / {(room.Submitted ? "Action saved. Waiting for teammates." : "Choose a move or cheer. Missing choices use NPC actions.")}", ImGui.GetContentRegionAvail().X, room.Paused ? PokemonOrange : CompanionMuted);
-        DrawRaidActor(battleState.Boss, "DEN BOSS", actorHeight);
+        var origin = ImGui.GetCursorScreenPos();
+        var width = ImGui.GetContentRegionAvail().X;
+        var draw = ImGui.GetWindowDrawList();
+        BeginMoveEffectField();
+        DrawRaidActor(battleState.Boss, "DEN BOSS", actorHeight, 4);
         if (ImGui.BeginTable("RaidAllies", 4, ImGuiTableFlags.SizingStretchSame))
         {
-            foreach (var ally in battleState.Allies) { ImGui.TableNextColumn(); DrawRaidActor(ally, ally.Slot == room.OwnSlot ? "YOU" : ally.Npc ? "NPC" : ally.Submitted ? "READY" : "CHOOSING", actorHeight); }
+            foreach (var ally in battleState.Allies) { ImGui.TableNextColumn(); DrawRaidActor(ally, ally.Slot == room.OwnSlot ? "YOU" : ally.Npc ? "NPC" : ally.Submitted ? "READY" : "CHOOSING", actorHeight, ally.Slot); }
             ImGui.EndTable();
         }
+        DrawMoveEffectField(origin, new Vector2(origin.X + width, ImGui.GetCursorScreenPos().Y), draw.GetClipRectMin(), draw.GetClipRectMax());
+        if (room.Status != "active") return;
         var own = battleState.Allies.FirstOrDefault(entry => entry.Slot == room.OwnSlot);
         if (own is null) return;
         ImGui.BeginDisabled(busy || !room.CanAct);
@@ -324,7 +331,7 @@ public sealed partial class MainWindow
     private static string RaidTransformationLabel(string value) => value switch {
         "mega" => "Mega", "ultra" => "Ultra Burst", "terastallize" => "Tera", "dynamax" => "Dynamax", _ => value
     };
-    private void DrawRaidActor(RaidActorDto actor, string heading, float height)
+    private void DrawRaidActor(RaidActorDto actor, string heading, float height, int effectSlot)
     {
         var scale = CompanionScale; var min = ImGui.GetCursorScreenPos(); var width = Math.Max(1, ImGui.GetContentRegionAvail().X);
         ImGui.PushID(heading + actor.Slot + actor.Species);
@@ -338,7 +345,10 @@ public sealed partial class MainWindow
         var badge = gimmick.Length > 0 ? gimmick : $"Lv. {actor.Level}";
         DrawClippedText($"{heading} / {badge}{(actor.ZMoveUsed ? " / Z used" : "")}", width - 16 * scale, heading == "YOU" ? PokemonBlue : CompanionMuted);
         ImGui.SetCursorScreenPos(min + new Vector2(8, 23) * scale); DrawClippedText(actor.Species, width - 16 * scale, Vector4.One);
-        ImGui.SetCursorScreenPos(min + new Vector2(8, 41) * scale); DrawPokemonIcon(actor.Species, actor.Shiny, new Vector2(Math.Min(34 * scale, height - 69 * scale)));
+        ImGui.SetCursorScreenPos(min + new Vector2(8, 41) * scale);
+        var art = new Vector2(Math.Min(34 * scale, height - 69 * scale));
+        if (moveEffectFrame is not null) DrawBattleMoveSprite(effectSlot, actor.Species, actor.Name, actor.Shiny, art);
+        else DrawPokemonIcon(actor.Species, actor.Shiny, art);
         ImGui.SetCursorScreenPos(min + new Vector2(46, 45) * scale);
         DrawStarterTypeBadges(actor.Types.ToArray(), Math.Max(1, Math.Min(64 * scale, (width - 60 * scale) / Math.Max(1, actor.Types.Count))), scale);
         ImGui.SetCursorScreenPos(new Vector2(min.X + 8 * scale, max.Y - 27 * scale));

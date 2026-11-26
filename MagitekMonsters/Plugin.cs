@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Command;
 using Dalamud.Interface;
@@ -31,6 +32,7 @@ public sealed class Plugin : IDalamudPlugin
     public ApiClient Api { get; }
     public AssetCatalog Assets { get; }
     public AnimatedPokemonSprites AnimatedSprites { get; }
+    internal MoveEffectTextures MoveTextures { get; }
     public ServerConnection Connection { get; }
     public DalamudNotifications Notifications { get; }
     internal BattleLogArchive BattleLogs { get; }
@@ -52,6 +54,12 @@ public sealed class Plugin : IDalamudPlugin
             exception => Log.Warning(exception, "Magitek Monsters server event connection was interrupted."));
         Api.Live = Connection;
         Assets = new AssetCatalog(assemblyDirectory);
+        MoveTextures = new MoveEffectTextures(Assets, TextureProvider);
+        if (Configuration.BattleMoveAnimationsEnabled)
+        {
+            _ = Task.Run(() => MoveEffectCatalog.Data.Value);
+            MoveTextures.Preload();
+        }
         var configDirectory = PluginInterface.GetPluginConfigDirectory();
         AnimatedSprites = new AnimatedPokemonSprites(Path.Combine(configDirectory, "AnimatedSprites"), Assets);
         BattleLogs = new(configDirectory, exception => Log.Warning(exception, "Magitek Monsters battle log file operation failed."),
@@ -99,6 +107,7 @@ public sealed class Plugin : IDalamudPlugin
         Notifications.Dispose();
         ConfigWindow.Dispose();
         MainWindow.Dispose();
+        MoveTextures.Dispose();
         AnimatedSprites.Dispose();
         Connection.Dispose();
         Api.Dispose();

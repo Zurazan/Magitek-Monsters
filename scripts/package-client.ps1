@@ -58,7 +58,7 @@ foreach ($variants in $assets.pokemon.PSObject.Properties.Value) {
     }
 }
 foreach ($asset in $assets.files) {
-    if ($asset.path -notmatch '^(items/(gen\d+/)?[^/]+\.png|pokemon/(shiny/)?[^/]+\.png|overrides/items/[^/]+\.png|types/generation-viii/brilliant-diamond-shining-pearl/\d+\.png|badges/\d+\.png|ribbons/ribbon[a-z0-9]+\.png)$') { throw 'Unexpected graphics path.' }
+    if ($asset.path -notmatch '^(items/(gen\d+/)?[^/]+\.png|pokemon/(shiny/)?[^/]+\.png|overrides/items/[^/]+\.png|types/generation-viii/brilliant-diamond-shining-pearl/\d+\.png|badges/\d+\.png|ribbons/ribbon[a-z0-9]+\.png|effects/[a-z0-9-]+\.png)$') { throw 'Unexpected graphics path.' }
     $name = 'Graphics/' + $asset.path
     $source = Join-Path $release $name
     if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $asset.sha256) { throw "Asset hash mismatch: $name" }

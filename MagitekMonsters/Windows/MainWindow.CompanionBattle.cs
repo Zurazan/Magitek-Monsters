@@ -24,6 +24,8 @@ public sealed partial class MainWindow
     private void ResetBattleLog()
     {
         battleLogFollow = null; battleLogSource = null; battleLogLines = []; battleLogSourceCount = 0; battleLogOutcome = string.Empty;
+        battleMoveEffects = null;
+        moveEffectFrame = null;
     }
 
     private void DrawPermanentBattleLog(string id, IReadOnlyList<string> lines, float height, string outcome = "active")

@@ -1,8 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
@@ -86,23 +83,5 @@ public sealed partial class MainWindow
             }
         }
         if (ImGui.IsItemHovered()) ImGui.SetTooltip("Copy the battle log as plain text, including earlier turns captured by this client.");
-    }
-
-    private void DrawLastBattleLog()
-    {
-        if (battleLogArchive?.LastLogPath is not { } path) return;
-        if (DrawAccentSmallButton("Open latest log", PokemonBlue))
-        {
-            try
-            {
-                using var opened = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or Win32Exception or InvalidOperationException)
-            {
-                SetStatus("Could not open the latest battle log.", true);
-                Plugin.Log.Warning(exception, "Magitek Monsters could not open the latest battle log.");
-            }
-        }
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(path);
     }
 }

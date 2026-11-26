@@ -15,7 +15,7 @@ public sealed partial class MainWindow
     private static readonly Vector4 CompanionMuted = new(0.70f, 0.70f, 0.74f, 1f);
     private static readonly Vector4 CompanionSurface = new(0.13f, 0.13f, 0.14f, 1f);
     private static float CompanionScale => Math.Max(ImGuiHelpers.GlobalScale, ImGui.GetTextLineHeight() / 17f);
-    private static void SameLineIfFits(string label, float right)
+    internal static void SameLineIfFits(string label, float right)
     {
         if (ImGui.GetItemRectMax().X + ImGui.GetStyle().ItemSpacing.X + ImGui.CalcTextSize(label).X + 2 * ImGui.GetStyle().FramePadding.X <= right) ImGui.SameLine();
     }

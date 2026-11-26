@@ -29,10 +29,21 @@ public sealed partial class MainWindow
         var scale = CompanionScale;
         var available = ImGui.GetContentRegionAvail();
         var layout = BattleLayout.Console(available.X, available.Y, scale, current.GameType == "doubles", !pvp && current.Status == "active" && battleMenu is BattleMenu.Bag or BattleMenu.Catch);
+        var playingMove = UpdateMoveEffects(current.Id, current.Revision ?? 0, current.Log, current.Status != "active");
         var origin = ImGui.GetCursorPos();
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         ImGui.BeginChild("BattleConsoleMain", new Vector2(layout.MainWidth, available.Y), false, FixedBattlePanel);
-        if (current.Status != "active" && !pvp) DrawBattleResults(current);
+        if (current.Status != "active" && !pvp)
+        {
+            if (playingMove)
+            {
+                DrawClippedText(BattleResultPresentation.Outcome(current.Status), layout.MainWidth,
+                    current.Status is "won" or "caught" ? PokemonGreen : PokemonOrange);
+                ImGui.SetCursorPosY(layout.HeaderHeight + layout.Gap);
+                DrawConsoleField(current, layout.FieldHeight);
+            }
+            else DrawBattleResults(current);
+        }
         else if (pvp && current.Status == "active" && (current.Request?.TeamPreview == true || current.Turn == 0 && current.PlayerActive is null)) DrawOnlinePreview(current);
         else DrawBattleConsoleMain(current, pvp, layout, available.Y);
         ImGui.EndChild();
@@ -103,6 +114,10 @@ public sealed partial class MainWindow
     private void DrawConsoleField(BattleSnapshotDto current, float height)
     {
         if (current.Request?.TeamPreview == true) { DrawConsoleOpponentPreview(current, height); return; }
+        var origin = ImGui.GetCursorScreenPos();
+        var size = new Vector2(ImGui.GetContentRegionAvail().X, height);
+        var draw = ImGui.GetWindowDrawList();
+        BeginMoveEffectField();
         var doubles = current.GameType == "doubles";
         ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(3, 0) * CompanionScale);
         if (ImGui.BeginTable("ConsoleCombatants", doubles ? 4 : 2, ImGuiTableFlags.SizingStretchSame))
@@ -118,6 +133,7 @@ public sealed partial class MainWindow
             ImGui.EndTable();
         }
         ImGui.PopStyleVar();
+        DrawMoveEffectField(origin, origin + size, draw.GetClipRectMin(), draw.GetClipRectMax());
     }
 
     private void DrawConsoleCombatant(BattleCombatantDto? pokemon, bool ours, int slot, bool doubles, float height, bool wild, bool captured)
@@ -126,11 +142,13 @@ public sealed partial class MainWindow
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(6, 2) * CompanionScale);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, ours ? new Vector4(0.11f, 0.14f, 0.19f, 1) : new Vector4(0.17f, 0.12f, 0.13f, 1));
         ImGui.BeginChild($"ConsolePokemon-{ours}-{slot}", new Vector2(0, height), true, FixedBattlePanel);
+        if (moveEffectFrame is not null) moveEffectLayer = ImGui.GetWindowDrawList();
         var width = ImGui.GetContentRegionAvail().X;
+        var actor = (ours ? 0 : 4) + slot;
         var role = ours ? doubles ? $"YOUR SLOT {slot + 1}" : "YOUR POKÉMON" : wild ? "WILD POKÉMON" : doubles ? $"FOE SLOT {slot + 1}" : "OPPONENT";
         if (height < 110 * CompanionScale)
         {
-            DrawCompactTrayCombatant(pokemon, ours, wild, captured, role, width);
+            DrawCompactTrayCombatant(pokemon, ours, wild, captured, role, width, actor);
             ImGui.EndChild(); ImGui.PopStyleColor(); ImGui.PopStyleVar(2);
             return;
         }
@@ -159,7 +177,7 @@ public sealed partial class MainWindow
             var nameHeight = badges.Stacked ? line + badges.Height + 2 * CompanionScale : Math.Max(line, badges.Height);
             var art = Math.Max(1, Math.Min(width, ImGui.GetContentRegionAvail().Y - nameHeight - line - 6 * CompanionScale - 4 * ImGui.GetStyle().ItemSpacing.Y));
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0, (width - art) / 2));
-            DrawPokemonBattleImage(pokemon.Species, pokemon.Shiny, new Vector2(art));
+            DrawBattleMoveSprite(actor, pokemon.Species, pokemon.Name, pokemon.Shiny, new Vector2(art));
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip($"{pokemon.Name} / {pokemon.Species} / Lv. {pokemon.Level}\n{string.Join(" / ", SpeciesDisplayCatalog.Get(pokemon.Species)?.Types ?? [])}\n{pokemon.Condition}");
             var mega = SpeciesDisplayCatalog.MegaEvolutions.Any(route => route.Species == pokemon.Species);

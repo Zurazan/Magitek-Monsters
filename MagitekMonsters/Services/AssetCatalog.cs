@@ -17,6 +17,7 @@ public sealed class AssetCatalog
     private readonly Dictionary<(string Species, bool Shiny), string> pokemonPaths = [];
     private readonly Dictionary<(string Species, bool Shiny), string> animationIds = [];
     private readonly Dictionary<string, string> typePaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> effectPaths = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (SpriteRegion Region, int Width, int Height)> spriteRegions = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<(string Species, bool Shiny), PokemonAsset> pokemonLookups = new();
     private readonly ConcurrentDictionary<string, string> itemLookups = new(StringComparer.OrdinalIgnoreCase);
@@ -32,6 +33,9 @@ public sealed class AssetCatalog
         graphicsRoot = Path.GetFullPath(Path.Combine(assemblyDirectory, "Graphics"));
         pokemonRoot = Path.Combine(graphicsRoot, "pokemon") + Path.DirectorySeparatorChar;
         IsAvailable = Directory.Exists(graphicsRoot);
+        var effects = Path.Combine(graphicsRoot, "effects");
+        if (Directory.Exists(effects))
+            foreach (var file in Directory.EnumerateFiles(effects, "*.png")) effectPaths[Path.GetFileName(file)] = file;
         foreach (var folder in new[] { "badges", "ribbons" })
         {
             var directory = Path.Combine(graphicsRoot, folder);
@@ -105,6 +109,7 @@ public sealed class AssetCatalog
     public bool HasItem(string itemId) => ResolveItem(itemId) is not null;
     public string Item(string itemId) => ResolveItem(itemId) ?? string.Empty;
     public string TypeBadge(string type) => typePaths.GetValueOrDefault(type, string.Empty);
+    internal IEnumerable<KeyValuePair<string, string>> MoveEffects => effectPaths;
     public string Achievement(string id)
     {
         if (achievementLookups.TryGetValue(id, out var cached)) return cached;
