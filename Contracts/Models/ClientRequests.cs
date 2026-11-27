@@ -50,12 +50,14 @@ public sealed record SavedTeamRequest(string Id, string Name, IReadOnlyList<stri
 public sealed record BoxNameRequest(string Name) : IClientRequest;
 public sealed record StorageSlotPlacement(int FromBox, int FromSlot, int ToBox, int ToSlot,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OccupantId = null);
+public sealed record StorageSortLayout(string Fingerprint, IReadOnlyList<int> Order);
 public sealed record StorageBatchRequest(string RequestId, string Action, IReadOnlyList<string> PokemonIds,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? BoxNumber = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Favorite = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Confirmed = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StorageSlotPlacement? Placement = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<int>? ExpectedSlots = null) : IClientRequest;
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<int>? ExpectedSlots = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StorageSortLayout? Layout = null) : IClientRequest;
 public sealed record TeamExportRequest(List<string> PokemonIds) : IClientRequest;
 public sealed record PvpQueueRequest(string Mode, string FormatId, IReadOnlyList<string> PokemonIds) : IClientRequest;
 public sealed record ChallengeRequest(string TrainerId, IReadOnlyList<string> PokemonIds,

@@ -196,17 +196,18 @@ public sealed partial class MainWindow
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip($"{pokemon.Name} / {pokemon.Species} / Lv. {pokemon.Level}\n{string.Join(" / ", SpeciesDisplayCatalog.Get(pokemon.Species)?.Types ?? [])}\n{pokemon.Condition}");
             var mega = SpeciesDisplayCatalog.MegaEvolutions.Any(route => route.Species == pokemon.Species);
-            var name = $"{(pokemon.Shiny ? "★ " : "")}{(mega ? pokemon.Species : pokemon.Name)} / Lv. {pokemon.Level}";
+            var name = $"{(pokemon.Shiny ? "★ " : "")}{(mega ? pokemon.Species : pokemon.Name)}";
+            var level = $" / Lv. {pokemon.Level}";
             if (types.Length == 0 || badges.Stacked)
             {
-                DrawClippedText(name, width, Vector4.One);
+                DrawClippedGenderedPokemonText(name, pokemon.Gender, width, Vector4.One, level);
                 if (types.Length > 0) DrawConsoleTypeRow(types, badges);
             }
             else if (ImGui.BeginTable("CombatantNameTypes", 2, ImGuiTableFlags.SizingStretchProp))
             {
                 ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("Types", ImGuiTableColumnFlags.WidthFixed, badges.Width);
-                ImGui.TableNextColumn(); DrawClippedText(name, ImGui.GetContentRegionAvail().X, Vector4.One);
+                ImGui.TableNextColumn(); DrawClippedGenderedPokemonText(name, pokemon.Gender, ImGui.GetContentRegionAvail().X, Vector4.One, level);
                 ImGui.TableNextColumn(); DrawConsoleTypeRow(types, badges);
                 ImGui.EndTable();
             }

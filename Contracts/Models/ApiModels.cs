@@ -554,6 +554,7 @@ public sealed class BattleCombatantDto
     public string Ident { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Species { get; set; } = string.Empty;
+    public string Gender { get; set; } = string.Empty;
     public int Level { get; set; }
     public bool Shiny { get; set; }
     public string Condition { get; set; } = string.Empty;

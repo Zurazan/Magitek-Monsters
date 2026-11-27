@@ -38,6 +38,7 @@ public sealed class StorageCapabilitiesDto
     public int MaximumBatchSize { get; set; }
     public bool ExactSlotPlacement { get; set; }
     public bool BoxSorting { get; set; }
+    public bool FullStorageSorting { get; set; }
 }
 public sealed class ServerFeaturesDto
 {

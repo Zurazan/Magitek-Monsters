@@ -45,7 +45,7 @@ public static class StorageBrowser
             .ThenBy(pokemon => pokemon.Id, StringComparer.Ordinal).ToList();
     }
 
-    internal static IEnumerable<PokemonDto> SortBox(IEnumerable<PokemonDto> pokemon, StorageSort order)
+    internal static IEnumerable<PokemonDto> Sort(IEnumerable<PokemonDto> pokemon, StorageSort order)
     {
         var sorted = order switch
         {
@@ -63,7 +63,7 @@ public static class StorageBrowser
                 .ThenBy(entry => entry.DisplaySpecies, StringComparer.OrdinalIgnoreCase),
             _ => throw new ArgumentOutOfRangeException(nameof(order))
         };
-        return sorted.ThenBy(entry => entry.BoxSlot);
+        return sorted.ThenBy(entry => entry.BoxNumber).ThenBy(entry => entry.BoxSlot);
     }
 
     public static List<PokemonDto> Selected(IEnumerable<PokemonDto> storage, ISet<string> ids) => storage

@@ -81,6 +81,7 @@ public sealed class RaidActorDto
 {
     public string Species { get; set; } = "";
     public string Name { get; set; } = "";
+    public string Gender { get; set; } = "";
     public string Status { get; set; } = "";
     public List<string> Types { get; set; } = [];
     public Dictionary<string, int> StatStages { get; set; } = [];

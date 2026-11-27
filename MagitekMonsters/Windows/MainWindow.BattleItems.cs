@@ -31,7 +31,7 @@ public sealed partial class MainWindow
         else MarkMoveEffectActor(actor, origin + new Vector2(width / 2, ImGui.GetTextLineHeight()), Math.Max(20 * CompanionScale, art));
         var textWidth = width - (ImGui.GetCursorScreenPos().X - origin.X);
         var textX = ImGui.GetCursorScreenPos().X;
-        DrawClippedText($"{pokemon.Name} / Lv. {pokemon.Level}", textWidth, Vector4.One);
+        DrawClippedGenderedPokemonText(pokemon.Name, pokemon.Gender, textWidth, Vector4.One, $" / Lv. {pokemon.Level}");
         ImGui.SetCursorScreenPos(new(textX, origin.Y + ImGui.GetTextLineHeight() + 2 * CompanionScale));
         DrawClippedText(hp.Label, textWidth, CompanionMuted);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip($"{pokemon.Species}\n{string.Join(" / ", SpeciesDisplayCatalog.Get(pokemon.Species)?.Types ?? [])}\n{hp.Label}");
@@ -246,7 +246,7 @@ public sealed partial class MainWindow
         if (layout.Wide && current.OpponentActive is { } target)
         {
             ImGui.Spacing();
-            DrawClippedText(target.Name, infoWidth, PokemonOrange);
+            DrawClippedGenderedPokemonText(target.Name, target.Gender, infoWidth, PokemonOrange);
             var hp = BattleBag.Health(target.Condition);
             DrawProgressBar(hp.Ratio, new Vector2(-1, 5 * scale), "", HpBarRed);
             DrawClippedText(hp.Label, infoWidth, CompanionMuted);

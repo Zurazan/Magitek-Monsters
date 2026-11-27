@@ -200,6 +200,9 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     internal Task<TrainerSnapshotDto> SortStorageBox(string requestId, int box, string[] pokemonIds, int[] expectedSlots, CancellationToken cancellationToken) =>
         ChangeStorageLayout(new(requestId, "sort", pokemonIds, BoxNumber: box, ExpectedSlots: expectedSlots), cancellationToken);
 
+    internal Task<TrainerSnapshotDto> SortAllStorage(string requestId, StorageSortLayout layout, CancellationToken cancellationToken) =>
+        ChangeStorageLayout(new(requestId, "sort-all", [], Layout: layout), cancellationToken);
+
     private async Task<TrainerSnapshotDto> ChangeStorageLayout(StorageBatchRequest request, CancellationToken cancellationToken)
     {
         try
@@ -216,9 +219,14 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
                 Plugin.Log.Debug(error, "Could not check server support for PC layout changes.");
             }
             var storage = metadata?.Capabilities.Storage;
-            if (storage is not null && !(request.Action == "sort" ? storage.BoxSorting : storage.ExactSlotPlacement))
-                throw new ApiException(400, request.Action == "sort" ? "The server needs an update before you can sort PC boxes."
-                    : "The server needs an update before you can move or swap PC slots.", "storage_layout_unavailable");
+            var unavailable = (request.Action, storage) switch
+            {
+                ("sort-all", { FullStorageSorting: false }) => "The server needs an update before you can sort all PC boxes.",
+                ("sort", { BoxSorting: false }) => "The server needs an update before you can sort PC boxes.",
+                ("place", { ExactSlotPlacement: false }) => "The server needs an update before you can move or swap PC slots.",
+                _ => null
+            };
+            if (unavailable is not null) throw new ApiException(400, unavailable, "storage_layout_unavailable");
             throw;
         }
     }

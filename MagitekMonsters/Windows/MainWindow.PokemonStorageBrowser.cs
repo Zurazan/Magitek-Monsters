@@ -75,7 +75,7 @@ public sealed partial class MainWindow
         {
             var box = Math.Clamp(number, 0, StorageBrowser.BoxCount);
             SetFilter(Filter with { Box = box });
-            if (Compact || box == 0) return;
+            if (Compact || box == 0 || ChoosingSwap) return;
             var contents = inventory.Boxes.GetValueOrDefault(box);
             if (contents?.Any(pokemon => pokemon.Id == SelectedId) != true)
                 SelectedId = contents?.FirstOrDefault()?.Id;
@@ -182,12 +182,13 @@ public sealed partial class MainWindow
             {
                 if (ImGui.Checkbox("Show empty boxes", ref showEmptyBoxes)) scrollToTop = true;
                 ImGui.SameLine();
-                ImGui.TextColored(CompanionMuted, $"{filtered.Count:N0} Pokémon / {OverviewBoxes().Length} boxes");
+                DrawClippedText(swap is { } source ? $"Swapping {source.Name} / Open a box" : $"{filtered.Count:N0} Pokémon / {OverviewBoxes().Length} boxes",
+                    ImGui.GetContentRegionAvail().X, ChoosingSwap ? PokemonYellow : CompanionMuted);
                 DrawStorageThumbnails(0, Math.Max(240 * scale, ImGui.GetContentRegionAvail().Y - 100 * scale));
                 DrawStoragePartyTray();
                 return;
             }
-            if (!Compact && !inventory.Owner.Party.Concat(filtered).Any(pokemon => pokemon.Id == SelectedId))
+            if (!Compact && !ChoosingSwap && !inventory.Owner.Party.Concat(filtered).Any(pokemon => pokemon.Id == SelectedId))
                 SelectedId = filtered.FirstOrDefault()?.Id;
             if (!overview && Compact && scrollToTop)
             {
@@ -240,7 +241,8 @@ public sealed partial class MainWindow
             ImGui.PushStyleColor(ImGuiCol.ChildBg, CompanionSurface);
             if (ImGui.BeginChild(Compact ? "StoragePickerPreview" : "StorageInspector", new Vector2(width, height), true))
             {
-                if (pokemon is not null)
+                if (ChoosingSwap) DrawSwapPreview();
+                else if (pokemon is not null)
                 {
                     ImGui.PushID(pokemon.Id);
                     if (beforeDetails is not null) beforeDetails(pokemon);

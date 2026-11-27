@@ -197,7 +197,7 @@ public sealed partial class MainWindow
 
         static BattleCombatantDto VisualActor(RaidActorDto actor, string slot) => new()
         {
-            Ident = $"{slot}: {actor.Name}", Name = actor.Name, Species = actor.Species, Level = actor.Level, Shiny = actor.Shiny,
+            Ident = $"{slot}: {actor.Name}", Name = actor.Name, Species = actor.Species, Level = actor.Level, Gender = actor.Gender, Shiny = actor.Shiny,
             Condition = actor.Status.Length == 0 ? $"{actor.Hp}/{actor.MaxHp}" : $"{actor.Hp}/{actor.MaxHp} {actor.Status}",
         };
     }
@@ -490,7 +490,8 @@ public sealed partial class MainWindow
         var gimmick = actor.DynamaxTurns > 0 ? $"MAX {actor.DynamaxTurns}" : RaidTransformationLabel(actor.Transformation);
         var badge = gimmick.Length > 0 ? gimmick : $"Lv. {actor.Level}";
         DrawClippedText($"{heading} / {badge}{(actor.ZMoveUsed ? " / Z used" : "")}", width - 16 * scale, heading == "YOU" ? PokemonBlue : CompanionMuted);
-        ImGui.SetCursorScreenPos(min + new Vector2(8, 23) * scale); DrawClippedText(species, width - 16 * scale, Vector4.One);
+        ImGui.SetCursorScreenPos(min + new Vector2(8, 23) * scale);
+        DrawClippedGenderedPokemonText(species, shown?.Gender ?? actor.Gender, width - 16 * scale, Vector4.One);
         ImGui.SetCursorScreenPos(min + new Vector2(8, 41) * scale);
         var art = new Vector2(Math.Min(34 * scale, height - 69 * scale));
         if (moveEffectFrame is not null) DrawBattleMoveSprite(effectSlot, species, shown?.Name ?? actor.Name, shown?.Shiny ?? actor.Shiny, art);

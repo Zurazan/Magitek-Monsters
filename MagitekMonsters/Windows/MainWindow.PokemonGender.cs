@@ -37,6 +37,45 @@ public sealed partial class MainWindow
             ImGui.SetTooltip(icon.Label);
     }
 
+    private static void DrawClippedGenderedPokemonText(string name, string? gender, float width, Vector4 color, string suffix = "")
+    {
+        if (PokemonGenderMark(gender) is not { } mark)
+        {
+            DrawClippedText(name + suffix, width, color);
+            return;
+        }
+
+        width = Math.Max(1, width);
+        var line = ImGui.GetTextLineHeight();
+        var iconSize = Math.Min(width, line);
+        var gap = Math.Min(width - iconSize, 3 * CompanionScale);
+        var textWidth = width - iconSize - gap;
+        var nameWidth = ImGui.CalcTextSize(name).X;
+        var suffixWidth = ImGui.CalcTextSize(suffix).X;
+        var clippedNameWidth = Math.Min(nameWidth, Math.Max(textWidth / 2, textWidth - suffixWidth));
+        var origin = ImGui.GetCursorScreenPos();
+        var icon = origin + new Vector2(clippedNameWidth + gap, (line - iconSize) / 2);
+        var suffixX = icon.X + iconSize;
+        ImGui.Dummy(new Vector2(width, line));
+        var draw = ImGui.GetWindowDrawList();
+        var tint = ImGui.GetColorU32(color);
+        draw.PushClipRect(origin, origin + new Vector2(clippedNameWidth, line), true);
+        draw.AddText(origin, tint, name);
+        draw.PopClipRect();
+        DrawPokemonGenderMark(mark, icon, iconSize);
+        if (suffix.Length > 0 && suffixX < origin.X + width)
+        {
+            draw.PushClipRect(new Vector2(suffixX, origin.Y), origin + new Vector2(width, line), true);
+            draw.AddText(new Vector2(suffixX, origin.Y), tint, suffix);
+            draw.PopClipRect();
+        }
+        if (ImGui.IsItemHovered())
+        {
+            if (ImGui.IsMouseHoveringRect(icon, icon + new Vector2(iconSize))) ImGui.SetTooltip(mark.Label);
+            else if (nameWidth > clippedNameWidth || suffixX + suffixWidth > origin.X + width) ImGui.SetTooltip(name + suffix);
+        }
+    }
+
     private static void DrawPokemonGenderMark(GenderMark mark, Vector2 position, float size)
     {
         var draw = ImGui.GetWindowDrawList();

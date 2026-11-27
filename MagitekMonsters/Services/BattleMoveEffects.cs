@@ -175,14 +175,17 @@ internal sealed class BattleMoveEffects
             foreach (var part in details)
                 if (part.StartsWith('L') && int.TryParse(part.AsSpan(1), out var parsed)) { level = parsed; break; }
             actors[slot] = new() { Ident = parts[2], Name = name, Species = details[0], Shiny = details.Contains("shiny"), Active = true,
-                Level = level, Condition = parts[4] };
+                Level = level, Gender = VisibleGender(details), Condition = parts[4] };
             return;
         }
         if (actor is null || actor.Name != name) return;
         if (parts[1] is "detailschange" or "-formechange" or "-terastallize")
         {
             var tera = parts[1] == "-terastallize";
-            actors[slot] = CopyActor(actor, actor.Condition, tera ? actor.Species : value.Split(',')[0], tera ? value : actor.TeraType);
+            var details = tera ? [] : value.Split(',', StringSplitOptions.TrimEntries);
+            var changedForm = CopyActor(actor, actor.Condition, tera ? actor.Species : details[0], tera ? value : actor.TeraType);
+            if (parts[1] == "detailschange") changedForm.Gender = VisibleGender(details);
+            actors[slot] = changedForm;
             return;
         }
         var condition = parts[1] switch
@@ -204,9 +207,11 @@ internal sealed class BattleMoveEffects
 
     private static BattleCombatantDto CopyActor(BattleCombatantDto actor, string condition, string species, string teraType) => new()
     {
-        Ident = actor.Ident, Name = actor.Name, Species = species, Level = actor.Level, Shiny = actor.Shiny, TeraType = teraType,
+        Ident = actor.Ident, Name = actor.Name, Species = species, Level = actor.Level, Gender = actor.Gender, Shiny = actor.Shiny, TeraType = teraType,
         Condition = condition, Fainted = condition.EndsWith(" fnt", StringComparison.Ordinal), Active = actor.Active,
     };
+
+    private static string VisibleGender(string[] details) => Array.Find(details, part => part is "M" or "F") ?? "";
 
     private static int? Slot(string value)
     {

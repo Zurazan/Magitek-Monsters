@@ -28,9 +28,10 @@ public sealed partial class MainWindow
             ImGui.TextWrapped("You can release a boxed Pokémon while your encounter is active.");
             if (DrawAccentSmallButton("Return to encounter", CompanionAccent)) mainSection = 0;
         }
+        StorageView.DragEnabled = !CollectionLocked && !storageSelecting && pendingStorageBatch is null;
+        if (StorageView.CancelInvalidSwap()) SetStatus("The Pokémon you picked moved or became locked. Start the swap again.", true);
         DrawStorageToolbar();
         DrawStorageTools(StorageView.Matches);
-        StorageView.DragEnabled = !CollectionLocked && !storageSelecting && pendingStorageBatch is null;
         StorageView.DrawBody(DrawStorageInspectorHeader, DrawStorageInspectorActions);
         DrawReleaseConfirmation();
         DrawStorageReleasePopup();
@@ -50,9 +51,10 @@ public sealed partial class MainWindow
         StorageView.DrawBoxJump();
         StorageView.DrawFilters(right, ImGui.GetWindowViewport().WorkSize.X);
         DrawStorageSort(right);
+        StorageView.DrawSwapButton(right);
         var selectLabel = storageSelecting ? "Done selecting" : "Multi-select";
-        StorageSameLine(right, ImGui.CalcTextSize(selectLabel).X + 16 * scale);
-        ImGui.BeginDisabled(busy);
+        StorageSameLine(right, ImGui.CalcTextSize(selectLabel).X + ImGui.GetStyle().FramePadding.X * 2);
+        ImGui.BeginDisabled(busy || StorageView.ChoosingSwap);
         if (DrawStorageToolbarButton(selectLabel, storageSelecting ? CompanionAccent : CompanionMuted))
         { storageSelecting = !storageSelecting; if (!storageSelecting) storageSelection.Clear(); }
         if (ImGui.IsItemHovered()) ImGui.SetTooltip("Click sprites to inspect. Shift-click to start selecting several Pokémon. Selections stay when switching boxes.");
@@ -86,19 +88,27 @@ public sealed partial class MainWindow
 
     private void DrawStorageSort(float right)
     {
-        const string label = "Sort box...";
+        const string label = "Sort...";
         var box = StorageView.Box;
         StorageSameLine(right, ImGui.CalcTextSize(label).X + 16 * CompanionScale);
-        ImGui.BeginDisabled(box == 0 || storageInventory?.Count(box) is not > 0 || CollectionLocked || pendingStorageBatch is not null);
+        ImGui.BeginDisabled(trainer?.Storage.Count is not > 0 || CollectionLocked || pendingStorageBatch is not null || StorageView.ChoosingSwap);
         if (DrawStorageToolbarButton(label, CompanionAccent)) ImGui.OpenPopup("SortStorageBox");
         ImGui.EndDisabled();
-        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(box == 0 ? "Open a box to sort it." : "Save a new slot order for every Pokémon in this box. Locked slots stay in place.");
         if (!ImGui.BeginPopup("SortStorageBox")) return;
-        ImGui.TextDisabled("Saves this box's slot order");
+        if (box == 0) DrawStorageSortOptions(0);
+        else
+        {
+            if (ImGui.BeginMenu("All boxes")) { DrawStorageSortOptions(0); ImGui.EndMenu(); }
+            if (ImGui.BeginMenu("This box", storageInventory?.Count(box) is > 0)) { DrawStorageSortOptions(box); ImGui.EndMenu(); }
+        }
+        ImGui.EndPopup();
+    }
+
+    private void DrawStorageSortOptions(int box)
+    {
+        ImGui.TextDisabled(box == 0 ? "Fills from Box 1. Locked Pokémon stay in place." : "Saves this box's slot order.");
         foreach (var (option, order) in StorageSortOptions)
             if (ImGui.Selectable(option)) SortStorageBox(box, order);
-        ImGui.EndPopup();
     }
 
     private void SelectStoragePokemon(PokemonDto pokemon)

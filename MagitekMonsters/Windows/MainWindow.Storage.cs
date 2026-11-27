@@ -26,6 +26,7 @@ public sealed partial class MainWindow
     {
         public StorageSlotPlacement? Placement { get; init; }
         public int[]? ExpectedSlots { get; init; }
+        public StorageSortLayout? Layout { get; init; }
     }
 
     private PokemonStorageBrowser StorageView => storageBrowser ??= new(
@@ -162,12 +163,24 @@ public sealed partial class MainWindow
 
     private void SortStorageBox(int box, StorageSort order)
     {
-        if (CollectionLocked || pendingStorageBatch is not null || trainer is not { } current
-            || storageInventory?.Boxes.GetValueOrDefault(box) is not { Count: > 0 } contents) return;
-        var ordered = StorageBrowser.SortBox(contents, order).ToArray();
-        var attempt = new StorageBatchAttempt(current.User.Id, Guid.NewGuid().ToString(), "sort", ordered.Select(pokemon => pokemon.Id).ToArray(), box, false)
-            { ExpectedSlots = ordered.Select(pokemon => pokemon.BoxSlot).ToArray() };
-        Run(() => ExecuteStorageBatch(attempt), $"Sorting {BoxLabel(box)}...");
+        if (CollectionLocked || pendingStorageBatch is not null || trainer is not { } current) return;
+        var contents = box == 0 ? current.Storage : storageInventory?.Boxes.GetValueOrDefault(box);
+        if (contents is not { Count: > 0 }) return;
+        var ordered = StorageBrowser.Sort(contents, order).ToArray();
+        var requestId = Guid.NewGuid().ToString();
+        StorageBatchAttempt attempt;
+        if (box == 0)
+        {
+            var occupants = ordered.Select(pokemon => (Position: StoragePositions.Position(pokemon.BoxNumber, pokemon.BoxSlot), Pokemon: Guid.Parse(pokemon.Id))).ToArray();
+            var layout = new StorageSortLayout(StoragePositions.Fingerprint(occupants), occupants.Select(occupant => occupant.Position).ToArray());
+            attempt = new(current.User.Id, requestId, "sort-all", [], box, false) { Layout = layout };
+        }
+        else
+        {
+            attempt = new(current.User.Id, requestId, "sort", ordered.Select(pokemon => pokemon.Id).ToArray(), box, false)
+                { ExpectedSlots = ordered.Select(pokemon => pokemon.BoxSlot).ToArray() };
+        }
+        Run(() => ExecuteStorageBatch(attempt), box == 0 ? "Sorting all PC boxes..." : $"Sorting {BoxLabel(box)}...");
     }
 
     private async Task ExecuteStorageBatch(StorageBatchAttempt attempt)
@@ -179,6 +192,7 @@ public sealed partial class MainWindow
             var request = attempt switch
             {
                 { Placement: { } placement } => plugin.Api.PlaceStoragePokemon(attempt.RequestId, attempt.Ids[0], placement, disposeCancellation.Token),
+                { Layout: { } layout } => plugin.Api.SortAllStorage(attempt.RequestId, layout, disposeCancellation.Token),
                 { ExpectedSlots: { } slots } => plugin.Api.SortStorageBox(attempt.RequestId, attempt.Box, attempt.Ids, slots, disposeCancellation.Token),
                 _ => plugin.Api.StorageBatch(attempt.RequestId, attempt.Action, attempt.Ids, attempt.Box, attempt.Favorite, disposeCancellation.Token)
             };
@@ -209,9 +223,9 @@ public sealed partial class MainWindow
             SetStatus(placed.OccupantId is null ? $"Moved to {BoxLabel(placed.ToBox)} / slot {placed.ToSlot}." : "Pokémon swapped.");
             return;
         }
-        if (attempt.ExpectedSlots is not null)
+        if (attempt.ExpectedSlots is not null || attempt.Layout is not null)
         {
-            SetStatus($"Sorted {BoxLabel(attempt.Box)}.");
+            SetStatus(attempt.Box == 0 ? "Sorted all PC boxes." : $"Sorted {BoxLabel(attempt.Box)}.");
             return;
         }
         if (attempt.Action is "party" or "release") storageSelection.ExceptWith(attempt.Ids);
