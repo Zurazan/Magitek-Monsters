@@ -83,6 +83,7 @@ public sealed class RaidActorDto
     public string Name { get; set; } = "";
     public string Status { get; set; } = "";
     public List<string> Types { get; set; } = [];
+    public Dictionary<string, int> StatStages { get; set; } = [];
     public int Hp { get; set; }
     public int MaxHp { get; set; }
     public int Level { get; set; }
@@ -104,6 +105,8 @@ public sealed class RaidActorDto
     public RaidMaxMovesDto? MaxMoves { get; set; }
     public List<RaidMoveDto> Moves { get; set; } = [];
 }
+public sealed record RaidCheerResultDto(int Slot, string Kind, int RestoredHp, int Cured, int Raised, int Lowered);
+
 public sealed class RaidSnapshotDto
 {
     public string Status { get; set; } = "";
@@ -114,6 +117,7 @@ public sealed class RaidSnapshotDto
     public int RoundLimit { get; set; }
     public RaidActorDto Boss { get; set; } = new();
     public List<RaidActorDto> Allies { get; set; } = [];
+    public List<RaidCheerResultDto> LastRoundCheers { get; set; } = [];
     public List<string> Log { get; set; } = [];
 }
 public sealed class RaidReceiptDto

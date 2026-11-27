@@ -29,16 +29,15 @@ public sealed partial class MainWindow
         var scale = CompanionScale;
         var available = ImGui.GetContentRegionAvail();
         var layout = BattleLayout.Console(available.X, available.Y, scale, current.GameType == "doubles", !pvp && current.Status == "active" && battleMenu is BattleMenu.Bag or BattleMenu.Catch);
-        var playingMove = UpdateMoveEffects(current.Id, current.Revision ?? 0, current.Log, current.Status != "active");
+        var playingMove = UpdateMoveEffects(current.Id, current.Revision ?? 0, current.Log, () => ConsoleCombatants(current));
         var origin = ImGui.GetCursorPos();
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         ImGui.BeginChild("BattleConsoleMain", new Vector2(layout.MainWidth, available.Y), false, FixedBattlePanel);
-        if (current.Status != "active" && !pvp)
+        if (current.Status != "active" && (playingMove || !pvp))
         {
             if (playingMove)
             {
-                DrawClippedText(BattleResultPresentation.Outcome(current.Status), layout.MainWidth,
-                    current.Status is "won" or "caught" ? PokemonGreen : PokemonOrange);
+                DrawClippedText(MoveEffectMessage ?? string.Empty, layout.MainWidth, CompanionAccent);
                 ImGui.SetCursorPosY(layout.HeaderHeight + layout.Gap);
                 DrawConsoleField(current, layout.FieldHeight);
             }
@@ -66,7 +65,7 @@ public sealed partial class MainWindow
         ImGui.SetCursorPosY(layout.HeaderHeight + layout.Gap + layout.FieldHeight + layout.Gap);
         ImGui.BeginChild("BattleLatest", new Vector2(0, layout.LatestHeight), false, FixedBattlePanel);
         var latest = !string.IsNullOrWhiteSpace(current.Error) ? current.Error
-            : busy ? "Resolving your action..." : current.Request?.Wait == true ? "Waiting for the next turn..." : "Choose your next action.";
+            : busy ? "Resolving your action..." : MoveEffectMessage ?? (current.Request?.Wait == true ? "Waiting for the next turn..." : "Choose your next action.");
         DrawClippedText(latest, ImGui.GetContentRegionAvail().X, string.IsNullOrWhiteSpace(current.Error) ? CompanionMuted : PokemonRed);
         ImGui.EndChild();
         ImGui.SetCursorPosY(Math.Min(height - layout.ActionHeight,
@@ -111,6 +110,23 @@ public sealed partial class MainWindow
         if (ImGui.IsItemHovered()) ImGui.SetTooltip($"{state}\n{rules}\n{(current.Raid is { } boss ? $"{boss.HpMultiplier}x boss HP / Bonus actions: {boss.BonusActions}" : "Hover moves for their full descriptions.")}");
     }
 
+    private static BattleCombatantDto? ConsoleCombatant(BattleSnapshotDto current, bool ours, int slot) => ours
+        ? current.GameType == "doubles" ? current.PlayerActives.ElementAtOrDefault(slot) : current.PlayerActive
+        : current.GameType == "doubles" ? current.OpponentActives.ElementAtOrDefault(slot) : current.OpponentActive;
+
+    private static BattleCombatantDto?[] ConsoleCombatants(BattleSnapshotDto current)
+    {
+        var actors = new BattleCombatantDto?[8];
+        actors[0] = ConsoleCombatant(current, true, 0);
+        actors[4] = ConsoleCombatant(current, false, 0);
+        if (current.GameType == "doubles")
+        {
+            actors[1] = ConsoleCombatant(current, true, 1);
+            actors[5] = ConsoleCombatant(current, false, 1);
+        }
+        return actors;
+    }
+
     private void DrawConsoleField(BattleSnapshotDto current, float height)
     {
         if (current.Request?.TeamPreview == true) { DrawConsoleOpponentPreview(current, height); return; }
@@ -126,8 +142,7 @@ public sealed partial class MainWindow
                 for (var slot = 0; slot < (doubles ? 2 : 1); slot++)
                 {
                     ImGui.TableNextColumn();
-                    var combatant = side == 0 ? doubles ? current.PlayerActives.ElementAtOrDefault(slot) : current.PlayerActive
-                        : doubles ? current.OpponentActives.ElementAtOrDefault(slot) : current.OpponentActive;
+                    var combatant = moveEffectFrame?.Actors is { } actors ? actors[side * 4 + slot] : ConsoleCombatant(current, side == 0, slot);
                     DrawConsoleCombatant(combatant, side == 0, slot, doubles, height, current.Kind == "wild", current.Status == "caught");
                 }
             ImGui.EndTable();

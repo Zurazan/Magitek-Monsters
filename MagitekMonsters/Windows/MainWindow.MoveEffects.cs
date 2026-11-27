@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using MagitekMonsters.Models;
 using MagitekMonsters.Services;
 
 namespace MagitekMonsters.Windows;
@@ -15,7 +16,7 @@ public sealed partial class MainWindow
     private ImDrawListPtr moveEffectLayer;
     private int lastMoveEffectFrame;
 
-    private bool UpdateMoveEffects(string id, int revision, IReadOnlyList<string> log, bool finished)
+    private bool UpdateMoveEffects(string id, int revision, IReadOnlyList<string> log, Func<BattleCombatantDto?[]>? readActors)
     {
         moveEffectFrame = null;
         if (!plugin.Configuration.BattleMoveAnimationsEnabled || Plugin.PluginInterface?.UiBuilder?.ShouldUseReducedMotion == true)
@@ -29,10 +30,12 @@ public sealed partial class MainWindow
         if (frame > lastMoveEffectFrame + 1) playback.Reset();
         lastMoveEffectFrame = frame;
         var now = ImGui.GetTime();
-        playback.Observe(id, revision, log, now, finished);
+        playback.Observe(id, revision, log, now, readActors);
         moveEffectFrame = playback.Frame(now);
         return moveEffectFrame is not null;
     }
+
+    private string? MoveEffectMessage => moveEffectFrame is { Cue: var cue } ? $"{cue.SourceName} used {cue.MoveName}!" : null;
 
     private void BeginMoveEffectField()
     {

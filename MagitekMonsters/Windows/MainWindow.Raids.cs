@@ -12,6 +12,18 @@ namespace MagitekMonsters.Windows;
 
 public sealed partial class MainWindow
 {
+    private static readonly (string Kind, string Label, string Description)[] RaidCheers =
+    [
+        ("heal", "Heal + cure", "Restore up to 25% max HP and cure status conditions for all allied Pokémon."),
+        ("attack", "Attack up", "Raise Attack and Special Attack by one stage for all allied Pokémon."),
+        ("defense", "Defense up", "Raise Defense and Special Defense by one stage for all allied Pokémon."),
+    ];
+    private static readonly (string Id, string Label)[] RaidStatLabels =
+    [
+        ("atk", "Atk"), ("spa", "Sp. Atk"), ("def", "Def"), ("spd", "Sp. Def"),
+        ("spe", "Speed"), ("accuracy", "Accuracy"), ("evasion", "Evasion"),
+    ];
+
     private RaidBoardDto? raidBoard;
     private RaidRoomDto? raidRoom;
     private volatile bool raidRefreshRequested;
@@ -137,7 +149,7 @@ public sealed partial class MainWindow
     {
         var available = ImGui.GetContentRegionAvail(); var origin = ImGui.GetCursorPos();
         var layout = BattleLayout.Console(available.X, available.Y, CompanionScale, false);
-        var playingMove = UpdateMoveEffects("raid:" + room.Id, room.Revision, room.Snapshot?.Log ?? [], room.Status != "active");
+        var playingMove = UpdateMoveEffects("raid:" + room.Id, room.Revision, room.Snapshot?.Log ?? [], () => RaidCombatants(room.Snapshot));
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         ImGui.BeginChild("RaidBattleMain", new Vector2(layout.MainWidth, available.Y), false);
         if (room.Status == "active" || playingMove) DrawRaidBattle(room); else DrawRaidResult(room);
@@ -148,6 +160,22 @@ public sealed partial class MainWindow
         DrawPermanentBattleLog("raid:" + room.Id, room.Snapshot?.Log ?? [], available.Y, room.Status);
         ImGui.EndChild(); ImGui.PopStyleVar();
     }
+
+    private static BattleCombatantDto?[] RaidCombatants(RaidSnapshotDto? snapshot)
+    {
+        var actors = new BattleCombatantDto?[8];
+        if (snapshot is null) return actors;
+        actors[4] = VisualActor(snapshot.Boss, "p2a");
+        foreach (var ally in snapshot.Allies) actors[ally.Slot] = VisualActor(ally, $"p1{(char)('a' + ally.Slot)}");
+        return actors;
+
+        static BattleCombatantDto VisualActor(RaidActorDto actor, string slot) => new()
+        {
+            Ident = $"{slot}: {actor.Name}", Name = actor.Name, Species = actor.Species, Level = actor.Level, Shiny = actor.Shiny,
+            Condition = actor.Status.Length == 0 ? $"{actor.Hp}/{actor.MaxHp}" : $"{actor.Hp}/{actor.MaxHp} {actor.Status}",
+        };
+    }
+
     private void DrawRaidDen(RaidDenDto den, PokemonDto? pokemon)
     {
         ImGui.PushID(den.Key);
@@ -271,7 +299,9 @@ public sealed partial class MainWindow
         var actorHeight = (compact ? 96 : 120) * scale;
         var seconds = Math.Max(0, room.SecondsRemaining - (DateTimeOffset.UtcNow - raidObservedAt).TotalSeconds);
         DrawClippedText($"{room.Den.Stars}-STAR DEN / Round {battleState.Turn}/{battleState.RoundLimit} / Lives: {battleState.LivesRemaining}{(battleState.ShieldRounds > 0 ? $" / Shield: {battleState.ShieldRounds}" : "")}", ImGui.GetContentRegionAvail().X, CompanionAccent);
-        DrawClippedText(room.Paused ? "Battle service unavailable. Your raid is saved; waiting to reconnect." : $"{Math.Ceiling(seconds):N0}s / {(room.Submitted ? "Action saved. Waiting for teammates." : "Choose a move or cheer. Missing choices use NPC actions.")}", ImGui.GetContentRegionAvail().X, room.Paused ? PokemonOrange : CompanionMuted);
+        var prompt = MoveEffectMessage ?? (room.Submitted ? "Action saved. Waiting for teammates." : "Choose a move or cheer. Missing choices use NPC actions.");
+        DrawClippedText(room.Paused ? "Battle service unavailable. Your raid is saved; waiting to reconnect." : $"{Math.Ceiling(seconds):N0}s / {prompt}", ImGui.GetContentRegionAvail().X, room.Paused ? PokemonOrange : CompanionMuted);
+        DrawRaidCheerResults(battleState);
         var origin = ImGui.GetCursorScreenPos();
         var width = ImGui.GetContentRegionAvail().X;
         var draw = ImGui.GetWindowDrawList();
@@ -308,13 +338,18 @@ public sealed partial class MainWindow
             }
             ImGui.EndTable();
         }
+        DrawClippedText($"Cheers left {own.Cheers}/3", ImGui.GetContentRegionAvail().X, own.Cheers > 0 ? CompanionAccent : CompanionMuted);
         ImGui.BeginDisabled(!own.CanCheer);
         if (ImGui.BeginTable("RaidCheers", 3, ImGuiTableFlags.SizingStretchSame))
         {
-            foreach (var (kind, label, color) in new[] { ("heal", "Heal + cure", PokemonGreen), ("attack", "Attack up", PokemonRed), ("defense", "Defense up", PokemonBlue) })
+            foreach (var (kind, label, description) in RaidCheers)
             {
                 ImGui.TableNextColumn();
-                if (DrawAccentButton($"{label} ({own.Cheers})", new Vector2(-1, 28 * scale), color)) SubmitRaidChoice(new RaidTurnChoice(Cheer: kind));
+                var color = kind switch { "heal" => PokemonGreen, "attack" => PokemonRed, _ => PokemonBlue };
+                if (DrawAccentButton(label, new Vector2(-1, 28 * scale), color)) SubmitRaidChoice(new RaidTurnChoice(Cheer: kind));
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                    ImGui.SetTooltip(own.Cheers == 0 ? "All three cheers have been used."
+                        : $"{description}\nUses one of your three shared cheers.");
             }
             ImGui.EndTable();
         }
@@ -325,6 +360,31 @@ public sealed partial class MainWindow
             ImGui.SameLine(); if (DrawAccentSmallButton("Retry saved action", PokemonBlue)) Run(() => RaidAction("choose", pendingRaidChoice), "Retrying raid action...");
         }
     }
+
+    private void DrawRaidCheerResults(RaidSnapshotDto snapshot)
+    {
+        if (snapshot.LastRoundCheers.Count == 0) return;
+        var results = snapshot.LastRoundCheers.Select(DescribeRaidCheer).ToArray();
+        DrawClippedText($"Last round / {string.Join("   /   ", results)}", ImGui.GetContentRegionAvail().X, CompanionAccent);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(string.Join("\n", snapshot.LastRoundCheers.Select((cheer, index) =>
+            {
+                var ally = snapshot.Allies.FirstOrDefault(actor => actor.Slot == cheer.Slot);
+                return $"{ally?.Name ?? "Ally"} / {results[index]}";
+            })));
+    }
+
+    private static string DescribeRaidCheer(RaidCheerResultDto cheer)
+    {
+        if (cheer.Kind == "heal")
+            return cheer.RestoredHp == 0 && cheer.Cured == 0 ? "Heal cheer · No HP or status changes"
+                : $"Heal cheer · +{cheer.RestoredHp:N0} HP, {cheer.Cured} cured";
+        var label = cheer.Kind == "attack" ? "Attack up" : "Defense up";
+        if (cheer.Raised == 0 && cheer.Lowered == 0) return $"{label} · No stat changes";
+        if (cheer.Raised == 0) return $"{label} · {cheer.Lowered} lowered";
+        return cheer.Lowered == 0 ? $"{label} · {cheer.Raised} boosted" : $"{label} · {cheer.Raised} boosted, {cheer.Lowered} lowered";
+    }
+
     private void DrawRaidModifier(RaidActorDto own)
     {
         if (own.DynamaxTurns > 0)
@@ -364,6 +424,11 @@ public sealed partial class MainWindow
     };
     private void DrawRaidActor(RaidActorDto actor, string heading, float height, int effectSlot)
     {
+        var shown = moveEffectFrame?.Actors?[effectSlot];
+        var species = shown?.Species ?? actor.Species;
+        var health = shown is null ? new BattleHealth(actor.Hp, actor.MaxHp, actor.Status, actor.Hp == 0) : BattleBag.Health(shown.Condition);
+        var stages = actor.StatStages.Count == 0 ? [] : RaidStatLabels.Where(stat => actor.StatStages.GetValueOrDefault(stat.Id) != 0)
+            .Select(stat => $"{stat.Label} {actor.StatStages[stat.Id]:+0;-0}").ToArray();
         var scale = CompanionScale; var min = ImGui.GetCursorScreenPos(); var width = Math.Max(1, ImGui.GetContentRegionAvail().X);
         ImGui.PushID(heading + actor.Slot + actor.Species);
         ImGui.InvisibleButton("RaidActor", new Vector2(width, height)); var hovered = ImGui.IsItemHovered(); var after = ImGui.GetCursorScreenPos();
@@ -375,19 +440,32 @@ public sealed partial class MainWindow
         var gimmick = actor.DynamaxTurns > 0 ? $"MAX {actor.DynamaxTurns}" : RaidTransformationLabel(actor.Transformation);
         var badge = gimmick.Length > 0 ? gimmick : $"Lv. {actor.Level}";
         DrawClippedText($"{heading} / {badge}{(actor.ZMoveUsed ? " / Z used" : "")}", width - 16 * scale, heading == "YOU" ? PokemonBlue : CompanionMuted);
-        ImGui.SetCursorScreenPos(min + new Vector2(8, 23) * scale); DrawClippedText(actor.Species, width - 16 * scale, Vector4.One);
+        ImGui.SetCursorScreenPos(min + new Vector2(8, 23) * scale); DrawClippedText(species, width - 16 * scale, Vector4.One);
         ImGui.SetCursorScreenPos(min + new Vector2(8, 41) * scale);
         var art = new Vector2(Math.Min(34 * scale, height - 69 * scale));
-        if (moveEffectFrame is not null) DrawBattleMoveSprite(effectSlot, actor.Species, actor.Name, actor.Shiny, art);
+        if (moveEffectFrame is not null) DrawBattleMoveSprite(effectSlot, species, shown?.Name ?? actor.Name, shown?.Shiny ?? actor.Shiny, art);
         else DrawPokemonIcon(actor.Species, actor.Shiny, art);
         ImGui.SetCursorScreenPos(min + new Vector2(46, 45) * scale);
         DrawStarterTypeBadges(actor.Types.ToArray(), Math.Max(1, Math.Min(64 * scale, (width - 60 * scale) / Math.Max(1, actor.Types.Count))), scale);
         ImGui.SetCursorScreenPos(new Vector2(min.X + 8 * scale, max.Y - 27 * scale));
-        DrawClippedText($"{actor.Hp:N0} / {actor.MaxHp:N0} {actor.Status}", width - 16 * scale, CompanionMuted);
+        var hp = $"{health.Hp:N0}/{(health.MaxHp > 0 ? health.MaxHp : actor.MaxHp):N0} {health.Status}".TrimEnd();
+        var rowWidth = width - 16 * scale;
+        var stageLabel = stages.FirstOrDefault();
+        if (stageLabel is not null && rowWidth - ImGui.CalcTextSize(hp).X >= ImGui.CalcTextSize("Stats").X + 5 * scale)
+        {
+            var full = string.Join(" / ", stages);
+            var space = rowWidth - ImGui.CalcTextSize(hp).X - 5 * scale;
+            stageLabel = ImGui.CalcTextSize(full).X <= space ? full : ImGui.CalcTextSize(stageLabel).X <= space ? stageLabel : "Stats";
+            var stageWidth = ImGui.CalcTextSize(stageLabel).X;
+            DrawClippedText(hp, rowWidth - stageWidth - 5 * scale, CompanionMuted);
+            ImGui.SetCursorScreenPos(new Vector2(max.X - 8 * scale - stageWidth, max.Y - 27 * scale));
+            DrawClippedText(stageLabel, stageWidth, actor.StatStages.Values.Any(stage => stage > 0) ? PokemonGreen : PokemonOrange);
+        }
+        else DrawClippedText(hp, rowWidth, CompanionMuted);
         ImGui.SetCursorScreenPos(new Vector2(min.X + 8 * scale, max.Y - 9 * scale));
-        DrawProgressBar(actor.Hp / (float)Math.Max(1, actor.MaxHp), new Vector2(width - 16 * scale, 5 * scale), "", HpBarRed);
+        DrawProgressBar(health.Ratio, new Vector2(width - 16 * scale, 5 * scale), "", HpBarRed);
         draw.PopClipRect(); ImGui.SetCursorScreenPos(after); ImGui.PopID();
-        if (hovered) ImGui.SetTooltip($"{actor.TrainerName}\n{actor.Species} / Lv. {actor.Level} / {string.Join(" / ", actor.Types)}\n{actor.Hp:N0}/{actor.MaxHp:N0} HP / {actor.Status}\n{(gimmick.Length > 0 ? gimmick : "No transformation used")} / Z-Move {(actor.ZMoveUsed ? "used" : "unused")}");
+        if (hovered) ImGui.SetTooltip($"{actor.TrainerName}\n{species} / Lv. {actor.Level} / {string.Join(" / ", actor.Types)}\n{health.Label}\n{(stages.Length > 0 ? $"Stat stages: {string.Join(" / ", stages)}\n" : "")}{(gimmick.Length > 0 ? gimmick : "No transformation used")} / Z-Move {(actor.ZMoveUsed ? "used" : "unused")}");
     }
     private void SubmitRaidMove(RaidMoveDto move, int target)
     {
@@ -396,6 +474,7 @@ public sealed partial class MainWindow
     private void SubmitRaidChoice(RaidTurnChoice choice)
     {
         if (raidRoom is null) return;
+        battleMoveEffects?.Skip();
         pendingRaidRound = raidRoom.RoundId;
         pendingRaidChoice = new RaidChooseRequest(pendingRaidRound, Guid.NewGuid().ToString(), choice);
         Run(() => RaidAction("choose", pendingRaidChoice), "Sending raid action...");

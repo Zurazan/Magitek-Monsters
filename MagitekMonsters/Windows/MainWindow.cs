@@ -1129,6 +1129,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         if (battle is null)
             return;
+        battleMoveEffects?.Skip();
         try
         {
             ApplyBattleResponse(await InSession(plugin.Api.ChooseBattleAction(battle.Id, choice, battle.Revision)), choice);
@@ -1195,6 +1196,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         if (pvpStatus?.Battle is null)
             return;
+        battleMoveEffects?.Skip();
         try { pvpStatus.Battle = await InSession(plugin.Api.ChoosePvpBattleAction(pvpStatus.Battle.Id, choice, revision: pvpStatus.Battle.Revision)); }
         catch (ApiException error) when (error.Code == "stale_battle_choice")
         {
@@ -1401,7 +1403,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 ? $"You sent out {CleanIdent(parts[2])}!"
                 : $"The opponent sent out {CleanIdent(parts[2])}!",
             "-damage" when parts.Length > 3 => FormatBattleDamage(BattleActor(parts[2]), parts),
-            "-heal" when parts.Length > 3 => $"{BattleActor(parts[2])} recovered to {parts[3]} HP.",
+            "-heal" when parts.Length > 3 => $"{BattleActor(parts[2])} recovered to {parts[3].Split(' ', 2)[0]} HP.",
             "faint" when parts.Length > 2 => $"{BattleActor(parts[2])} fainted!",
             "-supereffective" when parts.Length > 2 => "It's super effective!",
             "-resisted" when parts.Length > 2 => "It's not very effective...",
