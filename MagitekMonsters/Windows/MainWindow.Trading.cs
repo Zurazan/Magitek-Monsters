@@ -10,8 +10,8 @@ namespace MagitekMonsters.Windows;
 public sealed partial class MainWindow
 {
     private TradingSnapshotDto? trading;
-    private bool tradeRefreshRequested;
-    private DateTimeOffset nextTradePollAt;
+    private volatile bool tradeRefreshRequested;
+    private DateTimeOffset nextTradePollAt, tradeRetryAfter;
     private bool tradeHistoryOpen, requestTradeHistory;
     private string tradeTrainerCode = "";
     private string tradePokemonId = "";
@@ -30,7 +30,7 @@ public sealed partial class MainWindow
 
     private void ResetTrading()
     {
-        trading = null; tradeRefreshRequested = false; nextTradePollAt = DateTimeOffset.MinValue;
+        trading = null; tradeRefreshRequested = false; nextTradePollAt = tradeRetryAfter = DateTimeOffset.MinValue;
         tradeTrainerCode = tradePokemonId = wonderPokemonId = tradeConfirmationId = "";
         tradeHistoryPage = 0;
         tradeHistoryOpen = requestTradeHistory = false;
@@ -42,35 +42,39 @@ public sealed partial class MainWindow
     }
     private void ApplyTrading(TradingSnapshotDto next)
     {
-        trading = next; tradeRefreshRequested = false;
+        trading = next; tradeRetryAfter = DateTimeOffset.MinValue;
         if (next.Active?.YourPokemon?.Id == tradePokemonId) tradePokemonId = "";
         if (next.Wonder?.Pokemon.Id == wonderPokemonId) wonderPokemonId = "";
         nextTradePollAt = DateTimeOffset.UtcNow.AddSeconds(next.Active is not null ? 5 : next.Wonder is not null ? 15 : 60);
     }
-    private async Task RefreshTrading()
-    {
-        ApplyTrading(await InSession(plugin.Api.GetTrades(disposeCancellation.Token)));
-        SetStatus("Trading refreshed.", quiet: true);
-    }
+    private bool ShouldRefreshTrading(DateTimeOffset now) => now >= tradeRetryAfter
+        && (plugin.Connection.State == ServerConnectionState.Connected || IsOpen && mainSection == 16)
+        && (tradeRefreshRequested || now >= nextTradePollAt);
     private void BackgroundTrading()
     {
-        tradeRefreshRequested = false; nextTradePollAt = DateTimeOffset.UtcNow.AddSeconds(30);
+        tradeRefreshRequested = false;
         RunBackground(async token =>
         {
             var next = await InSession(plugin.Api.GetTrades(token));
             return () => ApplyTrading(next);
-        }, () => nextTradePollAt = DateTimeOffset.UtcNow.AddSeconds(60), deferLiveUpdates: false);
-    }
-    private async Task SaveTrade(Func<Task<TradingSnapshotDto>> action, bool refreshTrainer = true)
-    {
-        try
+        }, () =>
         {
-            ApplyTrading(await InSession(action()));
-            if (refreshTrainer) await InSession(RefreshTrainer());
-            SetStatus(trading?.Unread > 0 ? "Trade complete. Your new Pokémon is in PC storage." : "Trade saved.");
-        }
-        catch { tradeRefreshRequested = true; throw; }
+            tradeRefreshRequested = true;
+            tradeRetryAfter = DateTimeOffset.UtcNow.AddSeconds(10);
+        }, sharedBackoff: false, deferLiveUpdates: false);
     }
+    private void RunTrade(Func<Task<TradingSnapshotDto>> action, string progress, string success, string? activeTradeId = null, bool refreshTrainer = true)
+        => Run(async () =>
+        {
+            try
+            {
+                var next = await InSession(action());
+                ApplyTrading(next);
+                if (refreshTrainer) await InSession(RefreshTrainer());
+                SetStatus(activeTradeId is not null && next.Active?.Id != activeTradeId ? "Trade closed." : success);
+            }
+            catch { tradeRefreshRequested = true; throw; }
+        }, progress);
     private PokemonDto? TradingSelection(bool wonder)
     {
         if (!ReferenceEquals(tradeSelectionSource, trainer))

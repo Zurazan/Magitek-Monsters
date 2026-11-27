@@ -19,33 +19,38 @@ public static class SavedTeams
 
     public static IReadOnlyList<SavedTeamView> Resolve(TrainerSnapshotDto trainer)
     {
+        if (trainer.Collection.TeamPresets.Count == 0) return [];
         var owned = trainer.Party.Concat(trainer.Storage).DistinctBy(entry => entry.Id).ToDictionary(entry => entry.Id);
         var party = trainer.Party.OrderBy(entry => entry.PartySlot).Select(entry => entry.Id).ToArray();
-        return trainer.Collection.TeamPresets.Select(preset =>
+        var ownedCount = trainer.Storage.Count + trainer.Party.Count;
+        Func<string, PokemonDto?> find = owned.GetValueOrDefault;
+        return trainer.Collection.TeamPresets.Select(preset => Resolve(preset, party, ownedCount, find)).ToList();
+    }
+
+    internal static SavedTeamView Resolve(TeamPresetDto preset, IEnumerable<string> party, int ownedCount, Func<string, PokemonDto?> find)
+    {
+        var ids = preset.PokemonIds;
+        var members = Enumerable.Range(0, 6).Select(index =>
         {
-            var ids = preset.PokemonIds;
-            var members = Enumerable.Range(0, 6).Select(index =>
-            {
-                if (index >= ids.Count) return new SavedTeamMember(index + 1, null, SavedTeamMemberState.Empty);
-                if (!owned.TryGetValue(ids[index], out var pokemon)) return new SavedTeamMember(index + 1, null, SavedTeamMemberState.Missing);
-                return new SavedTeamMember(index + 1, pokemon, pokemon.FusionHostId.Length > 0 ? SavedTeamMemberState.FusionLocked : SavedTeamMemberState.Ready);
-            }).ToList();
-            var valid = ids.Count is >= 1 and <= 6 && ids.Distinct().Count() == ids.Count;
-            var missing = members.Count(entry => entry.State == SavedTeamMemberState.Missing);
-            var fused = members.Count(entry => entry.State == SavedTeamMemberState.FusionLocked);
-            var complete = valid && missing == 0 && fused == 0;
-            var current = complete && ids.SequenceEqual(party);
-            var storedAfterLoading = trainer.Storage.Count + trainer.Party.Count - ids.Count;
-            var full = complete && storedAfterLoading > StorageBrowser.BoxCount * StorageBrowser.BoxCapacity;
-            var problem = !valid ? "This preset needs 1-6 different Pokémon. Replace it with your current party to repair it."
-                : missing > 0 || fused > 0 ? string.Join(" / ", new[] {
-                    missing > 0 ? $"{missing} missing Pokémon" : null,
-                    fused > 0 ? $"{fused} fusion-locked Pokémon" : null }.OfType<string>())
-                : full ? "Free PC space before loading a smaller team." : null;
-            var boxed = members.Count(entry => entry.State == SavedTeamMemberState.Ready && entry.Pokemon?.PartySlot is null);
-            var status = current ? "Current party" : problem ?? $"Ready / {ids.Count}/6 members{(boxed > 0 ? $" / {boxed} from PC" : "")}";
-            return new SavedTeamView(preset, members, current, complete, complete && !full && !current, status, problem);
+            if (index >= ids.Count) return new SavedTeamMember(index + 1, null, SavedTeamMemberState.Empty);
+            if (find(ids[index]) is not { } pokemon) return new SavedTeamMember(index + 1, null, SavedTeamMemberState.Missing);
+            return new SavedTeamMember(index + 1, pokemon, pokemon.FusionHostId.Length > 0 ? SavedTeamMemberState.FusionLocked : SavedTeamMemberState.Ready);
         }).ToList();
+        var valid = ids.Count is >= 1 and <= 6 && ids.Distinct().Count() == ids.Count;
+        var missing = members.Count(entry => entry.State == SavedTeamMemberState.Missing);
+        var fused = members.Count(entry => entry.State == SavedTeamMemberState.FusionLocked);
+        var complete = valid && missing == 0 && fused == 0;
+        var current = complete && ids.SequenceEqual(party);
+        var storedAfterLoading = ownedCount - ids.Count;
+        var full = complete && storedAfterLoading > StorageBrowser.BoxCount * StorageBrowser.BoxCapacity;
+        var problem = !valid ? "This preset needs 1-6 different Pokémon. Replace it with your current party to repair it."
+            : missing > 0 || fused > 0 ? string.Join(" / ", new[] {
+                missing > 0 ? $"{missing} missing Pokémon" : null,
+                fused > 0 ? $"{fused} fusion-locked Pokémon" : null }.OfType<string>())
+            : full ? "Free PC space before loading a smaller team." : null;
+        var boxed = members.Count(entry => entry.State == SavedTeamMemberState.Ready && entry.Pokemon?.PartySlot is null);
+        var status = current ? "Current party" : problem ?? $"Ready / {ids.Count}/6 members{(boxed > 0 ? $" / {boxed} from PC" : "")}";
+        return new SavedTeamView(preset, members, current, complete, complete && !full && !current, status, problem);
     }
 
     public static string? NameError(string name)

@@ -10,6 +10,7 @@ public sealed partial class MainWindow
     private List<PokemonDto>? selectionStorage;
     private List<PokemonDto>? selectionFilter;
     private HashSet<string>? selectionIds;
+    private HashSet<string>? selectionVisibleIds;
     private List<PokemonDto>? selectedStorage;
     private int selectedStorageHidden;
 
@@ -18,21 +19,28 @@ public sealed partial class MainWindow
         if (selectedStorage is not null && ReferenceEquals(selectionStorage, trainer!.Storage)
             && ReferenceEquals(selectionFilter, filtered) && selectionIds!.SetEquals(storageSelection))
             return (selectedStorage, selectedStorageHidden);
-        return BuildStorageSelection(filtered);
-    }
 
-    private (List<PokemonDto> Selected, int Hidden) BuildStorageSelection(List<PokemonDto> filtered)
-    {
-        selectionStorage = trainer!.Storage; selectionFilter = filtered;
+        if (!ReferenceEquals(selectionFilter, filtered))
+        {
+            selectionFilter = filtered;
+            selectionVisibleIds = null;
+        }
+        selectionStorage = trainer!.Storage;
         selectionIds ??= []; selectionIds.Clear(); selectionIds.UnionWith(storageSelection);
-        selectedStorage = StorageBrowser.Selected(trainer.Storage, storageSelection);
-        var visible = filtered.Select(pokemon => pokemon.Id).ToHashSet();
-        selectedStorageHidden = selectedStorage.Count(pokemon => !visible.Contains(pokemon.Id));
+        selectedStorage = StorageBrowser.Selected(storageSelection, storageInventory!.Find);
+        selectedStorageHidden = 0;
+        if (selectedStorage.Count > 0)
+        {
+            selectionVisibleIds ??= filtered.Select(pokemon => pokemon.Id).ToHashSet();
+            selectedStorageHidden = selectedStorage.Count(pokemon => !selectionVisibleIds.Contains(pokemon.Id));
+        }
         return (selectedStorage, selectedStorageHidden);
     }
 
     private void ResetStorageSelectionCache()
     {
-        selectionStorage = selectionFilter = selectedStorage = null; selectionIds = null; selectedStorageHidden = 0;
+        selectionStorage = selectionFilter = selectedStorage = null;
+        selectionIds = selectionVisibleIds = null;
+        selectedStorageHidden = 0;
     }
 }

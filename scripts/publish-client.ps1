@@ -1,4 +1,4 @@
-param([switch]$UpdateRepository)
+param([switch]$UpdateRepository, [switch]$Verify)
 
 $ErrorActionPreference = 'Stop'
 $pluginRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -7,6 +7,16 @@ $record = Get-Content -LiteralPath (Join-Path $upload 'upload-manifest.json') -R
 $repository = 'Zurazan/Magitek-Monsters'
 if ($record.status -ne 'ready' -or $record.repository -ne "https://github.com/$repository") { throw 'Unexpected client package.' }
 if ($record.version -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw 'Invalid version.' }
+if (-not $record.sourceCommit) {
+    $workspace = Split-Path -Parent $pluginRoot
+    . (Join-Path $workspace 'Tools/ReleaseInputs.ps1')
+    $assembly = Join-Path $pluginRoot 'bin/Release/MagitekMonsters.dll'
+    if ($record.sourceRevision -ne (Get-ClientReleaseRevision $workspace) -or
+        -not (Test-Path -LiteralPath $assembly -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $assembly -Algorithm SHA256).Hash -ne $record.assemblySha256) {
+        throw 'Client-Upload is stale. Run package-client.ps1 before publishing.'
+    }
+}
 $zipName = "Magitek Monsters v$($record.version).zip"
 if ($record.zipFile -ne $zipName) { throw 'Unexpected ZIP filename.' }
 $assetName = $zipName.Replace(' ', '.')
@@ -24,6 +34,10 @@ if ($UpdateRepository) {
 }
 if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ne $record.sha256) { throw 'ZIP hash mismatch.' }
 $tag = 'v' + $record.version
+$revision = if ($record.sourceCommit) { $record.sourceCommit } else { $record.sourceRevision }
+Write-Output "Verified client $tag at $upload"
+Write-Output "Source: $revision"
+if ($Verify) { return }
 $priorPrompt = $env:GIT_TERMINAL_PROMPT
 $priorInteractive = $env:GCM_INTERACTIVE
 $headers = $null

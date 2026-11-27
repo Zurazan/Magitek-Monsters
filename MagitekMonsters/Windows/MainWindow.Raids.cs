@@ -249,7 +249,7 @@ public sealed partial class MainWindow
     private PokemonDto? SelectedRaidPokemon()
     {
         var id = raidRoom is { Status: "lobby" } room ? room.SelectedPokemon.Id : raidPokemonId;
-        return id.Length == 0 ? null : OnlineOwnedPokemon().FirstOrDefault(pokemon => pokemon.Id == id);
+        return id.Length > 0 && ObserveStorageOwner()?.Find(id) is { FusionHostId.Length: 0 } pokemon ? pokemon : null;
     }
 
     private void OpenRaidPicker() =>
@@ -327,17 +327,24 @@ public sealed partial class MainWindow
         var seconds = Math.Max(0, room.SecondsRemaining - (DateTimeOffset.UtcNow - raidObservedAt).TotalSeconds);
         DrawClippedText($"{room.Den.Stars}-STAR DEN / Round {battleState.Turn}/{battleState.RoundLimit} / Lives: {battleState.LivesRemaining}{(battleState.ShieldRounds > 0 ? $" / Shield: {battleState.ShieldRounds}" : "")}", ImGui.GetContentRegionAvail().X, CompanionAccent);
         var prompt = MoveEffectMessage ?? (room.Submitted ? "Action saved. Waiting for teammates." : "Choose a move or cheer. Missing choices use NPC actions.");
-        DrawClippedText(room.Paused ? "Battle service unavailable. Your raid is saved; waiting to reconnect." : $"{Math.Ceiling(seconds):N0}s / {prompt}", ImGui.GetContentRegionAvail().X, room.Paused ? PokemonOrange : CompanionMuted);
+        DrawClippedText(room.Paused ? "Battle service unavailable. Your raid is saved; waiting to reconnect." : $"{Math.Ceiling(seconds):N0}s / {prompt}",
+            ImGui.GetContentRegionAvail().X, room.Paused ? PokemonOrange : CompanionMuted);
         PrepareRaidHud(battleState);
         DrawRaidCheerResults();
         var origin = ImGui.GetCursorScreenPos();
         var width = ImGui.GetContentRegionAvail().X;
         var draw = ImGui.GetWindowDrawList();
         BeginMoveEffectField();
-        DrawRaidActor(battleState.Boss, "DEN BOSS", actorHeight, 4);
+        DrawRaidActor(battleState.Boss, "DEN BOSS", actorHeight, 4, battleState.Hazards?.Opponent);
         if (ImGui.BeginTable("RaidAllies", 4, ImGuiTableFlags.SizingStretchSame))
         {
-            foreach (var ally in battleState.Allies) { ImGui.TableNextColumn(); DrawRaidActor(ally, ally.Slot == room.OwnSlot ? "YOU" : ally.Npc ? "NPC" : ally.Submitted ? "READY" : "CHOOSING", actorHeight, ally.Slot); }
+            foreach (var ally in battleState.Allies)
+            {
+                ImGui.TableNextColumn();
+                var isOwn = ally.Slot == room.OwnSlot;
+                DrawRaidActor(ally, isOwn ? "YOU" : ally.Npc ? "NPC" : ally.Submitted ? "READY" : "CHOOSING", actorHeight, ally.Slot,
+                    isOwn ? battleState.Hazards?.Player : null);
+            }
             ImGui.EndTable();
         }
         DrawMoveEffectField(origin, new Vector2(origin.X + width, ImGui.GetCursorScreenPos().Y), draw.GetClipRectMin(), draw.GetClipRectMax());
@@ -473,7 +480,7 @@ public sealed partial class MainWindow
     private static string RaidTransformationLabel(string value) => value switch {
         "mega" => "Mega", "ultra" => "Ultra Burst", "terastallize" => "Tera", "dynamax" => "Dynamax", _ => value
     };
-    private void DrawRaidActor(RaidActorDto actor, string heading, float height, int effectSlot)
+    private void DrawRaidActor(RaidActorDto actor, string heading, float height, int effectSlot, IReadOnlyList<BattleHazardDto>? hazards)
     {
         var shown = moveEffectFrame?.Actors?[effectSlot];
         var species = shown?.Species ?? actor.Species;
@@ -489,7 +496,8 @@ public sealed partial class MainWindow
         ImGui.SetCursorScreenPos(min + new Vector2(8, 5) * scale);
         var gimmick = actor.DynamaxTurns > 0 ? $"MAX {actor.DynamaxTurns}" : RaidTransformationLabel(actor.Transformation);
         var badge = gimmick.Length > 0 ? gimmick : $"Lv. {actor.Level}";
-        DrawClippedText($"{heading} / {badge}{(actor.ZMoveUsed ? " / Z used" : "")}", width - 16 * scale, heading == "YOU" ? PokemonBlue : CompanionMuted);
+        DrawBattleCardStatus($"{heading} / {badge}{(actor.ZMoveUsed ? " / Z used" : "")}", width - 16 * scale,
+            heading == "YOU" ? PokemonBlue : CompanionMuted, hazards);
         ImGui.SetCursorScreenPos(min + new Vector2(8, 23) * scale);
         DrawClippedGenderedPokemonText(species, shown?.Gender ?? actor.Gender, width - 16 * scale, Vector4.One);
         ImGui.SetCursorScreenPos(min + new Vector2(8, 41) * scale);
@@ -516,7 +524,12 @@ public sealed partial class MainWindow
         ImGui.SetCursorScreenPos(new Vector2(min.X + 8 * scale, max.Y - 9 * scale));
         DrawProgressBar(health.Ratio, new Vector2(width - 16 * scale, 5 * scale), "", HpBarRed);
         draw.PopClipRect(); ImGui.SetCursorScreenPos(after); ImGui.PopID();
-        if (hovered) ImGui.SetTooltip($"{actor.TrainerName}\n{species} / Lv. {actor.Level} / {string.Join(" / ", actor.Types)}\n{health.Label}\n{(stages.Full is not null ? $"Stat stages: {stages.Full}\n" : "")}{(gimmick.Length > 0 ? gimmick : "No transformation used")} / Z-Move {(actor.ZMoveUsed ? "used" : "unused")}");
+        if (hovered)
+        {
+            var details = $"{actor.TrainerName}\n{species} / Lv. {actor.Level} / {string.Join(" / ", actor.Types)}\n{health.Label}\n{(stages.Full is not null ? $"Stat stages: {stages.Full}\n" : "")}{(gimmick.Length > 0 ? gimmick : "No transformation used")} / Z-Move {(actor.ZMoveUsed ? "used" : "unused")}";
+            if (hazards is { Count: > 0 }) details += $"\n\n{BattleHazardDetails(effectSlot == 4 ? "Boss side" : "Ally side", hazards)}";
+            ImGui.SetTooltip(details);
+        }
     }
     private void SubmitRaidMove(RaidMoveDto move, int target)
     {
@@ -553,8 +566,8 @@ public sealed partial class MainWindow
             }
             else
             {
-                foreach (var ball in itemCatalog.Where(item => item.Category == "ball" && trainer!.Inventory.Any(entry => entry.ItemId == item.Id && entry.Quantity > 0)))
-                    if (DrawAccentButton($"Catch with {ball.Name} ({trainer!.Inventory.First(entry => entry.ItemId == ball.Id).Quantity})##RaidBall{ball.Id}", new Vector2(-1, 28), PokemonGreen))
+                foreach (var ball in GetBattleBalls())
+                    if (DrawAccentButton($"Catch with {ball.Name} ({InventoryCount(ball.Id)})##RaidBall{ball.Id}", new Vector2(-1, 28), PokemonGreen))
                     {
                         raidCaptureRequest = Guid.NewGuid().ToString(); raidCaptureBall = ball.Id; raidSkipRequested = false;
                         Run(async () =>

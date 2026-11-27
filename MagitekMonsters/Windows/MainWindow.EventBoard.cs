@@ -23,11 +23,7 @@ public sealed partial class MainWindow
 
         DrawSectionHeader("Events", "Monthly rotation");
         var localNow = DateTimeOffset.UtcNow;
-        if (!busy && localNow >= nextEventRefresh)
-        {
-            nextEventRefresh = localNow.AddSeconds(20);
-            Run(RefreshRecurringEvents, "Loading the event calendar...");
-        }
+        BackgroundRecurringEvents(localNow);
 
         var schedule = recurringSchedule;
         var now = schedule is null ? localNow : schedule.ServerTime + (localNow - eventLoadedAt);

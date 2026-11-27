@@ -94,13 +94,14 @@ public sealed partial class MainWindow
     {
         var owner = trainer?.User.Id;
         if (owner is null) return;
+        var coveredBattle = battle;
         healingParty = true;
         try
         {
             var healed = await InSession(plugin.Api.RestParty(disposeCancellation.Token));
             if (trainer?.User.Id != owner) return;
             trainer = healed;
-            AcknowledgeBattleResultTrainer();
+            AcknowledgeBattleResultTrainer(coveredBattle);
             SetStatus("Pokémon Center: your party is fully healed. HP, PP and status restored.");
         }
         finally { healingParty = false; }

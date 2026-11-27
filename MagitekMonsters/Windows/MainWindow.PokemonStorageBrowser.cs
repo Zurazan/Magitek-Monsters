@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Contracts;
 using MagitekMonsters.Models;
@@ -11,16 +12,127 @@ namespace MagitekMonsters.Windows;
 
 public sealed partial class MainWindow
 {
-    private sealed class StorageInventory(TrainerSnapshotDto owner)
+    private sealed class StorageInventory
     {
-        public TrainerSnapshotDto Owner { get; } = owner;
-        public Dictionary<string, int> Duplicates { get; } = StorageBrowser.Duplicates(owner.Party.Concat(owner.Storage));
-        public Dictionary<int, List<PokemonDto>> Boxes { get; } = owner.Storage.Where(pokemon => pokemon.PartySlot is null).GroupBy(pokemon => pokemon.BoxNumber)
-            .ToDictionary(group => group.Key, group => group.OrderBy(pokemon => pokemon.BoxSlot).ToList());
+        private static readonly PokemonDto?[] EmptySlots = new PokemonDto?[StorageLimits.BoxCapacity];
+        private readonly ConditionalWeakTable<List<PokemonDto>, PokemonDto?[]> boxSlots = new();
+        private readonly Dictionary<string, PokemonDto> boxedById;
+        private Dictionary<string, int> partyVariants;
+        public TrainerSnapshotDto Owner { get; private set; }
+        public Dictionary<string, int> Duplicates { get; }
+        public Dictionary<int, List<PokemonDto>> Boxes { get; }
+        public int DuplicateRevision { get; private set; }
 
-        public PokemonDto? Find(string? id) => id is null ? null
-            : Owner.Party.Concat(Owner.Storage).FirstOrDefault(pokemon => pokemon.Id == id);
+        public StorageInventory(TrainerSnapshotDto owner)
+        {
+            Owner = owner;
+            boxedById = owner.Storage.DistinctBy(pokemon => pokemon.Id).ToDictionary(pokemon => pokemon.Id, StringComparer.Ordinal);
+            Boxes = owner.Storage.Where(pokemon => pokemon.PartySlot is null).GroupBy(pokemon => pokemon.BoxNumber)
+                .ToDictionary(group => group.Key, group => group.OrderBy(pokemon => pokemon.BoxSlot).ToList());
+            Duplicates = StorageBrowser.Duplicates(boxedById.Values);
+            partyVariants = PartyVariants(owner.Party);
+            foreach (var (variant, count) in partyVariants) ChangeCount(Duplicates, variant, count);
+        }
+
+        public void UpdateOwner(TrainerSnapshotDto owner)
+        {
+            if (!ReferenceEquals(Owner.Party, owner.Party))
+            {
+                var next = PartyVariants(owner.Party);
+                if (next.Count != partyVariants.Count || next.Any(entry => partyVariants.GetValueOrDefault(entry.Key) != entry.Value))
+                {
+                    foreach (var (variant, count) in partyVariants) ChangeCount(Duplicates, variant, -count);
+                    foreach (var (variant, count) in next) ChangeCount(Duplicates, variant, count);
+                    partyVariants = next;
+                    DuplicateRevision++;
+                }
+            }
+            Owner = owner;
+        }
+
+        public bool TryUpdateStorage(TrainerSnapshotDto owner)
+        {
+            var delta = owner.RosterCache?.StorageDelta;
+            if (delta is null || Owner.RosterCache?.StorageVersion != delta.BaseVersion) return false;
+            var affected = new HashSet<int>();
+            if (delta.UpdatedPokemon is { } edits)
+                foreach (var pokemon in edits) affected.Add(pokemon.BoxNumber);
+            if (delta.AddedPokemon is { } added)
+                foreach (var pokemon in added) affected.Add(pokemon.BoxNumber);
+            if (delta.RemovedPokemonIds is { } removed)
+                foreach (var id in removed)
+                {
+                    if (!boxedById.TryGetValue(id, out var pokemon)) return false;
+                    affected.Add(pokemon.BoxNumber);
+                }
+            foreach (var position in delta.Positions)
+            {
+                if (!boxedById.TryGetValue(position.PokemonId, out var before)) return false;
+                affected.Add(before.BoxNumber);
+                affected.Add(position.BoxNumber);
+            }
+            if (delta.AddedPokemon is not null || delta.RemovedPokemonIds is not null)
+            {
+                if (delta.RemovedPokemonIds is { } removedIds)
+                    foreach (var id in removedIds)
+                        if (boxedById.Remove(id, out var pokemon)) ChangeCount(Duplicates, StorageBrowser.Variant(pokemon), -1);
+                if (delta.AddedPokemon is { } newPokemon)
+                    foreach (var pokemon in newPokemon) ChangeCount(Duplicates, StorageBrowser.Variant(pokemon), 1);
+                DuplicateRevision++;
+            }
+            foreach (var box in affected)
+            {
+                var start = FirstAtOrAfterBox(owner.Storage, box);
+                var end = FirstAtOrAfterBox(owner.Storage, box + 1);
+                if (start == end) { Boxes.Remove(box); continue; }
+                var boxContents = owner.Storage.GetRange(start, end - start);
+                Boxes[box] = boxContents;
+                foreach (var pokemon in boxContents) boxedById[pokemon.Id] = pokemon;
+            }
+            UpdateOwner(owner);
+            return true;
+        }
+
+        private static int FirstAtOrAfterBox(List<PokemonDto> storage, int box)
+        {
+            var first = 0;
+            var last = storage.Count;
+            while (first < last)
+            {
+                var middle = first + (last - first) / 2;
+                if (storage[middle].BoxNumber < box) first = middle + 1;
+                else last = middle;
+            }
+            return first;
+        }
+
+        private Dictionary<string, int> PartyVariants(List<PokemonDto> party)
+        {
+            var variants = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pokemon in party.DistinctBy(pokemon => pokemon.Id))
+            {
+                if (boxedById.TryGetValue(pokemon.Id, out var boxed)) ChangeCount(variants, StorageBrowser.Variant(boxed), -1);
+                ChangeCount(variants, StorageBrowser.Variant(pokemon), 1);
+            }
+            return variants;
+        }
+
+        private static void ChangeCount(Dictionary<string, int> variants, string key, int delta)
+        {
+            var next = variants.GetValueOrDefault(key) + delta;
+            if (next == 0) variants.Remove(key); else variants[key] = next;
+        }
+
+        public PokemonDto? Find(string? id)
+        {
+            if (id is null) return null;
+            foreach (var pokemon in Owner.Party)
+                if (pokemon.Id == id) return pokemon;
+            return boxedById.GetValueOrDefault(id);
+        }
         public int Count(int box) => Boxes.TryGetValue(box, out var contents) ? contents.Count : 0;
+        public PokemonDto?[] Slots(List<PokemonDto>? pokemon) => pokemon is { Count: > 0 }
+            ? boxSlots.GetValue(pokemon, static entries => StorageBrowser.BoxSlots(entries)) : EmptySlots;
         public string Label(int box) => BoxLabel(Owner, box);
     }
 
@@ -39,6 +151,8 @@ public sealed partial class MainWindow
         private static readonly string[] Generations = ["Any generation", "Gen 1", "Gen 2", "Gen 3", "Gen 4", "Gen 5", "Gen 6", "Gen 7", "Gen 8", "Gen 9"];
         private StorageInventory inventory = null!;
         private StorageFilter? appliedFilter;
+        private List<PokemonDto>? appliedSource;
+        private int appliedDuplicateRevision;
         private List<PokemonDto> matches = [];
         private List<PokemonDto>? overviewSource;
         private Dictionary<int, List<PokemonDto>> overviewGroups = [];
@@ -85,12 +199,15 @@ public sealed partial class MainWindow
         {
             get
             {
-                if (appliedFilter == Filter) return matches;
+                var source = Box > 0 ? inventory.Boxes.GetValueOrDefault(Box) : inventory.Owner.Storage;
+                if (appliedFilter == Filter && ReferenceEquals(appliedSource, source)
+                    && (!Filter.Duplicates || appliedDuplicateRevision == inventory.DuplicateRevision)) return matches;
                 var started = System.Diagnostics.Stopwatch.GetTimestamp();
-                var source = Box > 0 ? inventory.Boxes.GetValueOrDefault(Box) ?? [] : inventory.Owner.Storage;
-                matches = Box > 0 && (Filter with { Box = 0 }) == StorageSearches.Empty
+                matches = source is null ? [] : Box > 0 && (Filter with { Box = 0 }) == StorageSearches.Empty
                     ? source : StorageBrowser.Filter(source, inventory.Duplicates, Filter);
                 appliedFilter = Filter;
+                appliedSource = source;
+                appliedDuplicateRevision = inventory.DuplicateRevision;
                 var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
                 if (elapsed >= 4) Plugin.Log?.Debug("PC filter: {PokemonCount} Pokemon in {ElapsedMs:F1} ms", inventory.Owner.Storage.Count, elapsed);
                 return matches;
@@ -182,7 +299,7 @@ public sealed partial class MainWindow
             {
                 if (ImGui.Checkbox("Show empty boxes", ref showEmptyBoxes)) scrollToTop = true;
                 ImGui.SameLine();
-                DrawClippedText(swap is { } source ? $"Swapping {source.Name} / Open a box" : $"{filtered.Count:N0} Pokémon / {OverviewBoxes().Length} boxes",
+                DrawClippedText(swap is { } source ? $"Swapping {source.Name} / {(source.PartyOnly ? "Pick a party slot" : "Pick a party slot or open a box")}" : $"{filtered.Count:N0} Pokémon / {OverviewBoxes().Length} boxes",
                     ImGui.GetContentRegionAvail().X, ChoosingSwap ? PokemonYellow : CompanionMuted);
                 DrawStorageThumbnails(0, Math.Max(240 * scale, ImGui.GetContentRegionAvail().Y - 100 * scale));
                 DrawStoragePartyTray();

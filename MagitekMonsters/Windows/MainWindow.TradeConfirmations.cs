@@ -26,7 +26,7 @@ public sealed partial class MainWindow
             if (DrawConfirmationActions("Confirm trade", PokemonGreen, busy || CollectionLocked || changed || active?.YouConfirmed == true || active?.YourPokemon is null || active.TheirPokemon is null))
             {
                 ImGui.CloseCurrentPopup(); var id = tradeConfirmationId; var revision = tradeConfirmationRevision;
-                Run(() => SaveTrade(() => plugin.Api.ConfirmTrade(id, revision)), "Confirming trade...");
+                RunTrade(() => plugin.Api.ConfirmTrade(id, revision), "Confirming trade...", "Offer confirmed. Waiting for the other trainer.", activeTradeId: id);
             }
             EndConfirmationModal();
         }
@@ -39,7 +39,7 @@ public sealed partial class MainWindow
             if (DrawConfirmationActions("Deposit Pokémon", PokemonOrange, TradeOfferRestriction(selected) is not null || trading?.Wonder is not null))
             {
                 ImGui.CloseCurrentPopup(); var id = selected!.Id; var request = Guid.NewGuid().ToString();
-                Run(() => SaveTrade(() => plugin.Api.DepositWonder(id, request)), "Depositing Wonder Trade Pokémon...");
+                RunTrade(() => plugin.Api.DepositWonder(id, request), "Depositing Wonder Trade Pokémon...", "Wonder Trade deposit submitted.");
             }
             EndConfirmationModal();
         }
@@ -49,7 +49,7 @@ public sealed partial class MainWindow
             var changed = trading?.Active?.Id != tradeCancellationId;
             ImGui.TextWrapped(changed ? "This trade is no longer open." : "Cancel this trade? Your reserved Pokémon returns to your control. Neither offer is exchanged.");
             if (DrawConfirmationActions("Cancel trade", PokemonRed, busy || changed, "Keep trading"))
-            { ImGui.CloseCurrentPopup(); var id = tradeCancellationId; Run(() => SaveTrade(() => plugin.Api.CancelTrade(id)), "Cancelling trade..."); }
+            { ImGui.CloseCurrentPopup(); var id = tradeCancellationId; RunTrade(() => plugin.Api.CancelTrade(id), "Cancelling trade...", "Trade closed."); }
             EndConfirmationModal();
         }
     }

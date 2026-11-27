@@ -110,6 +110,7 @@ public sealed record RaidCheerResultDto(int Slot, string Kind, int RestoredHp, i
 
 public sealed class RaidSnapshotDto
 {
+    public BattleHazardsDto? Hazards { get; set; }
     public string Status { get; set; } = "";
     public int Turn { get; set; }
     public int Phase { get; set; }

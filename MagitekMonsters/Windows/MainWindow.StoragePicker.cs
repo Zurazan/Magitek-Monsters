@@ -145,7 +145,7 @@ public sealed partial class MainWindow
             var tradeId = active.Id;
             var revision = active.Revision;
             var id = pokemon.Id;
-            Run(() => SaveTrade(() => plugin.Api.OfferTrade(tradeId, id, revision)), "Updating trade offer...");
+            RunTrade(() => plugin.Api.OfferTrade(tradeId, id, revision), "Updating trade offer...", "Trade offer updated.", activeTradeId: tradeId);
         }
         else tradePokemonId = pokemon.Id;
         return true;

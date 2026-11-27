@@ -21,10 +21,14 @@ public sealed class AnimatedPokemonSprites : IDisposable
     private const int MaximumDimension = 512;
     private const int MaximumFrames = 180;
     private const int MaximumMemoryEntries = 16;
+    private const long MaximumDiskBytes = 64 * 1024 * 1024;
+    private static readonly TimeSpan DiskRetention = TimeSpan.FromDays(30);
+    private static readonly TimeSpan DownloadTimeout = TimeSpan.FromSeconds(15);
 
     private readonly ConcurrentDictionary<SpriteKey, CacheEntry> entries = new();
     private readonly SpriteLoadQueue loads = new();
-    private int trimRequested;
+    private readonly object diskCacheGate = new();
+    private int trimRequested, diskPruned;
     private readonly HttpClient http;
     private readonly string cacheDirectory;
     private readonly AssetCatalog assets;
@@ -34,12 +38,7 @@ public sealed class AnimatedPokemonSprites : IDisposable
     {
         this.assets = assets;
         this.cacheDirectory = Path.Combine(cacheDirectory, PokemonSpriteSource.CacheFolder);
-        Directory.CreateDirectory(this.cacheDirectory);
-        http = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(15),
-            MaxResponseContentBufferSize = MaximumDownloadBytes
-        };
+        http = new HttpClient { Timeout = DownloadTimeout };
         http.DefaultRequestHeaders.UserAgent.ParseAdd($"MagitekMonsters/{ClientBuildVersion.Current} animated battle sprites");
     }
 
@@ -56,6 +55,11 @@ public sealed class AnimatedPokemonSprites : IDisposable
             entry = entries.GetOrAdd(key, static (createdKey, owner) => owner.CreateEntry(createdKey), this);
             Volatile.Write(ref trimRequested, 1);
         }
+        if (entry.ShouldRetry)
+        {
+            var replacement = CreateEntry(key);
+            if (entries.TryUpdate(key, replacement, entry)) entry = replacement;
+        }
         entry.Touch();
         if (Interlocked.Exchange(ref trimRequested, 0) != 0) TrimMemoryCache(key);
 
@@ -63,13 +67,22 @@ public sealed class AnimatedPokemonSprites : IDisposable
         if (!loading.IsCompletedSuccessfully)
             return null;
 
-        return loading.Result?.CurrentFrame;
+        return loading.Result.Animation?.CurrentFrame;
     }
 
-    private CacheEntry CreateEntry(SpriteKey key) => new(new Lazy<Task<Animation?>>(
+    private CacheEntry CreateEntry(SpriteKey key) => new(new Lazy<Task<LoadResult>>(
         () => loads.Run(async token =>
         {
-            try { return await LoadAnimation(key, token).ConfigureAwait(false); }
+            try
+            {
+                var animation = await LoadAnimation(key, token).ConfigureAwait(false);
+                return new LoadResult(animation, Stopwatch.GetTimestamp() + 180 * Stopwatch.Frequency);
+            }
+            catch (Exception exception) when (!token.IsCancellationRequested)
+            {
+                if (!disposed) Plugin.Log.Warning(exception, "Animated front sprite unavailable for {Species} (shiny: {Shiny}).", key.Species, key.Shiny);
+                return new LoadResult(null, Stopwatch.GetTimestamp() + 30 * Stopwatch.Frequency);
+            }
             finally { Volatile.Write(ref trimRequested, 1); }
         }), LazyThreadSafetyMode.ExecutionAndPublication));
 
@@ -88,54 +101,31 @@ public sealed class AnimatedPokemonSprites : IDisposable
 
     private async Task<Animation?> LoadAnimation(SpriteKey key, CancellationToken token)
     {
-        try
+        if (Interlocked.Exchange(ref diskPruned, 1) == 0) PruneDiskCache();
+        var preferred = assets.PokemonAnimationId(key.Species, key.Shiny);
+        var candidates = (preferred is null ? SpriteIds(key.Species) : new[] { preferred }).Distinct(StringComparer.Ordinal).ToArray();
+        if (candidates.Length == 0) return null;
+        _ = PokemonSpriteSource.AnimationUrl(candidates[0], key.Shiny);
+        var cachePath = Path.Combine(cacheDirectory, $"{(key.Shiny ? "shiny-" : string.Empty)}{candidates[0]}.gif");
+        var image = await ReadCached(cachePath, token).ConfigureAwait(false);
+        if (image is null)
         {
-            var preferred = assets.PokemonAnimationId(key.Species, key.Shiny);
-            var candidates = (preferred is null ? SpriteIds(key.Species) : new[] { preferred }).Distinct(StringComparer.Ordinal).ToArray();
-            if (candidates.Length == 0)
-                return null;
-
-            var cachePath = Path.Combine(
-                cacheDirectory,
-                $"{(key.Shiny ? "shiny-" : string.Empty)}{candidates[0]}.gif");
-
-            byte[]? data = null;
-            if (File.Exists(cachePath))
-            {
-                data = await File.ReadAllBytesAsync(cachePath, token).ConfigureAwait(false);
-                if (data.Length > MaximumDownloadBytes)
-                    data = null;
-            }
-
-            if (data is null)
-            {
-                data = await Download(key.Shiny, candidates, token).ConfigureAwait(false);
-                if (data is null)
-                    return null;
-                await File.WriteAllBytesAsync(cachePath, data, token).ConfigureAwait(false);
-            }
-
-            var animation = await DecodeAndUpload(key, data, token).ConfigureAwait(false);
-            if (disposed)
-            {
-                animation.Dispose();
-                return null;
-            }
-            return animation;
+            var data = await Download(key.Shiny, candidates, token).ConfigureAwait(false);
+            if (data is null) return null;
+            image = Decode(data, token);
+            await WriteCache(cachePath, data, token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-            return null;
-        }
-        catch (Exception exception)
-        {
-            if (!disposed) Plugin.Log.Warning(exception, "Animated front sprite unavailable for {Species} (shiny: {Shiny}).", key.Species, key.Shiny);
-            return null;
-        }
+        var animation = await Upload(key, image, token).ConfigureAwait(false);
+        if (!disposed) return animation;
+        animation.Dispose();
+        return null;
     }
 
     private async Task<byte[]?> Download(bool shiny, IEnumerable<string> candidates, CancellationToken token)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(DownloadTimeout);
+        token = timeout.Token;
         foreach (var spriteId in candidates)
         {
             var url = PokemonSpriteSource.AnimationUrl(spriteId, shiny);
@@ -147,17 +137,87 @@ public sealed class AnimatedPokemonSprites : IDisposable
             if (response.Content.Headers.ContentLength is > MaximumDownloadBytes)
                 throw new InvalidDataException("The animated sprite exceeded the download limit.");
 
-            var data = await response.Content.ReadAsByteArrayAsync(token).ConfigureAwait(false);
-            if (data.Length > MaximumDownloadBytes)
-                throw new InvalidDataException("The animated sprite exceeded the download limit.");
-            return data;
+            await response.Content.LoadIntoBufferAsync(MaximumDownloadBytes, token).ConfigureAwait(false);
+            return await response.Content.ReadAsByteArrayAsync(token).ConfigureAwait(false);
         }
         return null;
     }
 
-    private static async Task<Animation> DecodeAndUpload(SpriteKey key, byte[] data, CancellationToken token)
+    private async Task<GifSpriteDecoder.Animation?> ReadCached(string path, CancellationToken token)
     {
-        var image = GifSpriteDecoder.Decode(data, MaximumDimension, MaximumFrames, token, PokemonSpriteSource.MaximumAnimationBytes);
+        try
+        {
+            byte[] data;
+            await using (var file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete))
+            {
+                if (file.Length > MaximumDownloadBytes) throw new InvalidDataException("The cached sprite exceeded the download limit.");
+                data = new byte[(int)file.Length];
+                await file.ReadExactlyAsync(data, token).ConfigureAwait(false);
+            }
+            var image = Decode(data, token);
+            try
+            {
+                if (File.GetLastWriteTimeUtc(path) < DateTime.UtcNow.AddDays(-1)) File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+            return image;
+        }
+        catch (Exception error) when (error is InvalidDataException or EndOfStreamException
+            or SixLabors.ImageSharp.ImageFormatException or SixLabors.ImageSharp.Memory.InvalidMemoryOperationException)
+        {
+            DeleteCacheFile(path);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        return null;
+    }
+
+    private async Task WriteCache(string path, byte[] data, CancellationToken token)
+    {
+        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            Directory.CreateDirectory(cacheDirectory);
+            await File.WriteAllBytesAsync(temporary, data, token).ConfigureAwait(false);
+            lock (diskCacheGate) File.Move(temporary, path, overwrite: true);
+            PruneDiskCache();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        finally { DeleteCacheFile(temporary); }
+    }
+
+    private void PruneDiskCache()
+    {
+        lock (diskCacheGate)
+        {
+            try
+            {
+                var folder = new DirectoryInfo(cacheDirectory);
+                var expires = DateTime.UtcNow - DiskRetention;
+                long kept = 0;
+                foreach (var file in folder.EnumerateFiles("*.gif").OrderByDescending(file => file.LastWriteTimeUtc))
+                {
+                    if (file.LastWriteTimeUtc < expires || file.Length > MaximumDownloadBytes || kept + file.Length > MaximumDiskBytes)
+                        DeleteCacheFile(file.FullName);
+                    else kept += file.Length;
+                }
+                foreach (var file in folder.EnumerateFiles("*.gif.*.tmp"))
+                    if (file.LastWriteTimeUtc < expires) DeleteCacheFile(file.FullName);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    private static void DeleteCacheFile(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+    }
+
+    private static GifSpriteDecoder.Animation Decode(byte[] data, CancellationToken token) =>
+        GifSpriteDecoder.Decode(data, MaximumDimension, MaximumFrames, token, PokemonSpriteSource.MaximumAnimationBytes);
+
+    private static async Task<Animation> Upload(SpriteKey key, GifSpriteDecoder.Animation image, CancellationToken token)
+    {
         var frames = new List<AnimationFrame>(image.Frames.Count);
         SpriteRegion? region = null;
         try
@@ -237,28 +297,33 @@ public sealed class AnimatedPokemonSprites : IDisposable
 
     private readonly record struct SpriteKey(string Species, bool Shiny);
 
-    private sealed class CacheEntry(Lazy<Task<Animation?>> animation)
+    private sealed record LoadResult(Animation? Animation, long RetryAt);
+
+    private sealed class CacheEntry(Lazy<Task<LoadResult>> animation)
     {
         private long lastAccess = Stopwatch.GetTimestamp();
 
-        public Lazy<Task<Animation?>> Animation { get; } = animation;
+        public Lazy<Task<LoadResult>> Animation { get; } = animation;
         public long LastAccess => Interlocked.Read(ref lastAccess);
         public bool IsLoaded => Animation.IsValueCreated && Animation.Value.IsCompletedSuccessfully;
+
+        public bool ShouldRetry => IsLoaded && Animation.Value.Result is { Animation: null } failure
+            && Stopwatch.GetTimestamp() >= failure.RetryAt;
 
         public void Touch() => Interlocked.Exchange(ref lastAccess, Stopwatch.GetTimestamp());
 
         public void DisposeIfLoaded()
         {
             if (Animation.IsValueCreated && Animation.Value.IsCompletedSuccessfully)
-                Animation.Value.Result?.Dispose();
+                Animation.Value.Result.Animation?.Dispose();
         }
         public void DisposeWhenReady()
         {
             if (Animation.IsValueCreated) _ = DisposeAfterLoad(Animation.Value);
         }
-        private static async Task DisposeAfterLoad(Task<Animation?> task)
+        private static async Task DisposeAfterLoad(Task<LoadResult> task)
         {
-            try { (await task.ConfigureAwait(false))?.Dispose(); }
+            try { (await task.ConfigureAwait(false)).Animation?.Dispose(); }
             catch { }
         }
     }

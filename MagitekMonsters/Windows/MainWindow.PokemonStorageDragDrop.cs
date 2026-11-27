@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using MagitekMonsters.Contracts;
 using MagitekMonsters.Models;
 using MagitekMonsters.Services;
 
@@ -14,7 +15,7 @@ public sealed partial class MainWindow
     {
         private const string StoragePayload = "MAGIMON_PC_SLOT";
         private const int StoragePayloadSize = 24;
-        private sealed record StorageSwap(string Id, int Box, int Slot, string Name);
+        private sealed record StorageSwap(string Id, int Box, int Slot, string Name, bool PartyOnly);
         private StorageSwap? swap;
 
         public bool ChoosingSwap => swap is not null;
@@ -26,9 +27,19 @@ public sealed partial class MainWindow
         private static bool SlotLocked(PokemonDto? pokemon) =>
             pokemon is { TradeLockId: not null } or { FusionHostId.Length: > 0 };
 
-        private static bool CanSwapPokemon(PokemonDto? pokemon) =>
-            pokemon is { PartySlot: null, BoxNumber: >= 1 and <= StorageBrowser.BoxCount, BoxSlot: >= 1 and <= StorageBrowser.BoxCapacity }
-            && !SlotLocked(pokemon);
+        private static bool CanSwapPokemon(PokemonDto? pokemon) => !SlotLocked(pokemon) && pokemon is
+            { PartySlot: >= 1 and <= StorageLimits.PartyCapacity }
+            or { PartySlot: null, BoxNumber: >= 1 and <= StorageBrowser.BoxCount, BoxSlot: >= 1 and <= StorageBrowser.BoxCapacity };
+
+        private static (int Box, int Slot) StoragePosition(PokemonDto pokemon) => pokemon.PartySlot is int slot
+            ? (StorageLimits.PartyLocation, slot) : (pokemon.BoxNumber, pokemon.BoxSlot);
+
+        public void BeginSwap(PokemonDto? pokemon, bool partyOnly = false)
+        {
+            if (!DragEnabled || OnPlace is null || pokemon is null || !CanSwapPokemon(pokemon)) return;
+            var (box, slot) = StoragePosition(pokemon);
+            swap = new(pokemon.Id, box, slot, pokemon.Nickname.Length > 0 ? pokemon.Nickname : pokemon.DisplaySpecies, partyOnly);
+        }
 
         public void DrawSwapButton(float right)
         {
@@ -39,28 +50,28 @@ public sealed partial class MainWindow
             var width = Math.Max(ImGui.CalcTextSize(start).X, ImGui.CalcTextSize(cancel).X) + ImGui.GetStyle().FramePadding.X * 2;
             StorageSameLine(right, width);
             var size = new Vector2(Math.Max(1, Math.Min(width, ImGui.GetContentRegionAvail().X)), 32 * CompanionScale);
-            ImGui.BeginDisabled(!choosing && (!DragEnabled || pokemon?.BoxNumber != Box || !CanSwapPokemon(pokemon)));
+            ImGui.BeginDisabled(!choosing && (!DragEnabled || !CanSwapPokemon(pokemon)));
             if (DrawAccentButton((choosing ? cancel : start) + "###StorageSwap", size, choosing ? PokemonYellow : CompanionAccent))
             {
                 if (choosing) CancelSwap();
-                else if (pokemon is not null)
-                    swap = new(pokemon.Id, pokemon.BoxNumber, pokemon.BoxSlot, pokemon.Nickname.Length > 0 ? pokemon.Nickname : pokemon.DisplaySpecies);
+                else BeginSwap(pokemon);
             }
             ImGui.EndDisabled();
             if (!choosing && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                ImGui.SetTooltip("Select a Pokémon in a box to swap its slot with another Pokémon.");
+                ImGui.SetTooltip("Select a Pokémon to swap with another box or party slot.");
         }
 
         public void CancelSwap() => swap = null;
 
-        private PokemonDto? FindSwapSource(StorageSwap source) =>
-            inventory.Boxes.GetValueOrDefault(source.Box)?.Find(pokemon => pokemon.Id == source.Id);
+        private PokemonDto? FindSwapSource(StorageSwap source) => source.Box == StorageLimits.PartyLocation
+            ? inventory.Owner.Party.Find(pokemon => pokemon.Id == source.Id)
+            : inventory.Boxes.GetValueOrDefault(source.Box)?.Find(pokemon => pokemon.Id == source.Id);
 
         public bool CancelInvalidSwap()
         {
             if (swap is not { } source) return false;
             var current = FindSwapSource(source);
-            if (current?.BoxSlot == source.Slot && CanSwapPokemon(current)) return false;
+            if (current is not null && StoragePosition(current) == (source.Box, source.Slot) && CanSwapPokemon(current)) return false;
             CancelSwap();
             return true;
         }
@@ -78,35 +89,37 @@ public sealed partial class MainWindow
                 ImGui.Dummy(image);
             }
             ImGui.TextWrapped(source.Name);
-            ImGui.TextWrapped($"From {inventory.Label(source.Box)} / Slot {source.Slot}");
+            ImGui.TextWrapped($"From {(source.Box == StorageLimits.PartyLocation ? "Party" : inventory.Label(source.Box))} / Slot {source.Slot}");
             ImGui.Spacing();
             ImGui.Separator();
             ImGui.Spacing();
-            ImGui.TextWrapped(DragEnabled ? "Click a highlighted Pokémon here or open another box. Their slots will swap."
+            ImGui.TextWrapped(DragEnabled ? source.PartyOnly ? "Click a highlighted party member to swap their slots."
+                    : "Click a highlighted Pokémon in your party or in any box. Their slots will swap."
                 : EditRestrictionMessage() ?? "Wait for the current action to finish.");
         }
 
         private bool CanSwapWith(PokemonDto? pokemon) => DragEnabled && swap is { } source
-            && pokemon?.Id != source.Id && CanSwapPokemon(pokemon);
+            && pokemon?.Id != source.Id && (!source.PartyOnly || pokemon?.PartySlot is not null) && CanSwapPokemon(pokemon);
 
         private void SwapWith(PokemonDto pokemon)
         {
             if (!CanSwapWith(pokemon) || swap is not { } source || CancelInvalidSwap()) return;
+            var (box, slot) = StoragePosition(pokemon);
             CancelSwap();
-            OnPlace?.Invoke(source.Id, new(source.Box, source.Slot, pokemon.BoxNumber, pokemon.BoxSlot, pokemon.Id));
+            OnPlace?.Invoke(source.Id, new(source.Box, source.Slot, box, slot, pokemon.Id));
         }
 
-        private bool DrawStorageDragSource(PokemonDto? pokemon, int? slot)
+        private bool DrawStorageDragSource(PokemonDto? pokemon, int box, int? slot)
         {
             if (ChoosingSwap || !CanDrag || slot is null || pokemon is null || SlotLocked(pokemon)
                 || !Guid.TryParse(pokemon.Id, out var id) || !ImGui.BeginDragDropSource()) return false;
             Span<byte> payload = stackalloc byte[StoragePayloadSize];
             id.TryWriteBytes(payload);
-            BinaryPrimitives.WriteInt32LittleEndian(payload[16..], Box);
+            BinaryPrimitives.WriteInt32LittleEndian(payload[16..], box);
             BinaryPrimitives.WriteInt32LittleEndian(payload[20..], slot.Value);
             ImGui.SetDragDropPayload(StoragePayload, payload, ImGuiCond.Once);
             ImGui.TextUnformatted(pokemon.Nickname.Length > 0 ? pokemon.Nickname : pokemon.DisplaySpecies);
-            ImGui.TextDisabled("Drop on a slot or box number");
+            ImGui.TextDisabled("Drop on a party slot, box slot, or box number");
             ImGui.EndDragDropSource();
             return true;
         }
@@ -122,8 +135,7 @@ public sealed partial class MainWindow
                 var id = new Guid(data[..16]).ToString();
                 var fromBox = BinaryPrimitives.ReadInt32LittleEndian(data[16..]);
                 var fromSlot = BinaryPrimitives.ReadInt32LittleEndian(data[20..]);
-                var slots = inventory.Boxes.GetValueOrDefault(box);
-                var toSlot = slot ?? Array.FindIndex(StorageBrowser.BoxSlots(slots ?? []), pokemon => pokemon is null) + 1;
+                var toSlot = slot ?? Array.FindIndex(inventory.Slots(inventory.Boxes.GetValueOrDefault(box)), pokemon => pokemon is null) + 1;
                 if (toSlot > 0 && (fromBox != box || fromSlot != toSlot))
                     OnPlace?.Invoke(id, new(fromBox, fromSlot, box, toSlot, occupant?.Id));
             }

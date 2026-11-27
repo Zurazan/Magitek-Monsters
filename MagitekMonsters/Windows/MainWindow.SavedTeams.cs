@@ -12,7 +12,7 @@ namespace MagitekMonsters.Windows;
 public sealed partial class MainWindow
 {
     private enum SavedTeamEditKind { New, Rename, Replace, Delete }
-    private sealed record SavedTeamEdit(string Owner, string Id, SavedTeamEditKind Kind, string Name, string[] PokemonIds);
+    private sealed record SavedTeamEdit(string Owner, SavedTeamEditKind Kind, TeamPresetDto Preset);
     private SavedTeamEdit? savedTeamEdit;
     private string savedTeamEditName = string.Empty;
     private string savedTeamLibraryOwner = string.Empty;
@@ -187,9 +187,9 @@ public sealed partial class MainWindow
     {
         if (trainer is null) return;
         var ids = kind is SavedTeamEditKind.New or SavedTeamEditKind.Replace
-            ? trainer.Party.OrderBy(entry => entry.PartySlot).Select(entry => entry.Id).ToArray() : view!.Preset.PokemonIds.ToArray();
+            ? trainer.Party.OrderBy(entry => entry.PartySlot).Select(entry => entry.Id).ToList() : view!.Preset.PokemonIds.ToList();
         savedTeamEditName = view?.Preset.Name ?? $"Team {trainer.Collection.TeamPresets.Count + 1}";
-        savedTeamEdit = new(trainer.User.Id, view?.Preset.Id ?? Guid.NewGuid().ToString(), kind, savedTeamEditName, ids);
+        savedTeamEdit = new(trainer.User.Id, kind, new() { Id = view?.Preset.Id ?? Guid.NewGuid().ToString(), Name = savedTeamEditName, PokemonIds = ids });
         savedTeamEditComplete = false;
         requestSavedTeamEdit = true;
     }
@@ -215,17 +215,17 @@ public sealed partial class MainWindow
             ImGui.TextUnformatted("Team name"); ImGui.SetNextItemWidth(-1);
             ImGui.InputTextWithHint("##SavedTeamName", "Name your team...", ref savedTeamEditName, 129);
         }
-        else ImGui.TextWrapped($"{action}: {edit.Name}");
-        var previewTrainer = new TrainerSnapshotDto { Party = trainer.Party, Storage = trainer.Storage,
-            Collection = new() { TeamPresets = [new() { Id = edit.Id, Name = edit.Name, PokemonIds = edit.PokemonIds.ToList() }] } };
-        var preview = SavedTeams.Resolve(previewTrainer)[0];
+        else ImGui.TextWrapped($"{action}: {edit.Preset.Name}");
+        ObserveStorageOwner();
+        var partyOrder = trainer.Party.OrderBy(entry => entry.PartySlot).Select(entry => entry.Id);
+        var preview = SavedTeams.Resolve(edit.Preset, partyOrder, trainer.Storage.Count + trainer.Party.Count, storageInventory!.Find);
         ImGui.Spacing(); DrawSavedTeamMembers(preview.Members); ImGui.Spacing();
         ImGui.TextWrapped(edit.Kind == SavedTeamEditKind.Delete ? "Only the saved lineup is deleted. Your Pokémon stay in your party and PC."
             : edit.Kind == SavedTeamEditKind.Replace ? "Replace this saved lineup with the party shown above. Its name is kept."
             : "Saves these owned Pokémon in order. Their stats, moves and held items stay as they are.");
         var error = edit.Kind == SavedTeamEditKind.Delete ? null : SavedTeams.NameError(savedTeamEditName) ?? (!preview.Complete ? preview.Problem : null);
         if (edit.Kind == SavedTeamEditKind.New && trainer.Collection.TeamPresets.Count >= SavedTeams.MaximumTeams) error = "All 12 saved team slots are used.";
-        if (edit.Kind != SavedTeamEditKind.New && !trainer.Collection.TeamPresets.Any(entry => entry.Id == edit.Id)) error = "This saved team was removed. Close this window and refresh the list.";
+        if (edit.Kind != SavedTeamEditKind.New && !trainer.Collection.TeamPresets.Any(entry => entry.Id == edit.Preset.Id)) error = "This saved team was removed. Close this window and refresh the list.";
         if (error is not null) ImGui.TextWrapped(error);
         if (statusIsError) ImGui.TextWrapped(status);
         ImGui.BeginDisabled(busy || error is not null);
@@ -253,8 +253,8 @@ public sealed partial class MainWindow
     private async Task CommitSavedTeam(SavedTeamEdit edit, string name)
     {
         if (trainer?.User.Id != edit.Owner) return;
-        var result = edit.Kind == SavedTeamEditKind.Delete ? await InSession(plugin.Api.DeleteTeam(edit.Id))
-            : await InSession(plugin.Api.SaveTeam(edit.Id, name, edit.PokemonIds));
+        var result = edit.Kind == SavedTeamEditKind.Delete ? await InSession(plugin.Api.DeleteTeam(edit.Preset.Id))
+            : await InSession(plugin.Api.SaveTeam(edit.Preset.Id, name, edit.Preset.PokemonIds));
         if (trainer?.User.Id != edit.Owner) return;
         trainer = result;
         if (ReferenceEquals(savedTeamEdit, edit)) savedTeamEditComplete = true;

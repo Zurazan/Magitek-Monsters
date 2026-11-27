@@ -14,11 +14,12 @@ public sealed partial class MainWindow
     private int battleItemPage;
     private int battleBallPage;
 
-    private void DrawCompactTrayCombatant(BattleCombatantDto? pokemon, bool ours, bool wild, bool captured, string role, float width, int actor)
+    private void DrawCompactTrayCombatant(BattleCombatantDto? pokemon, bool ours, bool wild, bool captured, string role, float width, int actor,
+        IReadOnlyList<BattleHazardDto>? hazards, string side)
     {
         var caught = pokemon is not null && (captured || IsSpeciesRegistered(pokemon.Species));
-        DrawClippedText(wild && !ours ? caught ? "CAUGHT" : "NOT CAUGHT" : role, width,
-            wild && !ours ? caught ? PokemonGreen : PokemonYellow : CompanionAccent);
+        DrawBattleCardStatus(wild && !ours ? caught ? "CAUGHT" : "NOT CAUGHT" : role, width,
+            wild && !ours ? caught ? PokemonGreen : PokemonYellow : CompanionAccent, hazards, side);
         if (pokemon is null) { DrawClippedText("Waiting...", width, CompanionMuted); return; }
         var hp = BattleBag.Health(pokemon.Condition);
         var origin = ImGui.GetCursorScreenPos();

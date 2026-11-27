@@ -33,13 +33,14 @@ public sealed partial class MainWindow
         DrawPokemonIconAt, DrawStoragePokemonDetails, GetPokemonAlerts, () => CollectionEditRestriction, compact: false)
         { Marked = storageSelection, OnSelect = SelectStoragePokemon, OnPlace = PlaceStoragePokemon };
 
-    private void ObserveStorageOwner()
+    private StorageInventory? ObserveStorageOwner()
     {
-        if (trainer is not { } owner) return;
+        if (trainer is not { } owner) return null;
         if (storageOwner != owner.User.Id)
         {
             storageOwner = owner.User.Id;
             storageBrowser = null;
+            storageInventory = null;
             storageSelection.Clear(); storageComparePin = string.Empty;
             pendingStorageBatch = storageReleaseAttempt = null;
             storageSelecting = requestStorageRelease = requestStorageComparison = false;
@@ -48,14 +49,24 @@ public sealed partial class MainWindow
         }
         if (!ReferenceEquals(storageInventory?.Owner, owner))
         {
-            var started = System.Diagnostics.Stopwatch.GetTimestamp();
-            storageInventory = new(owner);
-            StorageBrowser.Synchronize(storageSelection, owner.Storage);
-            if (storageInventory.Find(storageComparePin) is null) storageComparePin = string.Empty;
-            var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-            if (elapsed >= 4) Plugin.Log?.Debug("PC index: {PokemonCount} Pokemon in {ElapsedMs:F1} ms", owner.Storage.Count, elapsed);
+            if (storageInventory is { } inventory && ReferenceEquals(inventory.Owner.Storage, owner.Storage)) inventory.UpdateOwner(owner);
+            else if (storageInventory?.TryUpdateStorage(owner) != true)
+            {
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                storageInventory = new(owner);
+                if (storageSelection.Count > 0) StorageBrowser.Synchronize(storageSelection, owner.Storage);
+                var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                if (elapsed >= 4) Plugin.Log?.Debug("PC index: {PokemonCount} Pokemon in {ElapsedMs:F1} ms", owner.Storage.Count, elapsed);
+            }
+            else if (owner.RosterCache?.StorageDelta?.RemovedPokemonIds is { } removed)
+            {
+                storageSelection.ExceptWith(removed);
+                if (StorageView.Selected is null) StorageView.SelectedId = null;
+            }
+            if (storageComparePin.Length > 0 && storageInventory.Find(storageComparePin) is null) storageComparePin = string.Empty;
         }
         StorageView.Bind(storageInventory!);
+        return storageInventory;
     }
 
     private void InspectStoredPokemon(PokemonDto pokemon)
@@ -71,7 +82,7 @@ public sealed partial class MainWindow
         var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
         if (storageComparePin.Length > 0)
         {
-            var pinned = trainer!.Party.Concat(trainer.Storage).FirstOrDefault(pokemon => pokemon.Id == storageComparePin);
+            var pinned = storageInventory?.Find(storageComparePin);
             ImGui.PushStyleColor(ImGuiCol.Text, CompanionAccent);
             ImGui.TextWrapped($"Pinned: {pinned?.Nickname ?? "Pokémon"} / Choose another to compare");
             ImGui.PopStyleColor();
@@ -219,8 +230,10 @@ public sealed partial class MainWindow
         pendingStorageBatch = null;
         if (attempt.Placement is { } placed)
         {
-            if (StorageView.Box == placed.ToBox) StorageView.SelectedId = attempt.Ids[0];
-            SetStatus(placed.OccupantId is null ? $"Moved to {BoxLabel(placed.ToBox)} / slot {placed.ToSlot}." : "Pokémon swapped.");
+            var toParty = placed.ToBox == StorageLimits.PartyLocation;
+            if (toParty || StorageView.Box == placed.ToBox) StorageView.SelectedId = attempt.Ids[0];
+            var location = toParty ? "Party" : BoxLabel(placed.ToBox);
+            SetStatus(placed.OccupantId is null ? $"Moved to {location} / slot {placed.ToSlot}." : "Pokémon swapped.");
             return;
         }
         if (attempt.ExpectedSlots is not null || attempt.Layout is not null)

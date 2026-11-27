@@ -145,20 +145,23 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
                         $"{trade.PartnerName} is trading with you. Review the Pokémon in Trading.", Target: GameNoticeTarget.Trades,
                         Subject: trade.Id, ActionLabel: "Review trade", ExpiresAt: tradeExpiry), "trade:" + trade.Id + ":" + (trade.TheyConfirmed ? "confirmed" : "invited"));
             }
-            var receipts = trading?.Receipts.Where(receipt => receipt.SeenAt is null).ToArray() ?? [];
-            if (receipts.Length > 0)
+            if (trading is not null)
             {
-                active.Add("trade-receipts");
-                var received = false;
-                foreach (var receipt in receipts) received |= Remember("trade-receipt:" + receipt.Id);
-                if (received)
+                TradeReceiptDto? firstNew = null;
+                var newCount = 0;
+                foreach (var receipt in trading.Receipts)
                 {
-                    var receipt = receipts[0];
-                    notices.Add(new("trade-receipts", receipts.Length > 1 ? "Trades complete" : receipt.Kind == "wonder" ? "Wonder Trade complete" : "Trade complete",
-                        receipts.Length > 1 ? $"{receipts.Length:N0} completed trades. Your received Pokémon are in PC storage."
-                            : $"Received {(receipt.Received.Shiny ? "shiny " : "")}{receipt.Received.DisplaySpecies} from {receipt.PartnerName}. Your Pokémon is in PC storage.",
-                        GameNoticeKind.Success, GameNoticeTarget.Trades, receipts.Length == 1 ? receipt.Id : null, "View trades"));
+                    if (receipt.SeenAt is not null) continue;
+                    active.Add("trade-receipts");
+                    if (!Remember("trade-receipt:" + receipt.Id)) continue;
+                    firstNew ??= receipt;
+                    newCount++;
                 }
+                if (firstNew is not null)
+                    notices.Add(new("trade-receipts", newCount > 1 ? "Trades complete" : firstNew.Kind == "wonder" ? "Wonder Trade complete" : "Trade complete",
+                        newCount > 1 ? $"{newCount:N0} completed trades. Your received Pokémon are in PC storage."
+                            : $"Received {(firstNew.Received.Shiny ? "shiny " : "")}{firstNew.Received.DisplaySpecies} from {firstNew.PartnerName}. Your Pokémon is in PC storage.",
+                        GameNoticeKind.Success, GameNoticeTarget.Trades, newCount == 1 ? firstNew.Id : null, "View trades"));
             }
             if (gifts is { Unread: > 0 })
             {

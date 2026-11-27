@@ -49,7 +49,11 @@ public sealed record PokemonCollectionRequest(
 public sealed record SavedTeamRequest(string Id, string Name, IReadOnlyList<string> PokemonIds) : IClientRequest;
 public sealed record BoxNameRequest(string Name) : IClientRequest;
 public sealed record StorageSlotPlacement(int FromBox, int FromSlot, int ToBox, int ToSlot,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OccupantId = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OccupantId = null)
+{
+    [JsonIgnore]
+    public bool IncludesParty => FromBox == StorageLimits.PartyLocation || ToBox == StorageLimits.PartyLocation;
+}
 public sealed record StorageSortLayout(string Fingerprint, IReadOnlyList<int> Order);
 public sealed record StorageBatchRequest(string RequestId, string Action, IReadOnlyList<string> PokemonIds,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? BoxNumber = null,

@@ -59,7 +59,7 @@ public sealed partial class MainWindow
         ImGui.SetNextWindowSize(new Vector2(Math.Min(740 * scale, work.X * 0.92f), Math.Min(650 * scale, work.Y * 0.88f)), ImGuiCond.Appearing);
         var open = true;
         if (!BeginCenteredModal(title, ref open, ImGuiWindowFlags.NoSavedSettings)) return;
-        var pokemon = trainer?.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == pokemonSummaryId);
+        var pokemon = ObserveStorageOwner()?.Find(pokemonSummaryId);
         if (pokemon is null)
         {
             ImGui.CloseCurrentPopup();
@@ -105,7 +105,7 @@ public sealed partial class MainWindow
             ImGui.TextWrapped("Reserved for trading. Cancel or withdraw it from Trading to make changes.");
         if (pokemon.FusionHostId.Length > 0)
         {
-            var host = trainer!.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == pokemon.FusionHostId);
+            var host = storageInventory?.Find(pokemon.FusionHostId);
             ImGui.TextWrapped($"Fusion partner of {host?.Nickname ?? "another Pokémon"}. Unfuse the host to edit this Pokémon.");
         }
         var vital = CompanionVital(pokemon);

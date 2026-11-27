@@ -154,8 +154,9 @@ public sealed partial class MainWindow
         }
         if (trainer?.User.Id != attempt.Owner) return;
         pendingFrontierPurchase = null;
+        RequestPokedexIfChanged(trainer.Pokedex, result.Pokedex);
         trainer = result;
-        await InSession(LoadPokedexCatalog()); SetStatus("Frontier reward received. BP and purchase history saved.");
+        SetStatus("Frontier reward received. BP and purchase history saved.");
     }
 
     private void DrawPendingFrontierPurchase()

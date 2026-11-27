@@ -14,9 +14,27 @@ public sealed partial class MainWindow
     private DateTimeOffset nextEventRefresh;
     private int eventPage;
     private readonly ConcurrentDictionary<string, string> eventRequests = new();
-    private async Task RefreshRecurringEvents()
+
+    private void BackgroundRecurringEvents(DateTimeOffset now)
     {
-        var schedule = await InSession(plugin.Api.GetRecurringEvents());
+        if (busy || backgroundRefreshing || now < nextEventRefresh) return;
+        var retryAt = now.AddSeconds(20);
+        nextEventRefresh = retryAt;
+        RunBackground(async token =>
+        {
+            var schedule = await plugin.Api.GetRecurringEvents(token);
+            return () =>
+            {
+                if (nextEventRefresh == retryAt) ApplyRecurringEvents(schedule);
+            };
+        }, () => { }, sharedBackoff: false, deferLiveUpdates: false);
+    }
+
+    private async Task RefreshRecurringEvents() =>
+        ApplyRecurringEvents(await InSession(plugin.Api.GetRecurringEvents()));
+
+    private void ApplyRecurringEvents(RecurringEventScheduleDto schedule)
+    {
         if (!plugin.Api.Catalogs.TryApply([schedule], () =>
         {
             recurringSchedule = schedule; eventLoadedAt = DateTimeOffset.UtcNow; nextEventRefresh = eventLoadedAt.AddMinutes(1);

@@ -13,6 +13,7 @@ public sealed partial class MainWindow
 {
     private string resultObservedBattle = string.Empty;
     private string resultTrainerBattle = string.Empty;
+    private int? resultTrainerRevision;
     private string resultMoveId = string.Empty;
     private string resultForgetMove = string.Empty;
     private string resultEvolutionPokemon = string.Empty;
@@ -28,9 +29,11 @@ public sealed partial class MainWindow
     private bool IsEventBattle(BattleSnapshotDto current) => current.Id.Length > 0 && (eventBattleId == current.Id
         || current.Kind == "wild" && trainer?.ActiveEncounter is { } encounter && encounter.Id == current.Id && IsEventEncounter(encounter));
 
-    private void AcknowledgeBattleResultTrainer()
+    private void AcknowledgeBattleResultTrainer(BattleSnapshotDto? covered)
     {
-        if (battle is { Status: not "active" } current) resultTrainerBattle = current.Id;
+        if (covered is not { Status: not "active" } || battle?.Id != covered.Id || battle.Revision != covered.Revision) return;
+        resultTrainerBattle = covered.Id;
+        resultTrainerRevision = covered.Revision;
     }
 
     private void DrawBattleResults(BattleSnapshotDto current)
@@ -68,26 +71,28 @@ public sealed partial class MainWindow
         if (current.Result is { } result)
         {
             var ids = result.Party.Select(entry => entry.PokemonId).ToHashSet();
+            var roster = ObserveStorageOwner();
             var resultTrainer = resultTrainerBattle == current.Id ? trainer : null;
             var pending = resultTrainer?.PendingMoves.Where(move => ids.Contains(move.PokemonId)).ToArray() ?? [];
+            var evolutions = resultTrainer is null ? [] : ReadyBattleResultEvolutions(ids);
             var milestones = result.Capture is not null || result.CaptureAvailable || result.Badges.Count > 0
                 || result.Medals.Count > 0 || result.CollectionPoints > 0 || result.Party.Any(entry => entry.LearnedMoves.Count > 0)
-                || resultTrainer?.EvolutionOptions.Any(option => option.Ready && ids.Contains(option.PokemonId)) == true;
+                || evolutions.Count > 0;
             var split = width >= 900 * scale && milestones && ImGui.BeginTable("BattleResultColumns", 2, ImGuiTableFlags.SizingStretchProp);
             if (split)
             {
                 ImGui.TableSetupColumn("Party", ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("Milestones", ImGuiTableColumnFlags.WidthFixed, 205 * scale);
-                ImGui.TableNextColumn(); DrawBattleResultParty(current, result);
-                ImGui.TableNextColumn(); DrawBattleResultMilestones(current, result, ids, pending.Length > 0);
+                ImGui.TableNextColumn(); DrawBattleResultParty(current, result, roster);
+                ImGui.TableNextColumn(); DrawBattleResultMilestones(current, result, roster, evolutions, pending.Length > 0);
                 ImGui.EndTable();
             }
-            else DrawBattleResultParty(current, result);
+            else DrawBattleResultParty(current, result, roster);
 
-            if (resultTrainer is not null) DrawBattleResultMoves(current.Id, resultTrainer, pending);
+            if (resultTrainer is not null) DrawBattleResultMoves(current.Id, roster, pending);
             if (!split)
             {
-                ImGui.Spacing(); DrawBattleResultMilestones(current, result, ids, pending.Length > 0);
+                ImGui.Spacing(); DrawBattleResultMilestones(current, result, roster, evolutions, pending.Length > 0);
             }
         }
         else
@@ -123,7 +128,7 @@ public sealed partial class MainWindow
         ImGui.EndTable();
     }
 
-    private void DrawBattleResultParty(BattleSnapshotDto current, BattleResultDto result)
+    private void DrawBattleResultParty(BattleSnapshotDto current, BattleResultDto result, StorageInventory? roster)
     {
         ImGui.TextColored(CompanionMuted, current.FrontierId is not null ? "YOUR BATTLE TEAM" : "YOUR PARTY");
         var scale = CompanionScale;
@@ -133,7 +138,7 @@ public sealed partial class MainWindow
         foreach (var entry in result.Party)
         {
             ImGui.TableNextColumn();
-            var pokemon = trainer?.Party.Concat(trainer.Storage).FirstOrDefault(pokemon => pokemon.Id == entry.PokemonId);
+            var pokemon = roster?.Find(entry.PokemonId);
             var synchronized = resultTrainerBattle == current.Id;
             var vital = synchronized && current.FrontierId is null && current.LeagueId is null ? pokemon?.Vitals ?? entry.Vitals : entry.Vitals;
             var leveled = entry.LevelAfter > entry.LevelBefore;
@@ -191,7 +196,26 @@ public sealed partial class MainWindow
         DrawProgressBar(ratio, new Vector2(width, height), "", fillColor);
     }
 
-    private void DrawBattleResultMilestones(BattleSnapshotDto current, BattleResultDto result, HashSet<string> ids, bool hasPendingMoves)
+    private List<(EvolutionOptionDto First, int Count)> ReadyBattleResultEvolutions(HashSet<string> participants)
+    {
+        List<(EvolutionOptionDto First, int Count)> ready = [];
+        foreach (var id in participants)
+        {
+            EvolutionOptionDto? first = null;
+            var count = 0;
+            foreach (var option in GetEvolutionOptions(id))
+            {
+                if (!option.Ready) continue;
+                first ??= option;
+                count++;
+            }
+            if (first is not null) ready.Add((first, count));
+        }
+        return ready;
+    }
+
+    private void DrawBattleResultMilestones(BattleSnapshotDto current, BattleResultDto result, StorageInventory? roster,
+        List<(EvolutionOptionDto First, int Count)> evolutions, bool hasPendingMoves)
     {
         var synchronized = resultTrainerBattle == current.Id;
         if (result.Capture is { } capture)
@@ -222,22 +246,21 @@ public sealed partial class MainWindow
                 Run(async () => { await InSession(ResumeWildBattle(encounter.Id, IsEventBattle(current))); mainSection = 0; }, "Opening your capture opportunity...");
             ImGui.EndDisabled(); ImGui.Spacing();
         }
-        if (!synchronized || trainer is not { } resultTrainer)
+        if (!synchronized || roster is null)
         {
             ImGui.TextColored(CompanionMuted, "Updating your party...");
             return;
         }
-        var ready = resultTrainer.EvolutionOptions.Where(option => ids.Contains(option.PokemonId) && option.Ready).GroupBy(option => option.PokemonId).ToList();
-        foreach (var group in ready)
+        foreach (var (first, count) in evolutions)
         {
-            var pokemon = resultTrainer.Party.Concat(resultTrainer.Storage).FirstOrDefault(pokemon => pokemon.Id == group.Key);
+            var pokemon = roster.Find(first.PokemonId);
             if (pokemon is null) continue;
-            ImGui.PushID($"ResultEvolution{group.Key}");
+            ImGui.PushID($"ResultEvolution{first.PokemonId}");
             ImGui.TextColored(PokemonYellow, "EVOLUTION AVAILABLE");
-            ImGui.TextWrapped(group.Count() == 1 ? $"{pokemon.Nickname} → {EvolutionLabel(group.First().TargetSpecies)}" : $"{pokemon.Nickname} / {group.Count()} routes");
+            ImGui.TextWrapped(count == 1 ? $"{pokemon.Nickname} → {EvolutionLabel(first.TargetSpecies)}" : $"{pokemon.Nickname} / {count} routes");
             ImGui.BeginDisabled(CollectionLocked);
             if (DrawAccentButton($"Evolve {pokemon.Nickname}", new Vector2(-1, 29 * CompanionScale), PokemonYellow))
-            { resultEvolutionPokemon = pokemon.Id; resultEvolutionTarget = group.First().TargetSpecies; requestResultEvolution = true; }
+            { resultEvolutionPokemon = pokemon.Id; resultEvolutionTarget = first.TargetSpecies; requestResultEvolution = true; }
             ImGui.EndDisabled(); ImGui.Spacing(); ImGui.PopID();
         }
         foreach (var entry in result.Party.Where(entry => entry.LearnedMoves.Count > 0))
@@ -246,8 +269,8 @@ public sealed partial class MainWindow
             ImGui.TextWrapped($"{entry.Name}: {string.Join(", ", entry.LearnedMoves)}");
             ImGui.Spacing();
         }
-        if (ready.Count > 0 && CollectionEditRestriction is { } restriction) ImGui.TextWrapped(restriction);
-        else if (ready.Count > 0) ImGui.TextWrapped("You can also evolve later from your Pokémon’s menu.");
+        if (evolutions.Count > 0 && CollectionEditRestriction is { } restriction) ImGui.TextWrapped(restriction);
+        else if (evolutions.Count > 0) ImGui.TextWrapped("You can also evolve later from your Pokémon’s menu.");
         else if (!hasPendingMoves && resultMoveOutcome is null && result.Capture is null && !result.CaptureAvailable && result.Badges.Count == 0 && result.Medals.Count == 0)
             ImGui.TextWrapped(current.Status == "lost" ? "Your progress is saved. Rest your party before trying again." : "Party progress saved. Ready for your next challenge.");
     }
@@ -283,7 +306,9 @@ public sealed partial class MainWindow
     {
         var current = battle;
         var returnToEvents = current is not null && IsEventBattle(current);
-        await InSession(RefreshTrainer());
+        if (current is null || trainer is null || current.Status == "active" || current.Revision is null || resultTrainerBattle != current.Id
+            || resultTrainerRevision != current.Revision || !RegionalLeaguePresentation.ResultReady(current, trainer.LeagueRun))
+            await InSession(RefreshTrainer());
         if (current is not null && !RegionalLeaguePresentation.ResultReady(current, trainer?.LeagueRun))
         {
             refreshState.Trainer();
@@ -294,6 +319,7 @@ public sealed partial class MainWindow
         eventBattleId = string.Empty;
         if (returnToEvents) mainSection = 10;
         else if (current?.FrontierId is not null) OpenFrontier();
+        SetStatus("Battle results closed.", quiet: true);
     }
 
     private void CloseBattleResultMoveReview()
@@ -302,13 +328,13 @@ public sealed partial class MainWindow
         resultMoveGeneration = null;
     }
 
-    private void DrawBattleResultMoves(string battleId, TrainerSnapshotDto resultTrainer, PendingMoveDto[] pending)
+    private void DrawBattleResultMoves(string battleId, StorageInventory? roster, PendingMoveDto[] pending)
     {
         if (!pending.Any(move => move.Id == resultMoveId)) CloseBattleResultMoveReview();
         if (resultMoveOutcome is { } outcome) DrawGoalText(outcome, PokemonGreen);
         foreach (var learning in pending)
         {
-            var pokemon = resultTrainer.Party.Concat(resultTrainer.Storage).FirstOrDefault(entry => entry.Id == learning.PokemonId);
+            var pokemon = roster?.Find(learning.PokemonId);
             if (pokemon is null) continue;
             ImGui.Spacing();
             DrawBattleResultMoveReview(battleId, learning, pokemon);
@@ -441,7 +467,7 @@ public sealed partial class MainWindow
     {
         if (requestResultEvolution) { ImGui.OpenPopup("Evolve battle partner"); requestResultEvolution = false; }
         if (!BeginConfirmationModal("Evolve battle partner")) return;
-        var pokemon = trainer?.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == resultEvolutionPokemon);
+        var pokemon = ObserveStorageOwner()?.Find(resultEvolutionPokemon);
         if (pokemon is null) { ImGui.CloseCurrentPopup(); EndConfirmationModal(); return; }
         var routes = GetEvolutionOptions(pokemon.Id).Where(option => option.Ready).ToArray();
         var route = routes.FirstOrDefault(option => option.TargetSpecies == resultEvolutionTarget) ?? routes.FirstOrDefault();

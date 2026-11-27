@@ -66,8 +66,9 @@ public static class StorageBrowser
         return sorted.ThenBy(entry => entry.BoxNumber).ThenBy(entry => entry.BoxSlot);
     }
 
-    public static List<PokemonDto> Selected(IEnumerable<PokemonDto> storage, ISet<string> ids) => storage
-        .Where(pokemon => pokemon.PartySlot is null && ids.Contains(pokemon.Id)).OrderBy(pokemon => pokemon.BoxNumber).ThenBy(pokemon => pokemon.BoxSlot).ThenBy(pokemon => pokemon.Id, StringComparer.Ordinal).ToList();
+    public static List<PokemonDto> Selected(ISet<string> ids, Func<string, PokemonDto?> find) => ids.Select(find).OfType<PokemonDto>()
+        .Where(pokemon => pokemon.PartySlot is null).OrderBy(pokemon => pokemon.BoxNumber).ThenBy(pokemon => pokemon.BoxSlot)
+        .ThenBy(pokemon => pokemon.Id, StringComparer.Ordinal).ToList();
 
     public static void Synchronize(HashSet<string> selected, IEnumerable<PokemonDto> storage)
     {

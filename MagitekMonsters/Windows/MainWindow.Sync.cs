@@ -38,16 +38,17 @@ public sealed partial class MainWindow
     {
         var generation = connectionSyncGeneration;
         var previous = trainer!;
+        var coveredBattle = battle;
         var activeBattleId = battle?.Status == "active" ? battle.Id : null;
         var needsPokedex = pokedexCatalog.Count == 0;
         RunBackground(async token =>
         {
             var recovered = await ConnectionRecovery.Fetch(plugin.Api, previous, activeBattleId, needsPokedex, token);
-            return () => ApplyConnectionSync(generation, recovered);
+            return () => ApplyConnectionSync(generation, recovered, coveredBattle);
         }, () => { });
     }
 
-    private void ApplyConnectionSync(long generation, ConnectionRecovery recovered)
+    private void ApplyConnectionSync(long generation, ConnectionRecovery recovered, BattleSnapshotDto? coveredBattle)
     {
         if (trainer?.User.Id != recovered.Trainer.User.Id || plugin.Connection.Generation != generation
             || plugin.Connection.State != ServerConnectionState.Syncing) return;
@@ -63,7 +64,7 @@ public sealed partial class MainWindow
             pokedexRefreshRequested = true;
             nextPokedexRefreshAt = DateTimeOffset.MinValue;
         }
-        AcknowledgeBattleResultTrainer();
+        AcknowledgeBattleResultTrainer(coveredBattle);
         nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(2);
         nextPvpPollAt = DateTimeOffset.MinValue;
         if (plugin.Connection.CompleteSync(generation))
@@ -128,6 +129,7 @@ public sealed partial class MainWindow
 
     private void BackgroundTrainer()
     {
+        var coveredBattle = battle;
         RunBackground(async token =>
         {
             var next = await plugin.Api.GetMe(token);
@@ -135,8 +137,8 @@ public sealed partial class MainWindow
             {
                 RequestPokedexIfChanged(trainer?.Pokedex, next.Pokedex);
                 trainer = next;
-                AcknowledgeBattleResultTrainer();
-                if (battle is { } current) refreshState.Acknowledge(current.Id, current.Revision, true);
+                AcknowledgeBattleResultTrainer(coveredBattle);
+                if (coveredBattle is not null) refreshState.Acknowledge(coveredBattle.Id, coveredBattle.Revision, true);
             };
         }, () => refreshState.Trainer());
     }
@@ -158,17 +160,25 @@ public sealed partial class MainWindow
         }, () => { if (battle?.Id == id && battle.Revision == revision) refreshState.Battle(id, null); });
     }
 
-    private bool ShouldRefreshPvp(DateTimeOffset now) =>
-        pvpRecoveryPending ? now >= nextPvpPollAt
-        : serverPvpRefreshRequested || pvpStatus is { } status && now >= nextPvpPollAt
-        && (status.State == "queued" || status.Challenges.Count > 0
-            || status.State == "idle" && IsOpen && mainSection == 4
-            || status.Battle is { Status: "active" } match
-                && (plugin.Connection.CanInvoke || match.Request is null || match.Request.Wait == true));
+    private bool ShouldRefreshPvp(DateTimeOffset now)
+    {
+        var lobbyVisible = IsOpen && mainSection == 4;
+        if (pvpRecoveryPending) return now >= nextPvpPollAt;
+        if (pvpStatus is not { } status)
+            return now >= nextPvpPollAt && (lobbyVisible || serverPvpRefreshRequested);
+        return serverPvpRefreshRequested || now >= nextPvpPollAt
+            && (status.State == "queued" || status.Challenges.Count > 0
+                || status.State == "idle" && lobbyVisible
+                || status.Battle is { Status: "active" } match
+                    && (plugin.Connection.CanInvoke || match.Request is null || match.Request.Wait == true));
+    }
 
     private void BackgroundPvp()
     {
         var recovering = pvpRecoveryPending;
+        var loading = pvpStatus is null && !recovering;
+        var requested = serverPvpRefreshRequested;
+        serverPvpRefreshRequested = false;
         RunBackground(async token =>
         {
             var next = await plugin.Api.GetPvpStatus(token);
@@ -183,9 +193,10 @@ public sealed partial class MainWindow
             };
         }, () =>
         {
-            if (recovering) nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(2);
-            else serverPvpRefreshRequested = true;
-        }, sharedBackoff: !recovering);
+            if (loading && pvpStatus is not null) return;
+            if (recovering || loading) nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(2);
+            if (!recovering && (!loading || requested)) serverPvpRefreshRequested = true;
+        }, sharedBackoff: !recovering && !loading, deferLiveUpdates: !loading);
     }
 
     private void ApplyBattleResponse(BattleSnapshotDto next, string? choice = null)

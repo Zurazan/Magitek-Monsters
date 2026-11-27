@@ -290,8 +290,8 @@ public sealed partial class MainWindow
         var result = await InSession(plugin.Api.RedeemCollectionReward(requestId, rewardId, mode, disposeCancellation.Token));
         redemptionRequests.TryRemove(key, out _);
         if (trainer?.User.Id != owner) return;
+        RequestPokedexIfChanged(trainer.Pokedex, result.Pokedex);
         trainer = result;
-        await InSession(LoadPokedexCatalog());
         SetStatus("Collection reward received. Points and unlocks saved.");
     }
 }

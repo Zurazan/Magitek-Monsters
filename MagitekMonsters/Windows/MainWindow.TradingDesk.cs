@@ -15,8 +15,6 @@ public sealed partial class MainWindow
         if (trading is null)
         {
             ImGui.TextDisabled("Loading Trading...");
-            if (!busy && DateTimeOffset.UtcNow >= nextTradePollAt)
-            { nextTradePollAt = DateTimeOffset.UtcNow.AddSeconds(30); Run(RefreshTrading, "Loading Trading..."); }
             return;
         }
         var wide = ImGui.GetContentRegionAvail().X >= 650 * CompanionScale;
@@ -81,7 +79,7 @@ public sealed partial class MainWindow
             if (DrawAccentButton("Send trade invitation", new Vector2(-1, 32 * scale), CompanionAccent) && selected is not null)
             {
                 var code = tradeTrainerCode.Trim(); var id = selected.Id; var request = Guid.NewGuid().ToString();
-                Run(() => SaveTrade(() => plugin.Api.CreateTrade(code, id, request)), "Sending trade invitation...");
+                RunTrade(() => plugin.Api.CreateTrade(code, id, request), "Sending trade invitation...", "Trade invitation sent.");
             }
             ImGui.EndDisabled();
             TradeText(reason ?? "Your partner reviews the offer before either of you confirms.", CompanionMuted);
@@ -117,7 +115,7 @@ public sealed partial class MainWindow
             TradeText("Waiting for a match", PokemonOrange);
             ImGui.BeginDisabled(busy);
             if (DrawAccentButton("Withdraw Pokémon", new Vector2(-1, 32 * CompanionScale), PokemonOrange))
-                Run(() => SaveTrade(() => plugin.Api.WithdrawWonder(deposit.Id)), "Withdrawing Wonder Trade deposit...");
+                RunTrade(() => plugin.Api.WithdrawWonder(deposit.Id), "Withdrawing Wonder Trade deposit...", "Wonder Trade deposit withdrawn.");
             ImGui.EndDisabled();
             TradeText("Keep playing. You can withdraw until matched. Your new Pokémon arrives in the same PC slot.", CompanionMuted);
             return;
@@ -195,7 +193,7 @@ public sealed partial class MainWindow
             var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
             ImGui.BeginDisabled(busy);
             if (receipt.SeenAt is null && DrawAccentSmallButton("Mark as read", CompanionAccent))
-                Run(() => SaveTrade(() => plugin.Api.ReadTradeReceipt(receipt.Id), refreshTrainer: false), "Marking trade as read...");
+                RunTrade(() => plugin.Api.ReadTradeReceipt(receipt.Id), "Marking trade as read...", "Trade marked as read.", refreshTrainer: false);
             if (receipt.SeenAt is null) SameLineIfFits("Find Pokémon", right);
             if (DrawAccentSmallButton("Find Pokémon", CompanionAccent)) Run(() => ViewTradedPokemon(receipt), "Opening traded Pokémon...");
             ImGui.EndDisabled(); ImGui.Separator(); ImGui.PopID();

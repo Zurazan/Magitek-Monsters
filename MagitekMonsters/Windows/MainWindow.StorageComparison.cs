@@ -30,9 +30,8 @@ public sealed partial class MainWindow
         var work = ImGui.GetMainViewport().WorkSize;
         ImGui.SetNextWindowSize(new Vector2(Math.Min(780 * scale, work.X * 0.94f), Math.Min(720 * scale, work.Y * 0.9f)), ImGuiCond.Appearing);
         if (!BeginCenteredModal("Compare Pokémon", ImGuiWindowFlags.None)) return;
-        var owned = GetComparisonPokemon();
-        var left = owned.FirstOrDefault(pokemon => pokemon.Id == storageComparisonLeft);
-        var right = owned.FirstOrDefault(pokemon => pokemon.Id == storageComparisonRight);
+        var left = storageInventory?.Find(storageComparisonLeft);
+        var right = storageInventory?.Find(storageComparisonRight);
         ImGui.TextColored(CompanionAccent, "COMPARE YOUR POKÉMON");
         ImGui.Checkbox("Use current levels", ref storageComparisonCurrentLevel);
         ImGui.TextWrapped(storageComparisonCurrentLevel ? "Actual stats at each Pokémon’s current level." : "Stats calculated at level 50 for both Pokémon. Their levels are unchanged.");
@@ -49,7 +48,9 @@ public sealed partial class MainWindow
                     ImGui.SetNextItemWidth(-1);
                     ImGui.InputTextWithHint("##CompareSearch", "Search species or nickname...", ref storageComparisonSearch, 80);
                     var other = side == 0 ? right?.Id : left?.Id;
-                    var matches = owned.Where(entry => entry.Id != other && (storageComparisonSearch.Length == 0 || entry.DisplaySpecies.Contains(storageComparisonSearch, StringComparison.OrdinalIgnoreCase) || entry.Nickname.Contains(storageComparisonSearch, StringComparison.OrdinalIgnoreCase))).ToList();
+                    var matches = GetComparisonPokemon().Where(entry => entry.Id != other && (storageComparisonSearch.Length == 0
+                        || entry.DisplaySpecies.Contains(storageComparisonSearch, StringComparison.OrdinalIgnoreCase)
+                        || entry.Nickname.Contains(storageComparisonSearch, StringComparison.OrdinalIgnoreCase))).Take(101).ToList();
                     foreach (var entry in matches.Take(100))
                     {
                         var location = entry.PartySlot is int slot ? $"Party {slot}" : $"Box {entry.BoxNumber}, slot {entry.BoxSlot}";

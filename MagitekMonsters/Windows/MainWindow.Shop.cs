@@ -68,12 +68,27 @@ public sealed partial class MainWindow
         shopWasOpen = open;
     }
 
+    private DateTimeOffset shopRetryAfter;
+
     private async Task RefreshShop()
     {
         shopRefreshRequested = false;
-        nextShopRefreshAt = DateTimeOffset.UtcNow.AddSeconds(30);
         if (ApplyShopCatalog(await InSession(plugin.Api.GetShop(disposeCancellation.Token))))
             SetStatus("Shop refreshed.", quiet: true);
+    }
+
+    private void BackgroundShop()
+    {
+        shopRefreshRequested = false;
+        RunBackground(async token =>
+        {
+            var catalog = await plugin.Api.GetShop(token);
+            return () => ApplyShopCatalog(catalog);
+        }, () =>
+        {
+            shopRefreshRequested = true;
+            shopRetryAfter = DateTimeOffset.UtcNow.AddSeconds(10);
+        }, sharedBackoff: false, deferLiveUpdates: false);
     }
 
     private bool ApplyShopCatalog(ShopCatalogDto catalog)
@@ -84,7 +99,7 @@ public sealed partial class MainWindow
             itemCatalog = catalog.InventoryItems.Count > 0 ? catalog.InventoryItems : shop;
             trainingItems = catalog.TrainingItems.Count > 0 ? catalog.TrainingItems : shop.Where(item => item.TrainingEffect is not null).ToList();
             nextShopRefreshAt = DateTimeOffset.UtcNow.AddSeconds(30);
-            shopRefreshRequested = false;
+            shopRetryAfter = DateTimeOffset.MinValue;
             if (pendingPurchase is { } purchase)
                 pendingPurchase = shop.FirstOrDefault(item => item.Id == purchase.Id);
         });

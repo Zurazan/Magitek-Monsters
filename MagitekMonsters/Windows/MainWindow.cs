@@ -335,20 +335,17 @@ public sealed partial class MainWindow : Window, IDisposable
                 || (plugin.Connection.CanInvoke || current.Request is null || current.Request.Wait == true) && DateTimeOffset.UtcNow >= nextBattlePollAt))
                 BackgroundBattle();
             else if (ShouldRefreshPvp(DateTimeOffset.UtcNow))
-            {
-                serverPvpRefreshRequested = false;
                 BackgroundPvp();
-            }
             else if ((battle?.Status != "active" || battle.LeagueId is not null || battle.FrontierId is not null)
                 && pvpStatus?.Battle?.Status != "active" && refreshState.TakeTrainer())
             {
                 BackgroundTrainer();
             }
-            else if (IsOpen && mainSection == 5 && shopRefreshRequested)
-                Run(RefreshShop, "Refreshing shop...");
-            else if (plugin.Connection.State == ServerConnectionState.Connected && ShouldRefreshPokedex(DateTimeOffset.UtcNow))
+            else if (IsOpen && mainSection == 5 && shopRefreshRequested && DateTimeOffset.UtcNow >= shopRetryAfter)
+                BackgroundShop();
+            else if (ShouldRefreshPokedex(DateTimeOffset.UtcNow))
                 BackgroundPokedex();
-            else if (plugin.Connection.State == ServerConnectionState.Connected && (tradeRefreshRequested || DateTimeOffset.UtcNow >= nextTradePollAt))
+            else if (ShouldRefreshTrading(DateTimeOffset.UtcNow))
                 BackgroundTrading();
             else if (plugin.Connection.State == ServerConnectionState.Connected && (friendsRefreshRequested || friendPages.HasPending || DateTimeOffset.UtcNow >= nextFriendsPollAt))
                 BackgroundFriends();
@@ -635,9 +632,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         if (pvpStatus is null)
         {
-            ImGui.TextDisabled("Loading PvP status...");
-            if (!busy)
-                Run(RefreshPvp, "Loading PvP status...");
+            ImGui.TextDisabled(DateTimeOffset.UtcNow < nextPvpPollAt ? "Retrying online battle status..." : "Loading online battle status...");
             return;
         }
 
@@ -1021,13 +1016,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         var next = await InSession(plugin.Api.GetHabitat(
             territoryId, context.LocalizedName, context.EnglishName, context.RegionName, context.ZoneName));
-        var dex = await InSession(plugin.Api.GetPokedexCatalog());
-        if (!plugin.Api.Catalogs.TryApply([next, dex], () =>
-        {
-            ApplyHabitat(territoryId, next);
-            pokedexCatalog = dex.Pokemon;
-            SetStatus($"Surveyed {next.Name}.");
-        })) RetryCatalogs();
+        if (ApplyHabitat(territoryId, next)) SetStatus($"Surveyed {next.Name}.");
     }
 
     private async Task Search(uint territoryId, TerritoryContextInfo context, string? target)
@@ -1083,8 +1072,9 @@ public sealed partial class MainWindow : Window, IDisposable
     private async Task EvolvePokemon(string pokemonId, string targetSpecies)
     {
         (evolutionEnvironment, evolutionEnvironmentLabel) = EvolutionEnvironment.Read(CurrentEvolutionTheme);
-        trainer = await InSession(plugin.Api.EvolvePokemon(pokemonId, targetSpecies, evolutionEnvironment));
-        await InSession(LoadPokedexCatalog());
+        var next = await InSession(plugin.Api.EvolvePokemon(pokemonId, targetSpecies, evolutionEnvironment));
+        RequestPokedexIfChanged(trainer?.Pokedex, next.Pokedex);
+        trainer = next;
         var evolved = trainer.Party.Concat(trainer.Storage).FirstOrDefault(entry => entry.Id == pokemonId);
         SetStatus(evolved is null ? $"Evolution into {targetSpecies} complete!" : $"Congratulations! Your Pokémon evolved into {evolved.Species}!");
     }
@@ -1231,10 +1221,11 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
         refreshState.TakeTrainer();
+        var coveredBattle = battle;
         var next = await InSession(plugin.Api.GetMe());
         RequestPokedexIfChanged(trainer?.Pokedex, next.Pokedex);
         trainer = next;
-        AcknowledgeBattleResultTrainer();
+        AcknowledgeBattleResultTrainer(coveredBattle);
         SetStatus("Trainer data refreshed.", quiet: true);
     }
 
@@ -1311,6 +1302,7 @@ public sealed partial class MainWindow : Window, IDisposable
         else plugin.Api.Logout();
         CancelBackgroundRefresh();
         refreshState.Reset();
+        resultTrainerBattle = string.Empty;
         sessionResponses.Invalidate();
         foregroundGeneration++;
         busy = false;
@@ -1376,6 +1368,7 @@ public sealed partial class MainWindow : Window, IDisposable
         previewChosenCount = 0;
         pvpTeamError = string.Empty;
         serverPvpRefreshRequested = false;
+        nextPvpPollAt = DateTimeOffset.MinValue;
         authorizationFlow = null;
         onlineTrainers = -1;
         trainerIdCopiedUntil = DateTimeOffset.MinValue;
@@ -1479,17 +1472,6 @@ public sealed partial class MainWindow : Window, IDisposable
         if (ident.StartsWith("p1", StringComparison.Ordinal) || ident.StartsWith("p2", StringComparison.Ordinal))
             return $"Foe {name}";
         return name;
-    }
-
-    private static (float Ratio, string Label) ParseBattleHp(string condition)
-    {
-        if (condition.EndsWith(" fnt", StringComparison.Ordinal))
-            return (0f, "0 HP");
-        var hp = condition.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "0/100";
-        var slash = hp.IndexOf('/');
-        if (slash > 0 && int.TryParse(hp[..slash], out var current) && int.TryParse(hp[(slash + 1)..], out var maximum) && maximum > 0)
-            return (Math.Clamp((float)current / maximum, 0f, 1f), $"{current} / {maximum} HP");
-        return (0f, condition);
     }
 
     private static (float Ratio, string Label) ExperienceProgress(PokemonDto pokemon)

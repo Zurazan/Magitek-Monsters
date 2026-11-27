@@ -63,6 +63,27 @@ public sealed class TrainerRosterCacheDto
     public string OptionsVersion { get; set; } = "";
     public bool StorageIncluded { get; set; } = true;
     public bool OptionsIncluded { get; set; } = true;
+    // Option lists cover only the storage change when this is set.
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? OptionsDeltaBaseVersion { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public TrainerOptionGroupsDto? OptionGroups { get; set; }
+    public TrainerStorageDeltaDto? StorageDelta { get; set; }
+}
+
+public sealed record TrainerOptionGroupsDto(string PartyVersion, string BoxedVersion, bool PartyIncluded, bool BoxedIncluded, string? BoxedDeltaBaseVersion = null);
+
+public sealed record StoragePositionDto(string PokemonId, int BoxNumber, int BoxSlot);
+public sealed record TrainerStorageDeltaDto(string BaseVersion, IReadOnlyList<StoragePositionDto> Positions)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<PokemonDto>? UpdatedPokemon { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<PokemonDto>? AddedPokemon { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? RemovedPokemonIds { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool TeamPlacement { get; init; }
 }
 
 public sealed class SearchCooldownDto
@@ -297,6 +318,14 @@ public sealed class PokemonDto
     public int BoxNumber { get; set; }
     public int BoxSlot { get; set; }
     public List<string> RelearnableMoves { get; set; } = [];
+
+    public PokemonDto WithStoragePosition(int boxNumber, int boxSlot)
+    {
+        var copy = (PokemonDto)MemberwiseClone();
+        copy.BoxNumber = boxNumber;
+        copy.BoxSlot = boxSlot;
+        return copy;
+    }
 }
 
 public sealed class PokedexCatalogDto
@@ -510,6 +539,7 @@ public sealed class BallEffectDto
 
 public sealed class BattleSnapshotDto
 {
+    public BattleHazardsDto? Hazards { get; set; }
     public List<BallEffectDto> BallOptions { get; set; } = [];
     public BattleResultDto? Result { get; set; }
     public int DefeatPenaltyCap { get; set; }
@@ -546,6 +576,14 @@ public sealed class BattleSnapshotDto
     public int RewardCurrency { get; set; }
     public int RewardExperience { get; set; }
     public string? ChoiceDeadline { get; set; }
+}
+
+public sealed record BattleHazardDto(string Id, int Layers);
+
+public sealed class BattleHazardsDto
+{
+    public List<BattleHazardDto> Player { get; set; } = [];
+    public List<BattleHazardDto> Opponent { get; set; } = [];
 }
 
 public sealed class BattleCombatantDto

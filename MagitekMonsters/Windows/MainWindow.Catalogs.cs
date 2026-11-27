@@ -56,16 +56,18 @@ public sealed partial class MainWindow
         RunBackground(token => FetchCatalogs(true, true, token), RetryCatalogs, deferLiveUpdates: false);
     }
 
-    private void ApplyHabitat(uint territory, MagitekMonsters.Models.HabitatDto next)
+    private bool ApplyHabitat(uint territory, MagitekMonsters.Models.HabitatDto next)
     {
-        if (Plugin.ClientState.TerritoryType != territory) return;
-        if (!plugin.Api.Catalogs.TryApply([next], () =>
+        if (Plugin.ClientState.TerritoryType != territory) return false;
+        var applied = plugin.Api.Catalogs.TryApply([next], () =>
         {
             var target = loadedTerritory == territory && targetIndex > 0 ? habitat?.Species.ElementAtOrDefault(targetIndex - 1) : null;
             habitat = next;
             loadedTerritory = territory;
             targetIndex = target is null ? 0 : Math.Max(0, next.Species.IndexOf(target) + 1);
-        })) RetryCatalogs();
+        });
+        if (!applied) RetryCatalogs();
+        return applied;
     }
 
     private void ApplyPokedex(MagitekMonsters.Models.PokedexCatalogDto next)
@@ -82,7 +84,8 @@ public sealed partial class MainWindow
 
     private void RequestPokedexIfChanged(MagitekMonsters.Models.PokedexDto? previous, MagitekMonsters.Models.PokedexDto next)
     {
-        if (previous is not null && previous.Caught == next.Caught && previous.CaughtSpecies.SequenceEqual(next.CaughtSpecies)) return;
+        if (previous is not null && previous.Caught == next.Caught && previous.CaughtSpecies.SequenceEqual(next.CaughtSpecies)
+            && previous.CaughtForms.SequenceEqual(next.CaughtForms)) return;
         pokedexRefreshRequested = true;
         nextPokedexRefreshAt = DateTimeOffset.MinValue;
     }

@@ -37,6 +37,7 @@ public sealed class StorageCapabilitiesDto
     public int PartyCapacity { get; set; }
     public int MaximumBatchSize { get; set; }
     public bool ExactSlotPlacement { get; set; }
+    public bool PartySlotPlacement { get; set; }
     public bool BoxSorting { get; set; }
     public bool FullStorageSorting { get; set; }
 }

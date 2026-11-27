@@ -89,8 +89,8 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     public Task<RaidRoomDto> RaidAction(string? id, string action, IClientRequest body, CancellationToken cancellationToken = default) =>
         Send<RaidRoomDto>(HttpMethod.Post, id is null ? $"/api/raids/{action}" : $"/api/raids/{id}/{action}", body, true, cancellationToken);
 
-    public Task<RecurringEventScheduleDto> GetRecurringEvents() =>
-        Send<RecurringEventScheduleDto>(HttpMethod.Get, "/api/recurring-events", null, true, default);
+    public Task<RecurringEventScheduleDto> GetRecurringEvents(CancellationToken cancellationToken = default) =>
+        Send<RecurringEventScheduleDto>(HttpMethod.Get, "/api/recurring-events", null, true, cancellationToken);
 
     public Task<EncounterDto> SearchRecurringEvent(string occurrenceId, string species, string requestId) =>
         Send<EncounterDto>(HttpMethod.Post, "/api/recurring-events/encounter", new EventEncounterRequest(occurrenceId, species, requestId), true, default);
@@ -223,6 +223,7 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
             {
                 ("sort-all", { FullStorageSorting: false }) => "The server needs an update before you can sort all PC boxes.",
                 ("sort", { BoxSorting: false }) => "The server needs an update before you can sort PC boxes.",
+                ("place", { PartySlotPlacement: false }) when request.Placement?.IncludesParty == true => "The server needs an update before you can move or swap party slots from the PC.",
                 ("place", { ExactSlotPlacement: false }) => "The server needs an update before you can move or swap PC slots.",
                 _ => null
             };
@@ -484,7 +485,15 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
                 {
                     requestToken = token;
                     rosterRequest = rosterCache.Begin(token, fullRoster, recoveryOf);
-                    rosterRequest.ApplyHeaders(request.Headers);
+                    var storageDeltaVersion = path == "/api/me" || method == HttpMethod.Post
+                        && path.StartsWith("/api/teams/", StringComparison.Ordinal) && path.EndsWith("/apply", StringComparison.Ordinal)
+                        ? ProtocolInfo.StorageTeamDeltaVersion : null;
+                    if (method == HttpMethod.Delete && path.StartsWith("/api/pokemon/", StringComparison.Ordinal)
+                        || body is PokemonCollectionRequest or StorageMoveRequest or StorageBoxRequest
+                            or StorageBatchRequest { Action: "place" or "sort" or "sort-all" or "box" or "party" or "favorite" or "release" })
+                        storageDeltaVersion = body is StorageBatchRequest { Placement: { IncludesParty: true } }
+                            ? ProtocolInfo.StorageReplacementDeltaVersion : ProtocolInfo.StorageDeltaVersion;
+                    rosterRequest.ApplyHeaders(request.Headers, storageDeltaVersion);
                 }
             }
             if (body is not null)

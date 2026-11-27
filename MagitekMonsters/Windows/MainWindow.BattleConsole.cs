@@ -107,7 +107,8 @@ public sealed partial class MainWindow
         if (current.Raid is { } raid)
             rules = $"Phase {raid.Phase} / {Math.Max(0, raid.TurnLimit - raid.CompletedTurns)} turns left / {(raid.CompletedTurns >= raid.EnrageTurn ? "ENRAGED" : $"Enrage in {raid.EnrageTurn - raid.CompletedTurns}")}";
         DrawClippedText($"{state} / {rules}", width, urgent || current.Status is "lost" or "error" ? PokemonRed : CompanionMuted);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip($"{state}\n{rules}\n{(current.Raid is { } boss ? $"{boss.HpMultiplier}x boss HP / Bonus actions: {boss.BonusActions}" : "Hover moves for their full descriptions.")}");
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip($"{state}\n{rules}\n{(current.Raid is { } boss ? $"{boss.HpMultiplier}x boss HP / Bonus actions: {boss.BonusActions}" : "Hover moves for their full descriptions.")}");
     }
 
     private static BattleCombatantDto? ConsoleCombatant(BattleSnapshotDto current, bool ours, int slot) => ours
@@ -143,7 +144,8 @@ public sealed partial class MainWindow
                 {
                     ImGui.TableNextColumn();
                     var combatant = moveEffectFrame?.Actors is { } actors ? actors[side * 4 + slot] : ConsoleCombatant(current, side == 0, slot);
-                    DrawConsoleCombatant(combatant, side == 0, slot, doubles, height, current.Kind == "wild", current.Status == "caught");
+                    var hazards = slot == 0 ? side == 0 ? current.Hazards?.Player : current.Hazards?.Opponent : null;
+                    DrawConsoleCombatant(combatant, side == 0, slot, doubles, height, current.Kind == "wild", current.Status == "caught", hazards);
                 }
             ImGui.EndTable();
         }
@@ -151,7 +153,8 @@ public sealed partial class MainWindow
         DrawMoveEffectField(origin, origin + size, draw.GetClipRectMin(), draw.GetClipRectMax());
     }
 
-    private void DrawConsoleCombatant(BattleCombatantDto? pokemon, bool ours, int slot, bool doubles, float height, bool wild, bool captured)
+    private void DrawConsoleCombatant(BattleCombatantDto? pokemon, bool ours, int slot, bool doubles, float height, bool wild, bool captured,
+        IReadOnlyList<BattleHazardDto>? hazards)
     {
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 5) * CompanionScale);
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(6, 2) * CompanionScale);
@@ -161,9 +164,10 @@ public sealed partial class MainWindow
         var width = ImGui.GetContentRegionAvail().X;
         var actor = (ours ? 0 : 4) + slot;
         var role = ours ? doubles ? $"YOUR SLOT {slot + 1}" : "YOUR POKÉMON" : wild ? "WILD POKÉMON" : doubles ? $"FOE SLOT {slot + 1}" : "OPPONENT";
+        var side = ours ? "Your side" : "Opponent's side";
         if (height < 110 * CompanionScale)
         {
-            DrawCompactTrayCombatant(pokemon, ours, wild, captured, role, width, actor);
+            DrawCompactTrayCombatant(pokemon, ours, wild, captured, role, width, actor, hazards, side);
             ImGui.EndChild(); ImGui.PopStyleColor(); ImGui.PopStyleVar(2);
             return;
         }
@@ -182,7 +186,7 @@ public sealed partial class MainWindow
             }
         }
         else DrawClippedText(role, width, ours ? CompanionAccent : PokemonOrange);
-        if (pokemon is null) DrawClippedText("Waiting for Pokémon...", width, CompanionMuted);
+        if (pokemon is null) DrawBattleCardStatus("Waiting for Pokémon...", width, CompanionMuted, hazards, side);
         else
         {
             var line = ImGui.GetTextLineHeight();
@@ -211,10 +215,12 @@ public sealed partial class MainWindow
                 ImGui.TableNextColumn(); DrawConsoleTypeRow(types, badges);
                 ImGui.EndTable();
             }
-            var (ratio, hp) = ParseBattleHp(pokemon.Condition);
-            DrawProgressBar(ratio, new Vector2(-1, 6 * CompanionScale), "", HpBarRed);
-            var status = pokemon.Condition.Split(' ', StringSplitOptions.RemoveEmptyEntries).Skip(1).Where(value => value != "fnt").ToArray();
-            DrawClippedText($"{hp}{(status.Length > 0 ? $" / {string.Join(" ", status).ToUpperInvariant()}" : "")}", width, pokemon.Fainted ? PokemonRed : status.Length > 0 ? PokemonOrange : CompanionMuted);
+            var health = BattleBag.Health(pokemon.Condition);
+            DrawProgressBar(health.Fainted ? 0 : health.Ratio, new Vector2(-1, 6 * CompanionScale), "", HpBarRed);
+            var hp = pokemon.Condition.EndsWith(" fnt", StringComparison.Ordinal) ? "0 HP"
+                : health.MaxHp > 0 ? $"{health.Hp} / {health.MaxHp} HP" : pokemon.Condition;
+            DrawBattleCardStatus(health.Status.Length > 0 ? $"{hp} / {health.Status.ToUpperInvariant()}" : hp,
+                width, pokemon.Fainted ? PokemonRed : health.Status.Length > 0 ? PokemonOrange : CompanionMuted, hazards, side);
         }
         ImGui.EndChild();
         ImGui.PopStyleColor(); ImGui.PopStyleVar(2);

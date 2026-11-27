@@ -12,6 +12,8 @@ $output = Join-Path $root '.artifacts/client'
 $manifest = Get-Content -LiteralPath (Join-Path $release 'MagitekMonsters.json') -Raw | ConvertFrom-Json -AsHashtable
 $version = [string]$manifest.AssemblyVersion
 if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw 'Invalid client version.' }
+$sourceVersion = [string]([xml](Get-Content -LiteralPath (Join-Path $root 'Directory.Build.props') -Raw)).Project.PropertyGroup.Version
+if ($sourceVersion -ne $version) { throw "Client source version is $sourceVersion, built $version." }
 foreach ($name in @('MagitekMonsters.dll', 'MagitekMonsters.Contracts.dll')) {
     if ([Reflection.AssemblyName]::GetAssemblyName((Join-Path $release $name)).Version.ToString() -ne $version) { throw "Built version mismatch: $name" }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using MagitekMonsters.Contracts;
 using MagitekMonsters.Models;
 using MagitekMonsters.Services;
 
@@ -144,9 +145,14 @@ public sealed partial class MainWindow
         var scale = CompanionScale;
         ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
         ImGui.BeginDisabled(CollectionLocked || pendingStorageBatch is not null || pokemon.FusionHostId.Length > 0 || pokemon.TradeLockId is not null);
-        ImGui.BeginDisabled(pokemon.PartySlot is null && trainer!.Party.Count >= 6);
-        if (DrawAccentButton(pokemon.PartySlot is null ? "To party" : "To PC", new Vector2(-1, 30 * scale), CompanionAccent))
-            Run(() => MovePokemon(pokemon.Id, pokemon.PartySlot is null ? "party" : "storage"), $"Moving {pokemon.Nickname}...");
+        var boxed = pokemon.PartySlot is null;
+        var swapIntoParty = boxed && trainer!.Party.Count >= StorageLimits.PartyCapacity;
+        ImGui.BeginDisabled(swapIntoParty && !StorageView.DragEnabled || !boxed && trainer!.Party.Count <= 1);
+        if (DrawAccentButton(swapIntoParty ? "Swap into party..." : boxed ? "To party" : "To PC", new Vector2(-1, 30 * scale), CompanionAccent))
+        {
+            if (swapIntoParty) StorageView.BeginSwap(pokemon, partyOnly: true);
+            else Run(() => MovePokemon(pokemon.Id, boxed ? "party" : "storage"), $"Moving {pokemon.Nickname}...");
+        }
         ImGui.EndDisabled();
         ImGui.EndDisabled();
         if (pokemon.PartySlot is null)
