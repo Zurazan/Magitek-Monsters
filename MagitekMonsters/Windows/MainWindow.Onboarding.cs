@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
@@ -283,9 +284,9 @@ public sealed partial class MainWindow
         draw.PopClipRect();
     }
 
-    private void DrawStarterTypeBadges(string[] types, float width, float scale)
+    private void DrawStarterTypeBadges(IReadOnlyList<string> types, float width, float scale)
     {
-        for (var index = 0; index < types.Length; index++)
+        for (var index = 0; index < types.Count; index++)
         {
             if (index > 0) ImGui.SameLine(0, 5 * scale);
             var path = plugin.Assets.TypeBadge(types[index]);

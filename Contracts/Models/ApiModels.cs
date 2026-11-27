@@ -39,7 +39,7 @@ public sealed class TrainerSnapshotDto
     public BattleSnapshotDto? ActiveTrainerBattle { get; set; }
     public LeagueRunDto? LeagueRun { get; set; }
     public UserDto User { get; set; } = new();
-    public int Currency { get; set; }
+    public long Currency { get; set; }
     public bool StarterChosen { get; set; }
     public List<PokemonDto> Party { get; set; } = [];
     public List<PokemonDto> Storage { get; set; } = [];
@@ -505,6 +505,7 @@ public sealed class BallEffectDto
     public bool BonusActive { get; set; }
     public string Detail { get; set; } = string.Empty;
     public bool Guaranteed { get; set; }
+    public double? CatchChance { get; set; }
 }
 
 public sealed class BattleSnapshotDto
@@ -537,6 +538,8 @@ public sealed class BattleSnapshotDto
     public List<string> Log { get; set; } = [];
     public BattleRequestDto? Request { get; set; }
     public string? Error { get; set; }
+    public bool EngineIncompatible { get; set; }
+    public bool OpponentRetired { get; set; }
     public int Turn { get; set; }
     public BattleCombatantDto? PlayerActive { get; set; }
     public BattleCombatantDto? OpponentActive { get; set; }

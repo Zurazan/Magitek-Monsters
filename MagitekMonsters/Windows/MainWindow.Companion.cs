@@ -20,7 +20,6 @@ public sealed partial class MainWindow
         if (ImGui.GetItemRectMax().X + ImGui.GetStyle().ItemSpacing.X + ImGui.CalcTextSize(label).X + 2 * ImGui.GetStyle().FramePadding.X <= right) ImGui.SameLine();
     }
     private string? selectedPartyPokemon;
-    private string? selectedStoragePokemon;
     private string? releasePokemonId;
     private bool requestRelease;
     private ShopItemDto? pendingPurchase;
@@ -117,7 +116,7 @@ public sealed partial class MainWindow
         ImGui.TextWrapped($"Release {pokemon.Nickname} permanently?");
         ImGui.TextWrapped("This cannot be undone. Its held item returns to your bag.");
         if (DrawConfirmationActions("Confirm release", PokemonRed,
-            CollectionLocked || pokemon.Favorite || pokemon.FusionHostId.Length > 0 || pokemon.Fusion is not null, "Keep Pokémon"))
+            BoxedReleaseLocked || StorageBrowser.ReleaseProtected(pokemon), "Keep Pokémon"))
         {
             ImGui.CloseCurrentPopup();
             Run(() => ReleasePokemon(pokemon.Id, pokemon.Nickname), $"Releasing {pokemon.Nickname}...");

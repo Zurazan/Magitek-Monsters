@@ -170,17 +170,21 @@ public sealed partial class MainWindow
         var shopLabel = collectionItem ? "Open Collection Exchange" : item.BpOnly ? "Open BP Exchange" : item.Currency == "rank-tokens" ? "Open Rank Token Exchange" : "Open Poké Mart";
         if (DrawAccentButton(shopLabel, new Vector2(-1, 30 * scale), CompanionAccent))
         {
-            if (item.BpOnly) OpenFrontier(exchange: true);
+            if (item.BpOnly)
+            {
+                FrontierItems.Focus($"item-{item.Id}", item.Name, "");
+                OpenFrontier(exchange: true);
+            }
             else if (collectionItem) { openCollectionExchange = true; mainSection = 5; }
             else
             {
                 requestedShopTab = item.Currency == "rank-tokens" ? "Rank Token Exchange" : "Items";
                 if (item.Currency == "rank-tokens")
-                { tokenShopSearch = item.Name; tokenShopPage = 0; selectedTokenShopItem = item.Id; tokenShopQuantity = 1; }
+                    TokenCatalog.Focus(item.Id, item.Name, "");
                 else
                 {
-                    shopCategoryIndex = Math.Clamp(Array.FindIndex(BagInventory.Pockets, pocket => pocket.Id == BagInventory.Pocket(item)) - 1, 0, 7);
-                    shopSearch = item.Name; shopPage = 0; selectedShopItem = item.Id; shopBuyQuantity = 1;
+                    var pocket = BagInventory.Pocket(item);
+                    MoneyCatalog.Focus(item.Id, item.Name, pocket == "other" ? "" : pocket);
                 }
                 mainSection = 5;
             }

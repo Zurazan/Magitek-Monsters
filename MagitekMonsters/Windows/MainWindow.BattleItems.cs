@@ -176,6 +176,13 @@ public sealed partial class MainWindow
 
     private void DrawConsoleCatch(BattleSnapshotDto current)
     {
+        if (trainer is { Party.Count: >= 6 } && trainer.Storage.Count >= StorageBrowser.BoxCount * StorageBrowser.BoxCapacity)
+        {
+            ImGui.TextColored(PokemonOrange, "Your party and PC are full.");
+            ImGui.TextWrapped("Release a boxed Pokémon to make room before throwing a ball.");
+            if (DrawAccentSmallButton("Open PC Storage", CompanionAccent)) mainSection = 2;
+            return;
+        }
         var scale = CompanionScale; var gap = 5 * scale;
         var start = ImGui.GetCursorScreenPos(); var size = ImGui.GetContentRegionAvail();
         var frame = ImGui.GetFrameHeight(); var line = ImGui.GetTextLineHeight();
@@ -212,8 +219,13 @@ public sealed partial class MainWindow
         }
         var selected = balls.First(ball => ball.Id == battleBallId);
         var effect = current.BallOptions.FirstOrDefault(option => option.ItemId == selected.Id);
-        var effectLabel = effect is null ? "No current bonus information" : (effect.BonusActive && !effect.Guaranteed ? "Bonus active / " : "") + BallModifier(effect);
-        var detail = effect?.Detail ?? selected.Description;
+        var odds = BallCatchOdds(effect);
+        var effectLabel = effect?.Guaranteed == true ? "Guaranteed catch"
+            : odds is not null ? $"{odds} chance this throw"
+            : effect is not null ? BallModifier(effect) : "Current odds unavailable";
+        var detail = effect is null ? selected.Description
+            : odds is null || effect.Guaranteed ? effect.Detail
+            : effect.Detail == "Standard catch modifier" ? BallModifier(effect) : $"{BallModifier(effect)} / {effect.Detail}";
         var infoX = layout.Wide ? start.X + layout.GridWidth + gap * 2 : start.X;
         var infoY = layout.Wide ? top : top + layout.BodyHeight - layout.InfoHeight;
         ImGui.SetCursorScreenPos(new(infoX, infoY));
@@ -265,7 +277,13 @@ public sealed partial class MainWindow
 
     private bool DrawBattleBallCard(ShopItemDto ball, BallEffectDto? effect, float width, float height, bool selected, bool wide)
     {
-        if (!wide) return DrawBattleTrayCard("ball-" + ball.Id, ball.Name, $"x{InventoryCount(ball.Id):N0}", width, height, selected, "", ball.Description, ball.Id, accent: PokemonOrange);
+        var quantity = $"x{InventoryCount(ball.Id):N0}";
+        var odds = BallCatchOdds(effect);
+        var label = odds ?? (effect is null ? "Select to inspect" : BallModifier(effect));
+        var tooltip = $"{ball.Name} {quantity}\n{(odds is not null && effect?.Guaranteed != true ? odds + " chance this throw" : label)}\n{ball.Description}\n{effect?.Detail}";
+        if (!wide)
+            return DrawBattleTrayCard("ball-" + ball.Id, ball.Name, odds is null ? quantity : $"{odds} / {quantity}", width, height,
+                selected, "", tooltip, ball.Id, accent: PokemonOrange);
         var scale = CompanionScale; var line = ImGui.GetTextLineHeight();
         var min = ImGui.GetCursorScreenPos(); var max = min + new Vector2(width, height);
         var clicked = ImGui.InvisibleButton("##Ball-" + ball.Id, new Vector2(width, height));
@@ -276,18 +294,29 @@ public sealed partial class MainWindow
         draw.PushClipRect(min, max, true);
         ImGui.SetCursorScreenPos(min + new Vector2(7 * scale));
         DrawItemImage(ball.Id, new Vector2(32 * scale));
-        var quantity = $"x{InventoryCount(ball.Id):N0}";
         var quantityWidth = Math.Min(width - 12 * scale, ImGui.CalcTextSize(quantity).X);
         ImGui.SetCursorScreenPos(new(max.X - quantityWidth - 7 * scale, min.Y + 8 * scale));
         DrawClippedText(quantity, quantityWidth, PokemonYellow);
         ImGui.SetCursorScreenPos(new(min.X + 7 * scale, min.Y + 40 * scale));
         DrawClippedText(ball.Name, width - 14 * scale, Vector4.One);
         ImGui.SetCursorScreenPos(new(min.X + 7 * scale, min.Y + 40 * scale + line + 3 * scale));
-        DrawClippedText(effect is null ? "Select to inspect" : BallModifier(effect), width - 14 * scale,
+        DrawClippedText(label, width - 14 * scale,
             effect?.BonusActive == true || effect?.Guaranteed == true ? PokemonGreen : CompanionMuted);
         draw.PopClipRect(); ImGui.SetCursorScreenPos(after);
-        if (hovered) { ImGui.SetMouseCursor(ImGuiMouseCursor.Hand); ImGui.SetTooltip($"{ball.Name} x{InventoryCount(ball.Id):N0}\n{ball.Description}\n{effect?.Detail}"); }
+        if (hovered) { ImGui.SetMouseCursor(ImGuiMouseCursor.Hand); ImGui.SetTooltip(tooltip); }
         return clicked;
+    }
+
+    private static string? BallCatchOdds(BallEffectDto? effect)
+    {
+        if (effect?.Guaranteed == true) return "Guaranteed";
+        if (effect?.CatchChance is not double chance || !(chance >= 0 && chance <= 1)) return null;
+        return chance switch
+        {
+            > 0 and < .001 => $"<{0.1:0.0}%",
+            > .999 and < 1 => $">{99.9:0.0}%",
+            _ => $"{chance * 100:0.#}%"
+        };
     }
 
     private void DrawBattleInfoLines(string text, float width, int maximum, Vector4 color)

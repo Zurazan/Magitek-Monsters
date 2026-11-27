@@ -13,49 +13,55 @@ namespace MagitekMonsters.Windows;
 public sealed partial class MainWindow
 {
     private readonly HashSet<string> storageSelection = [];
-    private Dictionary<string, int> storageDuplicates = new(StringComparer.OrdinalIgnoreCase);
     private bool storageSelecting;
-    private bool storageDuplicatesOnly;
     private string storageOwner = string.Empty;
     private string storageComparePin = string.Empty;
-    private TrainerSnapshotDto? storageIndexedTrainer;
-    private TrainerSnapshotDto? storageFilteredTrainer;
-    private StorageFilter? storageCachedFilter;
-    private List<PokemonDto> storageFilteredPokemon = [];
+    private StorageInventory? storageInventory;
+    private PokemonStorageBrowser? storageBrowser;
     private StorageBatchAttempt? pendingStorageBatch;
     private StorageBatchAttempt? storageReleaseAttempt;
     private bool requestStorageRelease;
     private bool confirmStorageRelease;
-    private sealed record StorageBatchAttempt(string Owner, string RequestId, string Action, string[] Ids, int Box, bool Favorite);
+    private sealed record StorageBatchAttempt(string Owner, string RequestId, string Action, string[] Ids, int Box, bool Favorite)
+    {
+        public StorageSlotPlacement? Placement { get; init; }
+        public int[]? ExpectedSlots { get; init; }
+    }
+
+    private PokemonStorageBrowser StorageView => storageBrowser ??= new(
+        DrawPokemonIconAt, DrawStoragePokemonDetails, GetPokemonAlerts, () => CollectionEditRestriction, compact: false)
+        { Marked = storageSelection, OnSelect = SelectStoragePokemon, OnPlace = PlaceStoragePokemon };
 
     private void ObserveStorageOwner()
     {
-        if (trainer is null) return;
-        if (storageOwner != trainer.User.Id)
+        if (trainer is not { } owner) return;
+        if (storageOwner != owner.User.Id)
         {
-            storageOwner = trainer.User.Id;
-            storageIndexedTrainer = storageFilteredTrainer = null;
-            storageCachedFilter = null; storageFilteredPokemon = [];
+            storageOwner = owner.User.Id;
+            storageBrowser = null;
             storageSelection.Clear(); storageComparePin = string.Empty;
             pendingStorageBatch = storageReleaseAttempt = null;
             storageSelecting = requestStorageRelease = requestStorageComparison = false;
             storageComparisonLeft = storageComparisonRight = string.Empty;
-            storageBox = 1; storageSearch = boxName = string.Empty;
-            storageType = storageGeneration = storageSort = 0;
-            storageFavorites = storageShiny = storageDuplicatesOnly = false;
-            selectedStoragePokemon = null;
-            storageScrollToTop = true; storageShowEmptyBoxes = false;
+            boxName = string.Empty;
         }
-        if (ReferenceEquals(storageIndexedTrainer, trainer)) return;
-        var started = System.Diagnostics.Stopwatch.GetTimestamp();
-        storageIndexedTrainer = trainer;
-        StorageBrowser.Synchronize(storageSelection, trainer.Storage);
-        if (!trainer.Party.Concat(trainer.Storage).Any(pokemon => pokemon.Id == storageComparePin)) storageComparePin = string.Empty;
-        storageDuplicates = StorageBrowser.Duplicates(trainer.Party.Concat(trainer.Storage));
-        storageBoxContents = trainer.Storage.GroupBy(pokemon => pokemon.BoxNumber)
-            .ToDictionary(group => group.Key, group => group.OrderBy(pokemon => pokemon.BoxSlot).ToList());
-        var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-        if (elapsed >= 4) Plugin.Log?.Debug("PC index: {PokemonCount} Pokemon in {ElapsedMs:F1} ms", trainer.Storage.Count, elapsed);
+        if (!ReferenceEquals(storageInventory?.Owner, owner))
+        {
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            storageInventory = new(owner);
+            StorageBrowser.Synchronize(storageSelection, owner.Storage);
+            if (storageInventory.Find(storageComparePin) is null) storageComparePin = string.Empty;
+            var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            if (elapsed >= 4) Plugin.Log?.Debug("PC index: {PokemonCount} Pokemon in {ElapsedMs:F1} ms", owner.Storage.Count, elapsed);
+        }
+        StorageView.Bind(storageInventory!);
+    }
+
+    private void InspectStoredPokemon(PokemonDto pokemon)
+    {
+        ObserveStorageOwner();
+        StorageView.SetFilter(StorageSearches.Empty with { Box = Math.Clamp(pokemon.BoxNumber, 1, StorageBrowser.BoxCount) });
+        StorageView.SelectedId = pokemon.Id;
     }
 
     private void DrawStorageTools(List<PokemonDto> filtered)
@@ -81,9 +87,9 @@ public sealed partial class MainWindow
         }
         if (!storageSelecting) return;
         ImGui.BeginDisabled(busy);
-        if (storageBox > 0 && DrawAccentSmallButton("Select box", CompanionAccent)) StorageBrowser.Select(storageSelection, filtered);
+        if (StorageView.Box > 0 && DrawAccentSmallButton("Select box", CompanionAccent)) StorageBrowser.Select(storageSelection, filtered);
         var selectLabel = filtered.Count > StorageLimits.MaximumBatch ? "Select matches (max 100)" : "Select all matches";
-        if (storageBox == 0 && DrawAccentSmallButton(selectLabel, CompanionAccent)) StorageBrowser.Select(storageSelection, filtered);
+        if (StorageView.Box == 0 && DrawAccentSmallButton(selectLabel, CompanionAccent)) StorageBrowser.Select(storageSelection, filtered);
         StorageSameLine(right, ImGui.CalcTextSize("Clear selection").X + 2 * ImGui.GetStyle().FramePadding.X);
         if (DrawAccentSmallButton("Clear selection", CompanionMuted)) storageSelection.Clear();
         ImGui.EndDisabled();
@@ -146,18 +152,48 @@ public sealed partial class MainWindow
         Run(() => ExecuteStorageBatch(attempt), $"Updating {selected.Count} stored Pokémon...");
     }
 
+    private void PlaceStoragePokemon(string id, StorageSlotPlacement placement)
+    {
+        if (CollectionLocked || pendingStorageBatch is not null || trainer is not { } current) return;
+        var attempt = new StorageBatchAttempt(current.User.Id, Guid.NewGuid().ToString(), "place", [id], placement.ToBox, false)
+            { Placement = placement };
+        Run(() => ExecuteStorageBatch(attempt), placement.OccupantId is null ? "Moving Pokémon..." : "Swapping Pokémon...");
+    }
+
+    private void SortStorageBox(int box, StorageSort order)
+    {
+        if (CollectionLocked || pendingStorageBatch is not null || trainer is not { } current
+            || storageInventory?.Boxes.GetValueOrDefault(box) is not { Count: > 0 } contents) return;
+        var ordered = StorageBrowser.SortBox(contents, order).ToArray();
+        var attempt = new StorageBatchAttempt(current.User.Id, Guid.NewGuid().ToString(), "sort", ordered.Select(pokemon => pokemon.Id).ToArray(), box, false)
+            { ExpectedSlots = ordered.Select(pokemon => pokemon.BoxSlot).ToArray() };
+        Run(() => ExecuteStorageBatch(attempt), $"Sorting {BoxLabel(box)}...");
+    }
+
     private async Task ExecuteStorageBatch(StorageBatchAttempt attempt)
     {
         if (trainer?.User.Id != attempt.Owner) return;
         pendingStorageBatch = attempt;
         try
         {
-            await InSession(UpdateCollection(plugin.Api.StorageBatch(attempt.RequestId, attempt.Action, attempt.Ids, attempt.Box, attempt.Favorite, disposeCancellation.Token), "PC storage updated."));
+            var request = attempt switch
+            {
+                { Placement: { } placement } => plugin.Api.PlaceStoragePokemon(attempt.RequestId, attempt.Ids[0], placement, disposeCancellation.Token),
+                { ExpectedSlots: { } slots } => plugin.Api.SortStorageBox(attempt.RequestId, attempt.Box, attempt.Ids, slots, disposeCancellation.Token),
+                _ => plugin.Api.StorageBatch(attempt.RequestId, attempt.Action, attempt.Ids, attempt.Box, attempt.Favorite, disposeCancellation.Token)
+            };
+            await InSession(UpdateCollection(request, "PC storage updated."));
         }
         catch (ApiException exception) when (exception.Code == "mutation_committed")
         {
             pendingStorageBatch = null;
             if (!await InSession(RecoverAction(true))) return;
+        }
+        catch (ApiException exception) when (exception.Code == "storage_layout_unavailable")
+        {
+            pendingStorageBatch = null;
+            SetStatus(exception.Message, true);
+            return;
         }
         catch (ApiException exception) when (exception.StatusCode is 400 or 403 or 404 or 409)
         {
@@ -167,6 +203,17 @@ public sealed partial class MainWindow
         }
         if (trainer?.User.Id != attempt.Owner) return;
         pendingStorageBatch = null;
+        if (attempt.Placement is { } placed)
+        {
+            if (StorageView.Box == placed.ToBox) StorageView.SelectedId = attempt.Ids[0];
+            SetStatus(placed.OccupantId is null ? $"Moved to {BoxLabel(placed.ToBox)} / slot {placed.ToSlot}." : "Pokémon swapped.");
+            return;
+        }
+        if (attempt.ExpectedSlots is not null)
+        {
+            SetStatus($"Sorted {BoxLabel(attempt.Box)}.");
+            return;
+        }
         if (attempt.Action is "party" or "release") storageSelection.ExceptWith(attempt.Ids);
         var message = attempt.Action switch { "party" => "added to your party", "box" => $"moved to {BoxLabel(attempt.Box)}", "release" => "released", _ => attempt.Favorite ? "marked as favourites" : "unmarked as favourites" };
         SetStatus($"{attempt.Ids.Length} Pokémon {message}.");

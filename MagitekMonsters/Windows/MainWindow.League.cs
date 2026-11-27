@@ -171,37 +171,30 @@ public sealed partial class MainWindow
     }
     private async Task StartLeague(string[] ids)
     {
-        var refresh = true;
-        try { battle = await InSession(plugin.Api.StartLeague(ids, leagueRematch, circuitId: leagueEntryCircuitId)); }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
+        ApplyCheckpointBattle(await InSession(plugin.Api.StartLeague(ids, leagueRematch, circuitId: leagueEntryCircuitId)));
         SetStatus("League run saved. Choose your action.");
     }
     private async Task NextLeague()
     {
         var run = trainer!.LeagueRun!;
-        var refresh = true;
-        try { battle = await InSession(plugin.Api.NextLeague(run.Id, run.Revision)); }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
+        ApplyCheckpointBattle(await InSession(plugin.Api.NextLeague(run.Id, run.Revision)));
         SetStatus("Next League fight started.");
     }
     private async Task HealLeague(bool singleMove)
     {
         var run = trainer!.LeagueRun!;
-        var refresh = true;
-        try { await InSession(plugin.Api.HealLeague(run.Id, run.Revision, leagueItemId, leagueTargetId, singleMove ? leagueMoveId : null)); }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
+        var item = leagueItemId;
+        trainer!.LeagueRun = await InSession(plugin.Api.HealLeague(run.Id, run.Revision, item, leagueTargetId, singleMove ? leagueMoveId : null));
+        ConsumeLocalItem(item);
+        refreshState.Trainer();
         SetStatus("Medicine used. Checkpoint saved.");
     }
     private async Task AbandonLeague()
     {
         var run = trainer!.LeagueRun!;
-        var refresh = true;
-        try { await InSession(plugin.Api.AbandonLeague(run.Id, run.Revision)); battle = null; }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
+        trainer!.LeagueRun = await InSession(plugin.Api.AbandonLeague(run.Id, run.Revision));
+        trainer.ActiveTrainerBattle = battle = null;
+        refreshState.Trainer();
         SetStatus("League run ended. Your team is unlocked.");
     }
 }

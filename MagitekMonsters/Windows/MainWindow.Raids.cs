@@ -42,6 +42,10 @@ public sealed partial class MainWindow
     private string? raidCaptureRequest;
     private string? raidCaptureBall;
     private bool raidSkipRequested;
+    private RaidSnapshotDto? raidHudSnapshot;
+    private string? raidCheerSummary;
+    private string? raidCheerTooltip;
+    private (string? First, string? Full, bool Positive)[]? raidStatText;
 
     private void ApplyRaid(RaidRoomDto next)
     {
@@ -51,54 +55,77 @@ public sealed partial class MainWindow
             pendingRaidChoice = null; raidTargetMove = null; raidModifier = "";
         }
         if (raidRoom?.Id != next.Id) { raidCaptureRequest = null; raidCaptureBall = null; }
-        var terminal = raidRoom?.Status is "lobby" or "active" && next.Status is not ("lobby" or "active");
-        var awarded = raidRoom?.Receipt is null && next.Receipt is not null;
+        var previous = raidRoom?.Id == next.Id ? raidRoom : null;
+        var terminal = previous?.Status is "lobby" or "active" && next.Status is not ("lobby" or "active");
+        var awarded = previous?.Receipt is null && next.Receipt is not null;
+        var captured = next.CaptureState == "caught" && previous?.CaptureState != "caught";
         raidRoom = next; raidObservedAt = DateTimeOffset.UtcNow; nextRaidPollAt = raidObservedAt.AddSeconds(2);
         if (trainer is not null)
         {
             trainer.RaidLocked = next.Status is "lobby" or "active";
             trainer.ActiveRaidId = trainer.RaidLocked || next.CaptureState == "pending" ? next.Id : null;
         }
-        if (terminal || awarded) refreshState.Trainer();
+        if (terminal || awarded || captured) refreshState.Trainer();
     }
-    private async Task RefreshRaids()
+    private void ClearRaidView()
     {
-        var board = await InSession(plugin.Api.GetRaids(disposeCancellation.Token));
-        if (!plugin.Api.Catalogs.TryApply([board], () => raidBoard = board)) { RetryCatalogs(); return; }
-        var id = raidRoom?.Id ?? board.ActiveRoomId;
-        if (id is not null) ApplyRaid(await InSession(plugin.Api.GetRaid(id, disposeCancellation.Token)));
+        raidRoom = null;
+        pendingRaidChoice = null; raidTargetMove = null; raidTargetOpen = false; raidModifier = "";
+        raidCaptureRequest = null; raidCaptureBall = null; raidSkipRequested = false;
+    }
+    private void ClearUnavailableRaid(string id)
+    {
+        if (raidRoom?.Id == id) ClearRaidView();
+        if (raidBoard?.ActiveRoomId == id) raidBoard = null;
+        if (trainer is { } current && current.ActiveRaidId == id)
+        {
+            current.ActiveRaidId = null;
+            current.RaidLocked = false;
+        }
+        refreshState.Trainer();
         nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(5);
-        SetStatus(raidRoom is null ? "Raid dens ready." : "Raid loaded.", quiet: true);
+    }
+    private async Task ResumeRaid(string id)
+    {
+        try { ApplyRaid(await InSession(plugin.Api.GetRaid(id, disposeCancellation.Token))); }
+        catch (ApiException exception) when (ConnectionRecovery.IsMissingRaid(exception))
+        {
+            ClearUnavailableRaid(id);
+            SetStatus("That raid is no longer available.");
+        }
     }
     private void BackgroundRaids()
     {
-        var id = raidRoom?.Id ?? trainer?.ActiveRaidId;
+        var id = trainer?.ActiveRaidId ?? raidRoom?.Id;
         RunBackground(async token =>
         {
             var board = id is null ? await InSession(plugin.Api.GetRaids(token)) : null;
             var roomId = id ?? board?.ActiveRoomId;
             RaidRoomDto? room;
             try { room = roomId is null ? null : await InSession(plugin.Api.GetRaid(roomId, token)); }
-            catch (Services.ApiException exception) when (exception.StatusCode == 404)
+            catch (ApiException exception) when (roomId is not null && ConnectionRecovery.IsMissingRaid(exception))
             {
-                return () => { raidRoom = null; raidBoard = null; if (trainer is not null) { trainer.ActiveRaidId = null; trainer.RaidLocked = false; } refreshState.Trainer(); nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(5); };
+                return () => ClearUnavailableRaid(roomId);
             }
             return () =>
             {
                 if (board is not null && !plugin.Api.Catalogs.TryApply([board], () => raidBoard = board)) RetryCatalogs();
                 if (room is not null) ApplyRaid(room);
                 nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(plugin.Connection.CanInvoke ? 10 : room?.Status is "lobby" or "active" || room?.RewardsPending == true ? 2 : 10);
-                if (status == "Loading raid dens...") SetStatus(raidRoom is null ? "Raid dens ready." : "Raid loaded.", quiet: true);
             };
         }, () => raidRefreshRequested = true);
     }
     private async Task RaidAction(string action, IClientRequest body, bool lobby = false)
     {
         var result = await InSession(plugin.Api.RaidAction(lobby ? null : raidRoom!.Id, action, body, disposeCancellation.Token));
-        if (action == "leave") { raidRoom = null; raidBoard = null; }
+        if (action == "leave")
+        {
+            ClearRaidView(); raidBoard = null;
+            if (trainer is not null) { trainer.ActiveRaidId = null; trainer.RaidLocked = false; }
+            refreshState.Trainer();
+        }
         else ApplyRaid(result);
         if (action == "join") friendsRefreshRequested = true;
-        trainer = await InSession(plugin.Api.GetMe(disposeCancellation.Token));
         SetStatus(action switch { "join" => "Joined the den lobby.", "choose" => "Raid action saved.", "catch" => "Caught! Your Pokémon is saved.", "skip" => "Capture skipped.", "leave" => "You left the raid.", _ => "Raid updated." });
     }
     private void DrawRaids()
@@ -114,12 +141,11 @@ public sealed partial class MainWindow
             DrawSectionHeader("COOPERATIVE DENS", "Four allies, one boss. Bring one Pokémon from your party or PC. Empty slots get NPC allies.");
             if (raidBoard is null)
             {
-                if (!busy) Run(RefreshRaids, "Loading raid dens...");
                 ImGui.TextUnformatted("Loading the den board..."); return;
             }
             if (raidBoard.ActiveRoomId is { } saved)
             {
-                if (DrawAccentButton("Resume saved raid", new Vector2(-1, 34), PokemonBlue)) Run(async () => ApplyRaid(await InSession(plugin.Api.GetRaid(saved))), "Resuming raid...");
+                if (DrawAccentButton("Resume saved raid", new Vector2(-1, 34), PokemonBlue)) Run(() => ResumeRaid(saved), "Resuming raid...");
                 raidPicker = null;
                 DrawRaidPicker();
                 return;
@@ -239,6 +265,7 @@ public sealed partial class MainWindow
     {
         if (busy) return "Wait for the current action to finish.";
         if (pokemon is null) return "Choose a Pokémon from your party or PC Storage.";
+        if (pokemon.TradeLockId is not null) return "This Pokémon is reserved for trading.";
         return pokemon.FusionHostId.Length > 0 ? "Unfuse this Pokémon's host before bringing it to a den." : RaidLevelRestriction(pokemon, minimumLevel);
     }
 
@@ -301,7 +328,8 @@ public sealed partial class MainWindow
         DrawClippedText($"{room.Den.Stars}-STAR DEN / Round {battleState.Turn}/{battleState.RoundLimit} / Lives: {battleState.LivesRemaining}{(battleState.ShieldRounds > 0 ? $" / Shield: {battleState.ShieldRounds}" : "")}", ImGui.GetContentRegionAvail().X, CompanionAccent);
         var prompt = MoveEffectMessage ?? (room.Submitted ? "Action saved. Waiting for teammates." : "Choose a move or cheer. Missing choices use NPC actions.");
         DrawClippedText(room.Paused ? "Battle service unavailable. Your raid is saved; waiting to reconnect." : $"{Math.Ceiling(seconds):N0}s / {prompt}", ImGui.GetContentRegionAvail().X, room.Paused ? PokemonOrange : CompanionMuted);
-        DrawRaidCheerResults(battleState);
+        PrepareRaidHud(battleState);
+        DrawRaidCheerResults();
         var origin = ImGui.GetCursorScreenPos();
         var width = ImGui.GetContentRegionAvail().X;
         var draw = ImGui.GetWindowDrawList();
@@ -361,17 +389,40 @@ public sealed partial class MainWindow
         }
     }
 
-    private void DrawRaidCheerResults(RaidSnapshotDto snapshot)
+    private void PrepareRaidHud(RaidSnapshotDto snapshot)
     {
-        if (snapshot.LastRoundCheers.Count == 0) return;
-        var results = snapshot.LastRoundCheers.Select(DescribeRaidCheer).ToArray();
-        DrawClippedText($"Last round / {string.Join("   /   ", results)}", ImGui.GetContentRegionAvail().X, CompanionAccent);
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(string.Join("\n", snapshot.LastRoundCheers.Select((cheer, index) =>
+        if (ReferenceEquals(raidHudSnapshot, snapshot)) return;
+        raidHudSnapshot = snapshot;
+        raidStatText ??= new (string?, string?, bool)[5];
+        raidStatText[4] = DescribeRaidStats(snapshot.Boss);
+        foreach (var ally in snapshot.Allies) raidStatText[ally.Slot] = DescribeRaidStats(ally);
+        raidCheerSummary = null;
+        raidCheerTooltip = null;
+        if (snapshot.LastRoundCheers.Count > 0)
+        {
+            var results = snapshot.LastRoundCheers.Select(DescribeRaidCheer).ToArray();
+            raidCheerSummary = $"Last round / {string.Join("   /   ", results)}";
+            raidCheerTooltip = string.Join("\n", snapshot.LastRoundCheers.Select((cheer, index) =>
             {
                 var ally = snapshot.Allies.FirstOrDefault(actor => actor.Slot == cheer.Slot);
                 return $"{ally?.Name ?? "Ally"} / {results[index]}";
-            })));
+            }));
+        }
+    }
+
+    private void DrawRaidCheerResults()
+    {
+        if (raidCheerSummary is null) return;
+        DrawClippedText(raidCheerSummary, ImGui.GetContentRegionAvail().X, CompanionAccent);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(raidCheerTooltip!);
+    }
+
+    private static (string? First, string? Full, bool Positive) DescribeRaidStats(RaidActorDto actor)
+    {
+        if (actor.StatStages.Count == 0) return default;
+        var stages = RaidStatLabels.Where(stat => actor.StatStages.GetValueOrDefault(stat.Id) != 0)
+            .Select(stat => $"{stat.Label} {actor.StatStages[stat.Id]:+0;-0}").ToArray();
+        return stages.Length == 0 ? default : (stages[0], string.Join(" / ", stages), actor.StatStages.Values.Any(stage => stage > 0));
     }
 
     private static string DescribeRaidCheer(RaidCheerResultDto cheer)
@@ -427,8 +478,7 @@ public sealed partial class MainWindow
         var shown = moveEffectFrame?.Actors?[effectSlot];
         var species = shown?.Species ?? actor.Species;
         var health = shown is null ? new BattleHealth(actor.Hp, actor.MaxHp, actor.Status, actor.Hp == 0) : BattleBag.Health(shown.Condition);
-        var stages = actor.StatStages.Count == 0 ? [] : RaidStatLabels.Where(stat => actor.StatStages.GetValueOrDefault(stat.Id) != 0)
-            .Select(stat => $"{stat.Label} {actor.StatStages[stat.Id]:+0;-0}").ToArray();
+        var stages = raidStatText![effectSlot];
         var scale = CompanionScale; var min = ImGui.GetCursorScreenPos(); var width = Math.Max(1, ImGui.GetContentRegionAvail().X);
         ImGui.PushID(heading + actor.Slot + actor.Species);
         ImGui.InvisibleButton("RaidActor", new Vector2(width, height)); var hovered = ImGui.IsItemHovered(); var after = ImGui.GetCursorScreenPos();
@@ -446,26 +496,26 @@ public sealed partial class MainWindow
         if (moveEffectFrame is not null) DrawBattleMoveSprite(effectSlot, species, shown?.Name ?? actor.Name, shown?.Shiny ?? actor.Shiny, art);
         else DrawPokemonIcon(actor.Species, actor.Shiny, art);
         ImGui.SetCursorScreenPos(min + new Vector2(46, 45) * scale);
-        DrawStarterTypeBadges(actor.Types.ToArray(), Math.Max(1, Math.Min(64 * scale, (width - 60 * scale) / Math.Max(1, actor.Types.Count))), scale);
+        DrawStarterTypeBadges(actor.Types, Math.Max(1, Math.Min(64 * scale, (width - 60 * scale) / Math.Max(1, actor.Types.Count))), scale);
         ImGui.SetCursorScreenPos(new Vector2(min.X + 8 * scale, max.Y - 27 * scale));
         var hp = $"{health.Hp:N0}/{(health.MaxHp > 0 ? health.MaxHp : actor.MaxHp):N0} {health.Status}".TrimEnd();
         var rowWidth = width - 16 * scale;
-        var stageLabel = stages.FirstOrDefault();
+        var stageLabel = stages.First;
         if (stageLabel is not null && rowWidth - ImGui.CalcTextSize(hp).X >= ImGui.CalcTextSize("Stats").X + 5 * scale)
         {
-            var full = string.Join(" / ", stages);
+            var full = stages.Full!;
             var space = rowWidth - ImGui.CalcTextSize(hp).X - 5 * scale;
             stageLabel = ImGui.CalcTextSize(full).X <= space ? full : ImGui.CalcTextSize(stageLabel).X <= space ? stageLabel : "Stats";
             var stageWidth = ImGui.CalcTextSize(stageLabel).X;
             DrawClippedText(hp, rowWidth - stageWidth - 5 * scale, CompanionMuted);
             ImGui.SetCursorScreenPos(new Vector2(max.X - 8 * scale - stageWidth, max.Y - 27 * scale));
-            DrawClippedText(stageLabel, stageWidth, actor.StatStages.Values.Any(stage => stage > 0) ? PokemonGreen : PokemonOrange);
+            DrawClippedText(stageLabel, stageWidth, stages.Positive ? PokemonGreen : PokemonOrange);
         }
         else DrawClippedText(hp, rowWidth, CompanionMuted);
         ImGui.SetCursorScreenPos(new Vector2(min.X + 8 * scale, max.Y - 9 * scale));
         DrawProgressBar(health.Ratio, new Vector2(width - 16 * scale, 5 * scale), "", HpBarRed);
         draw.PopClipRect(); ImGui.SetCursorScreenPos(after); ImGui.PopID();
-        if (hovered) ImGui.SetTooltip($"{actor.TrainerName}\n{species} / Lv. {actor.Level} / {string.Join(" / ", actor.Types)}\n{health.Label}\n{(stages.Length > 0 ? $"Stat stages: {string.Join(" / ", stages)}\n" : "")}{(gimmick.Length > 0 ? gimmick : "No transformation used")} / Z-Move {(actor.ZMoveUsed ? "used" : "unused")}");
+        if (hovered) ImGui.SetTooltip($"{actor.TrainerName}\n{species} / Lv. {actor.Level} / {string.Join(" / ", actor.Types)}\n{health.Label}\n{(stages.Full is not null ? $"Stat stages: {stages.Full}\n" : "")}{(gimmick.Length > 0 ? gimmick : "No transformation used")} / Z-Move {(actor.ZMoveUsed ? "used" : "unused")}");
     }
     private void SubmitRaidMove(RaidMoveDto move, int target)
     {

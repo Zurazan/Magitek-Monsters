@@ -244,7 +244,7 @@ public sealed partial class MainWindow
 
     private void DrawConsoleCommands(BattleSnapshotDto current, bool pvp)
     {
-        var exit = current.Status == "active" && current.Kind != "wild";
+        var exit = current.Status == "active" && current.Kind != "wild" && !current.OpponentRetired;
         if (exit) ImGui.BeginChild("ConsoleActionContent", new Vector2(0, -ImGui.GetFrameHeight() - 6 * CompanionScale), false, FixedBattlePanel);
         DrawConsoleActionContent(current, pvp);
         if (exit) { ImGui.EndChild(); DrawConsoleExit(current, pvp); }
@@ -253,6 +253,15 @@ public sealed partial class MainWindow
     private void DrawConsoleActionContent(BattleSnapshotDto current, bool pvp)
     {
         if (current.Status != "active") { DrawConsoleResult(current, pvp); return; }
+        if (!pvp && (current.EngineIncompatible || current.OpponentRetired))
+        {
+            ImGui.TextWrapped(current.Error ?? "This battle can no longer be resumed.");
+            ImGui.BeginDisabled(busy);
+            if (DrawAccentButton("Leave battle", new Vector2(0, 27 * CompanionScale), PokemonRed))
+                Run(() => ChooseBattle(current.Kind == "wild" ? "run" : "forfeit"), "Leaving the battle...");
+            ImGui.EndDisabled();
+            return;
+        }
         var request = current.Request;
         var available = request is not null && request.Wait != true;
         var ready = !busy && available;

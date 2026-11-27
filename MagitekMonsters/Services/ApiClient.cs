@@ -79,6 +79,8 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
         Send<GiftInboxDto>(HttpMethod.Get, "/api/gifts", null, true, cancellationToken);
     public Task<GiftInboxDto> ReadGift(string receipt, CancellationToken cancellationToken = default) =>
         Send<GiftInboxDto>(HttpMethod.Post, $"/api/gifts/{receipt}/seen", null, true, cancellationToken);
+    public Task<TrainerSnapshotDto> ClaimGift(string receipt, CancellationToken cancellationToken = default) =>
+        Send<TrainerSnapshotDto>(HttpMethod.Post, $"/api/gifts/{receipt}/claim", EmptyRequest.Instance, true, cancellationToken);
 
     public Task<RaidBoardDto> GetRaids(CancellationToken cancellationToken = default) =>
         Send<RaidBoardDto>(HttpMethod.Get, "/api/raids", null, true, cancellationToken);
@@ -192,6 +194,35 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
         return Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/storage/batch", body, true, cancellationToken);
     }
 
+    internal Task<TrainerSnapshotDto> PlaceStoragePokemon(string requestId, string pokemonId, StorageSlotPlacement placement, CancellationToken cancellationToken) =>
+        ChangeStorageLayout(new(requestId, "place", [pokemonId], Placement: placement), cancellationToken);
+
+    internal Task<TrainerSnapshotDto> SortStorageBox(string requestId, int box, string[] pokemonIds, int[] expectedSlots, CancellationToken cancellationToken) =>
+        ChangeStorageLayout(new(requestId, "sort", pokemonIds, BoxNumber: box, ExpectedSlots: expectedSlots), cancellationToken);
+
+    private async Task<TrainerSnapshotDto> ChangeStorageLayout(StorageBatchRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/storage/batch", request, true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ApiException exception) when (exception is { StatusCode: 400, Code: "invalid_request" })
+        {
+            ServerMetadataDto? metadata = null;
+            try { metadata = await GetMetadata(cancellationToken).ConfigureAwait(false); }
+            catch (Exception error) when (!cancellationToken.IsCancellationRequested
+                && error is ApiException or HttpRequestException or JsonException or OperationCanceledException)
+            {
+                Plugin.Log.Debug(error, "Could not check server support for PC layout changes.");
+            }
+            var storage = metadata?.Capabilities.Storage;
+            if (storage is not null && !(request.Action == "sort" ? storage.BoxSorting : storage.ExactSlotPlacement))
+                throw new ApiException(400, request.Action == "sort" ? "The server needs an update before you can sort PC boxes."
+                    : "The server needs an update before you can move or swap PC slots.", "storage_layout_unavailable");
+            throw;
+        }
+    }
+
     public Task<TextExportDto> ExportTeam(IEnumerable<string> pokemonIds) =>
         Send<TextExportDto>(HttpMethod.Post, "/api/teams/export", new TeamExportRequest([.. pokemonIds]), true, default, changesState: false);
 
@@ -243,7 +274,10 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
         Send<EncounterDto>(HttpMethod.Post, "/api/frontier/paradox/encounter", new ParadoxEncounterRequest(permitId), true, default);
 
     public Task<TrainerSnapshotDto> BuyItem(string itemId, int quantity, CancellationToken cancellationToken = default) =>
-        Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/shop/buy", new ShopPurchaseRequest(itemId, quantity, Guid.NewGuid().ToString()), true, cancellationToken);
+        BuyItem(new ShopPurchaseRequest(itemId, quantity, Guid.NewGuid().ToString()), cancellationToken);
+
+    internal Task<TrainerSnapshotDto> BuyItem(ShopPurchaseRequest purchase, CancellationToken cancellationToken) =>
+        Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/shop/buy", purchase, true, cancellationToken);
 
     public Task<EvTrainingPlanDto> PreviewEvTraining(string pokemonId, Dictionary<string, int> targetEvs, bool useResetItem, CancellationToken cancellationToken = default) =>
         Send<EvTrainingPlanDto>(HttpMethod.Post, "/api/items/ev-plan/preview", new EvTrainingRequest(pokemonId, targetEvs, useResetItem), true, cancellationToken, changesState: false);
@@ -254,8 +288,8 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     public Task<TrainerSnapshotDto> UseTeraShard(string pokemonId, string teraType, CancellationToken cancellationToken = default) =>
         Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/items/train", new TrainingItemRequest(pokemonId, "terashard", 1, TeraType: teraType), true, cancellationToken);
 
-    public Task<TrainerSnapshotDto> RedeemPrizePokemon(string species, CancellationToken cancellationToken = default) =>
-        Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/prize-exchange/redeem", new SpeciesRequest(species), true, cancellationToken);
+    public Task<TrainerSnapshotDto> RedeemPrizePokemon(PrizePurchaseRequest request, CancellationToken cancellationToken = default) =>
+        Send<TrainerSnapshotDto>(HttpMethod.Post, "/api/prize-exchange/redeem", request, true, cancellationToken);
 
     public Task<TrainerSnapshotDto> UseTrainingItem(
         string pokemonId,
@@ -367,6 +401,34 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
 
     public void Logout() { tokenStore.Clear(); rosterCache.Reset(); tradingCache.Reset(); Catalogs.Reset(); }
 
+    public async Task Disconnect(PvpStatusDto? pvp)
+    {
+        var token = tokenStore.Read();
+        Logout();
+        if (string.IsNullOrWhiteSpace(token)) return;
+
+        try
+        {
+            if (pvp?.State == "queued") await SendDisconnectRequest(HttpMethod.Delete, "/api/pvp/queue", token).ConfigureAwait(false);
+            else if (pvp?.Battle is { Status: "active" } battle && Guid.TryParseExact(battle.Id, "D", out var battleId))
+                await SendDisconnectRequest(HttpMethod.Post, $"/api/pvp/battles/{battleId:D}/forfeit", token).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException or ObjectDisposedException)
+        { Plugin.Log.Warning(exception, "Magitek Monsters could not cleanly leave PvP during disconnect"); }
+
+        await SendDisconnectRequest(HttpMethod.Post, "/api/auth/logout", token).ConfigureAwait(false);
+    }
+
+    private async Task SendDisconnectRequest(HttpMethod method, string path, string token)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var request = CreateRequest(method, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (method == HttpMethod.Post) request.Content = JsonContent.Create(EmptyRequest.Instance);
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token).ConfigureAwait(false);
+        if (response.StatusCode != HttpStatusCode.Unauthorized) response.EnsureSuccessStatusCode();
+    }
+
     public void Dispose() { rosterCache.Reset(); tradingCache.Reset(); http.Dispose(); }
 
     private async Task<T> Send<T>(HttpMethod method, string path, IClientRequest? body, bool authenticated, CancellationToken cancellationToken, bool changesState = true, bool fullRoster = false, TrainerRosterCache.Request? recoveryOf = null)
@@ -398,10 +460,7 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
                 object? value = typeof(T) == typeof(BattleSnapshotDto) ? reply.Battle : typeof(T) == typeof(RaidRoomDto) ? reply.Raid : reply.Pvp;
                 return value is T liveResult ? liveResult : throw new HttpRequestException("The live response was incomplete.");
             }
-            using var request = new HttpRequestMessage(method, BuildUri(path));
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            request.Headers.TryAddWithoutValidation(ProtocolInfo.ProtocolHeader, ProtocolInfo.Version);
-            request.Headers.TryAddWithoutValidation(ProtocolInfo.ClientHeader, ClientBuildVersion.Current);
+            using var request = CreateRequest(method, path);
             if (authenticated)
             {
                 var token = tokenStore.Read();
@@ -492,7 +551,7 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
             return result;
         }
         catch (Exception exception) when (dispatched && authenticated && changesState && method != HttpMethod.Get && method != HttpMethod.Head
-            && !cancellationToken.IsCancellationRequested && (exception is HttpRequestException or OperationCanceledException
+            && !cancellationToken.IsCancellationRequested && (exception is HttpRequestException or OperationCanceledException or JsonException
                 or ApiException { StatusCode: 408 or 502 or 503 or 504 }))
         {
             Plugin.Log.Warning(exception, "Magitek Monsters action outcome unknown: {Method} {Route} / {Transport} / HTTP {StatusCode} / {ElapsedMs:F0} ms / server {ServerTiming}",
@@ -513,6 +572,15 @@ public sealed class ApiClient : IDisposable, IConnectionRecoveryApi
     private static string DiagnosticRoute(HttpMethod method, string path) => ApiRequestContracts.Find(method.Method, path)?.Path
         ?? (path == "/api/me" ? path : path.StartsWith("/api/battles/", StringComparison.Ordinal) ? "/api/battles/{battleId}"
             : path.StartsWith("/api/pvp/battles/", StringComparison.Ordinal) ? "/api/pvp/battles/{battleId}" : "/api");
+
+    private HttpRequestMessage CreateRequest(HttpMethod method, string path)
+    {
+        var request = new HttpRequestMessage(method, BuildUri(path));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.TryAddWithoutValidation(ProtocolInfo.ProtocolHeader, ProtocolInfo.Version);
+        request.Headers.TryAddWithoutValidation(ProtocolInfo.ClientHeader, ClientBuildVersion.Current);
+        return request;
+    }
 
     private Uri BuildUri(string path)
     {

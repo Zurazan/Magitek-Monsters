@@ -12,6 +12,8 @@ public sealed class BattleLogArchive
 {
     public const int DefaultRetentionDays = 7;
     private const int CopyLineLimit = 20_000;
+    private const int SharingViolation = 32;
+    private const int LockViolation = 33;
     private const string DateFormat = "yyyy-MM-dd";
     private const string Gap = "[Some battle events were skipped between updates.]";
     private static readonly HashSet<string> OmittedEvents = new(StringComparer.Ordinal)
@@ -96,14 +98,42 @@ public sealed class BattleLogArchive
         var path = DailyLogPath(today);
         var header = transcript.FormatHeader();
         var battleKey = (source, id, transcript.ObservedAt);
-        PendingSave = PendingSave.ContinueWith(_ => TryFileOperation(() =>
+        PendingSave = PendingSave.ContinueWith(_ => AppendLog(path, header, append, battleKey), TaskScheduler.Default).Unwrap();
+    }
+
+    private async Task AppendLog(string path, string header, string append, (string Source, string Id, DateTimeOffset ObservedAt) battleKey)
+    {
+        try
         {
-            var exists = File.Exists(path);
-            var newSection = path != lastWrittenPath || battleKey != lastWrittenBattle || !exists;
-            File.AppendAllText(path, newSection ? (exists ? Environment.NewLine : "") + header + append : append);
+            using (var file = await OpenLog(path).ConfigureAwait(false))
+            using (var writer = new StreamWriter(file))
+            {
+                if (path != lastWrittenPath || battleKey != lastWrittenBattle || file.Length == 0)
+                {
+                    if (file.Length > 0) writer.WriteLine();
+                    writer.Write(header);
+                }
+                writer.Write(append);
+            }
             lastWrittenPath = lastLogPath = path;
             lastWrittenBattle = battleKey;
-        }), TaskScheduler.Default);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            reportError(exception);
+        }
+    }
+
+    private async Task<FileStream> OpenLog(string path)
+    {
+        for (var delay = 250; ; delay *= 2)
+        {
+            try { return File.Open(path, FileMode.Append, FileAccess.Write, FileShare.Read); }
+            catch (IOException exception) when (delay <= 8000 && (exception.HResult & 0xffff) is SharingViolation or LockViolation)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(delay), clock).ConfigureAwait(false);
+            }
+        }
     }
 
     public string? GetText(string id) => transcripts.Values.FirstOrDefault(log => log.Id == id && log.Lines.Count > 0)?.Format();

@@ -35,9 +35,6 @@ public sealed partial class MainWindow
     private readonly Dictionary<string, string> teraSelections = new();
     private int evStatIndex;
     private int evTrainingQuantity = 1;
-    private string shopSearch = string.Empty;
-    private int shopPage;
-    private int shopBuyQuantity = 1;
 
     private PokemonBuildDto? GetPokemonBuild(PokemonDto pokemon)
     {

@@ -118,28 +118,21 @@ public sealed partial class MainWindow
 
     private async Task BeginFactoryDraft(string bracket)
     {
-        var refresh = true;
-        try { await InSession(plugin.Api.DraftFactory(bracket)); battle = null; }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
+        trainer!.FrontierRun = await InSession(plugin.Api.DraftFactory(bracket));
+        trainer.ActiveTrainerBattle = battle = null;
+        refreshState.Trainer();
         SetStatus("Factory draft saved. Choose three rentals in lead order.");
     }
     private async Task ConfirmFactory(string[] ids)
     {
         var run = trainer!.FrontierRun!;
-        var refresh = true;
-        try { battle = await InSession(plugin.Api.PickFactory(run.Id, run.Revision, ids)); }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
+        ApplyCheckpointBattle(await InSession(plugin.Api.PickFactory(run.Id, run.Revision, ids)));
         SetStatus("Factory team saved. Your first fight is ready.");
     }
     private async Task ContinueFactory(string outgoing, string incoming)
     {
         var run = trainer!.FrontierRun!;
-        var refresh = true;
-        try { battle = await InSession(plugin.Api.NextFrontier(run.Id, run.Revision, outgoing, incoming)); }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
+        ApplyCheckpointBattle(await InSession(plugin.Api.NextFrontier(run.Id, run.Revision, outgoing, incoming)));
         SetStatus("Rental swap saved. Your team is fully healed.");
     }
 }

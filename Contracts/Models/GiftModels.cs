@@ -15,6 +15,7 @@ public sealed class GiftReceiptDto
     public string Reference { get; set; } = string.Empty;
     public string CreatedAt { get; set; } = string.Empty;
     public string? SeenAt { get; set; }
+    public bool Pending { get; set; }
     public PokemonDto Pokemon { get; set; } = new();
     public string? PokemonId { get; set; }
     public int? PartySlot { get; set; }

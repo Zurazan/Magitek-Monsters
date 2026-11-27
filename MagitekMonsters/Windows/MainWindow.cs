@@ -67,14 +67,12 @@ public sealed partial class MainWindow : Window, IDisposable
     private int starterGeneration = 1;
     private bool confirmStarter;
     private int targetIndex;
-    private int shopCategoryIndex = -1;
     private int pveTierIndex;
     private int pvpModeIndex = 1;
     private int mainSection;
     private string pokedexSearch = string.Empty;
     private int pokedexPage;
     private string? selectedPokedexSpecies;
-    private string storageSearch = string.Empty;
     private readonly HashSet<string> pvpTeamIds = [];
     private volatile int onlineTrainers = -1;
     private uint loadedTerritory = uint.MaxValue;
@@ -341,12 +339,15 @@ public sealed partial class MainWindow : Window, IDisposable
                 serverPvpRefreshRequested = false;
                 BackgroundPvp();
             }
-            else if (battle?.Status != "active" && pvpStatus?.Battle?.Status != "active" && refreshState.TakeTrainer())
+            else if ((battle?.Status != "active" || battle.LeagueId is not null || battle.FrontierId is not null)
+                && pvpStatus?.Battle?.Status != "active" && refreshState.TakeTrainer())
             {
                 BackgroundTrainer();
             }
             else if (IsOpen && mainSection == 5 && shopRefreshRequested)
                 Run(RefreshShop, "Refreshing shop...");
+            else if (plugin.Connection.State == ServerConnectionState.Connected && ShouldRefreshPokedex(DateTimeOffset.UtcNow))
+                BackgroundPokedex();
             else if (plugin.Connection.State == ServerConnectionState.Connected && (tradeRefreshRequested || DateTimeOffset.UtcNow >= nextTradePollAt))
                 BackgroundTrading();
             else if (plugin.Connection.State == ServerConnectionState.Connected && (friendsRefreshRequested || friendPages.HasPending || DateTimeOffset.UtcNow >= nextFriendsPollAt))
@@ -481,6 +482,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (ImGui.Button($"{label}##MainSection{section}", new Vector2(itemWidth, height)))
         {
             if (!selected && section == 4 && pvpStatus is not null) serverPvpRefreshRequested = true;
+            if (!selected && section == 12 && raidBoard is null) raidRefreshRequested = true;
             if (!selected && section == 8) OpenFrontier();
             else mainSection = section;
         }
@@ -626,6 +628,11 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         if (trainer is null)
             return;
+        if (pvpRecoveryPending)
+        {
+            ImGui.TextDisabled("Restoring online battle status...");
+            return;
+        }
         if (pvpStatus is null)
         {
             ImGui.TextDisabled("Loading PvP status...");
@@ -663,6 +670,7 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         DrawSectionHeader("POKÉ MART", "Items and Pokémon exchanges");
         DrawCurrencyGuideShortcut();
+        DrawPendingShopPurchase();
         ImGui.Spacing();
         if (ImGui.GetContentRegionAvail().X < 620 * CompanionScale)
         {
@@ -1059,20 +1067,6 @@ public sealed partial class MainWindow : Window, IDisposable
         SetStatus(lead is null ? "Party order updated." : $"Party order updated. {lead.Nickname} will lead.");
     }
 
-    private async Task BuyItem(string itemId, int quantity = 1)
-    {
-        trainer = await InSession(plugin.Api.BuyItem(itemId, quantity, disposeCancellation.Token));
-        SetStatus("Purchase complete.");
-    }
-
-    private async Task RedeemPrizePokemon(string species)
-    {
-        var joinsParty = trainer is not null && trainer.Party.Count < 6;
-        trainer = await InSession(plugin.Api.RedeemPrizePokemon(species));
-        await InSession(LoadPokedexCatalog());
-        SetStatus(joinsParty ? $"{species} joined your party!" : $"{species} was sent to PC storage.");
-    }
-
     private async Task UseTrainingItem(string pokemonId, string itemId, string? stat, int quantity = 1)
     {
         trainer = await InSession(plugin.Api.UseTrainingItem(pokemonId, itemId, stat, quantity));
@@ -1142,6 +1136,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1);
         SetStatus(battle.Status == "lost" && battle.CurrencyLost > 0 ? $"Defeat. Lost ¥ {battle.CurrencyLost:N0}."
+            : battle.OpponentRetired && battle.Status != "active" ? "Battle cancelled. No penalty was applied."
             : battle.Status != "active" ? $"Battle ended: {battle.Status}."
             : battle.Request is not null && battle.Request.Wait != true ? "Choose your next action."
             : "Resolving the turn...");
@@ -1236,11 +1231,10 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
         refreshState.TakeTrainer();
-        var previousCaught = trainer?.Pokedex.Caught ?? -1;
-        trainer = await InSession(plugin.Api.GetMe());
+        var next = await InSession(plugin.Api.GetMe());
+        RequestPokedexIfChanged(trainer?.Pokedex, next.Pokedex);
+        trainer = next;
         AcknowledgeBattleResultTrainer();
-        if (trainer.Pokedex.Caught != previousCaught)
-            await InSession(LoadPokedexCatalog());
         SetStatus("Trainer data refreshed.", quiet: true);
     }
 
@@ -1279,6 +1273,11 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             await RecoverAction(false);
         }
+        catch (ApiException exception) when (exception.Code is "stale_league_choice" or "stale_frontier_choice" or "league_not_found" or "frontier_not_found")
+        {
+            refreshState.Trainer();
+            SetStatus(exception.Message, true);
+        }
         catch (ApiException exception) when (exception.StatusCode == 429)
         {
             if (exception.Code == "search_cooldown" && exception.RetryAfterSeconds is { } seconds) searchCooldown.Observe(seconds);
@@ -1304,19 +1303,14 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void Disconnect(bool leavePvp = true)
     {
-        Task? cleanup = !leavePvp ? null : pvpStatus?.State == "queued"
-            ? plugin.Api.LeavePvpQueue()
-            : pvpStatus?.Battle?.Status == "active"
-                ? plugin.Api.ForfeitPvpBattle(pvpStatus.Battle.Id)
-                : null;
-        if (cleanup is not null)
+        if (leavePvp)
         {
-            _ = cleanup.ContinueWith(task => Plugin.Log.Warning(task.Exception, "Magitek Monsters could not cleanly leave PvP during disconnect"),
+            _ = plugin.Api.Disconnect(pvpStatus).ContinueWith(task => Plugin.Log.Warning(task.Exception, "Magitek Monsters could not revoke the server session"),
                 TaskContinuationOptions.OnlyOnFaulted);
         }
+        else plugin.Api.Logout();
         CancelBackgroundRefresh();
         refreshState.Reset();
-        plugin.Api.Logout();
         sessionResponses.Invalidate();
         foregroundGeneration++;
         busy = false;
@@ -1328,9 +1322,9 @@ public sealed partial class MainWindow : Window, IDisposable
         travelPartyKey = string.Empty;
         plugin.Connection.Stop();
         connectionSyncGeneration = 0;
+        pvpRecoveryPending = false;
         trainer = null;
         selectedPartyPokemon = null;
-        selectedStoragePokemon = null;
         releasePokemonId = null;
         requestRelease = false;
         pendingPurchase = null;
@@ -1356,6 +1350,8 @@ public sealed partial class MainWindow : Window, IDisposable
         eventPage = 0;
         selectedEvent = selectedEventForm = null;
         pokedexCatalog.Clear();
+        pokedexRefreshRequested = false;
+        nextPokedexRefreshAt = DateTimeOffset.MinValue;
         selectedPokedexSpecies = null;
         habitat = null;
         battle = null;
@@ -1407,7 +1403,8 @@ public sealed partial class MainWindow : Window, IDisposable
             "faint" when parts.Length > 2 => $"{BattleActor(parts[2])} fainted!",
             "-supereffective" when parts.Length > 2 => "It's super effective!",
             "-resisted" when parts.Length > 2 => "It's not very effective...",
-            "-miss" when parts.Length > 2 => $"{BattleActor(parts[2])} avoided the attack.",
+            "-miss" when parts.Length > 3 && parts[3] != parts[2] && !string.IsNullOrWhiteSpace(parts[3]) => $"{BattleActor(parts[3])} avoided the attack.",
+            "-miss" => "The attack missed.",
             "-crit" when parts.Length > 2 => "A critical hit!",
             "-status" when parts.Length > 3 => $"{BattleActor(parts[2])} is now {parts[3].ToUpperInvariant()}.",
             "-curestatus" when parts.Length > 3 => $"{BattleActor(parts[2])} recovered from {parts[3].ToUpperInvariant()}.",
@@ -1566,7 +1563,15 @@ public sealed partial class MainWindow : Window, IDisposable
                 var revision = update.RootElement.TryGetProperty("revision", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? (int?)number : null;
                 var change = update.RootElement.TryGetProperty("changeId", out var receipt) && receipt.ValueKind == JsonValueKind.String ? receipt.GetString() : null;
                 if (eventName == "battle.updated") { if (id is not null) refreshState.Battle(id, revision); }
-                else refreshState.Trainer(id, revision, change);
+                else
+                {
+                    refreshState.Trainer(id, revision, change);
+                    if (update.RootElement.TryGetProperty("reason", out var reason) && reason.ValueKind == JsonValueKind.String)
+                    {
+                        if (reason.ValueEquals("pvp-season-started")) serverPvpRefreshRequested = true;
+                        if (reason.ValueEquals("recurring-event-updated")) backgroundResults.Enqueue(() => nextEventRefresh = DateTimeOffset.MinValue);
+                    }
+                }
             }
             catch (JsonException) { refreshState.Trainer(); }
         }

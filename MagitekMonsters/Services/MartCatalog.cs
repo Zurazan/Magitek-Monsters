@@ -26,22 +26,33 @@ public static class MartCatalog
 
     public static List<ShopItemDto> Filter(IEnumerable<ShopItemDto> items, bool tokens, string category, string search)
     {
-        var words = search.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var words = SearchWords(search);
         return items.Where(item => !item.BpOnly && (tokens ? item.Currency == "rank-tokens" : item.Currency is "yen" or "")
             && (tokens || category.Length == 0 || BagInventory.Pocket(item) == category)
-            && words.All(word => item.Name.Contains(word, StringComparison.OrdinalIgnoreCase)
-                || item.Description.Contains(word, StringComparison.OrdinalIgnoreCase)
-                || (item.Move?.Contains(word, StringComparison.OrdinalIgnoreCase) ?? false))).ToList();
+            && Matches(words, item.Name, item.Description, item.Move)).ToList();
     }
 
-    public static MartQuote Quote(ShopItemDto item, int owned, int requested, long balance)
+    public static string[] SearchWords(string search) => search.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    public static bool Matches(string[] words, string name, string description, string? extra = null) =>
+        words.All(word => name.Contains(word, StringComparison.OrdinalIgnoreCase)
+            || description.Contains(word, StringComparison.OrdinalIgnoreCase)
+            || extra?.Contains(word, StringComparison.OrdinalIgnoreCase) == true);
+
+    public static int Capacity(int? maxOwned, int owned, int maximumQuantity) => maxOwned is int maximum
+        ? (int)Math.Clamp((long)maximum - Math.Max(0, owned), 0, maximumQuantity) : maximumQuantity;
+
+    public static MartQuote Quote(ShopItemDto item, int owned, int requested, long balance) =>
+        Quote(item.Price, item.MaxOwned, owned, requested, balance, 999);
+
+    public static MartQuote Quote(int price, int? maxOwned, int owned, int requested, long balance, int maximumQuantity)
     {
-        var remaining = item.MaxOwned is int maximum ? Math.Clamp((long)maximum - Math.Max(0, owned), 0, 999) : 999;
-        var quantity = (int)Math.Min(Math.Clamp(requested, 1, 999), remaining);
-        var total = (long)Math.Max(0, item.Price) * quantity;
+        var remaining = Capacity(maxOwned, owned, maximumQuantity);
+        var quantity = Math.Min(Math.Clamp(requested, 1, maximumQuantity), remaining);
+        var total = (long)Math.Max(0, price) * quantity;
         var funds = Math.Max(0, balance);
         return new(quantity, total, Math.Max(0, funds - total), Math.Max(0, total - funds), remaining == 0,
-            quantity > 0 && item.Price >= 0 && total <= funds);
+            quantity > 0 && price >= 0 && total <= funds);
     }
 
     public static MartGrid Layout(float width, float height, float scale, float line, float gap)

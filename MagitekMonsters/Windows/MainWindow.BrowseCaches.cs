@@ -24,10 +24,6 @@ public sealed partial class MainWindow
     private int cachedObjectiveState;
     private List<CollectionObjectiveDto>? cachedObjectives;
     private Dictionary<string, CollectionObjectiveDto[]>? objectiveTracks;
-    private List<PokemonDto>? overviewSource;
-    private Dictionary<int, List<PokemonDto>>? overviewGroups;
-    private bool overviewEmpty;
-    private int[]? overviewBoxes;
     private TrainerSnapshotDto? comparisonTrainer;
     private List<PokemonDto>? comparisonPokemon;
     private TrainerSnapshotDto? onlineOwnedTrainer;
@@ -129,23 +125,6 @@ public sealed partial class MainWindow
             ? goal.Id[..suffix] : goal.Id;
     }
 
-    private (Dictionary<int, List<PokemonDto>> Groups, int[] Boxes) GetStorageOverview(List<PokemonDto> filtered)
-    {
-        if (overviewGroups is null || !ReferenceEquals(overviewSource, filtered))
-        {
-            overviewSource = filtered;
-            overviewGroups = filtered.GroupBy(pokemon => pokemon.BoxNumber).ToDictionary(group => group.Key, group => group.ToList());
-            overviewBoxes = null;
-        }
-        if (overviewBoxes is null || overviewEmpty != storageShowEmptyBoxes)
-        {
-            overviewEmpty = storageShowEmptyBoxes;
-            overviewBoxes = Enumerable.Range(1, StorageBrowser.BoxCount)
-                .Where(number => overviewEmpty || overviewGroups.ContainsKey(number)).ToArray();
-        }
-        return (overviewGroups, overviewBoxes);
-    }
-
     private List<PokemonDto> GetComparisonPokemon()
     {
         if (comparisonPokemon is not null && ReferenceEquals(comparisonTrainer, trainer)) return comparisonPokemon;
@@ -159,12 +138,14 @@ public sealed partial class MainWindow
         ResetDetailCaches();
         ResetStorageSelectionCache();
         dexDirectoryTrainer = comparisonTrainer = null; dexDirectoryCatalog = null; dexDirectory = null;
-        objectiveSource = cachedObjectives = null; overviewSource = comparisonPokemon = null;
+        objectiveSource = cachedObjectives = null;
+        comparisonPokemon = null;
         objectiveTracks = null;
         objectiveCategory = objectiveState = objectivePage = 0;
         expandedObjective = null;
         expandFirstObjective = true;
-        overviewGroups = null; overviewBoxes = null;
+        storageBrowser = null;
+        storageInventory = null;
         onlineOwnedTrainer = savedTeamsTrainer = null;
         onlineOwned = onlineCandidateSource = onlineCandidates = null;
         savedTeamViews = null;

@@ -37,9 +37,7 @@ public sealed partial class MainWindow
         return storageSearchPreferences;
     }
 
-    private StorageFilter CaptureStorageSearch() => StorageSearches.Normalize(new(storageSearch, 0,
-        storageType > 0 && storageType <= ChallengeTypes.Length ? ChallengeTypes[storageType - 1] : null,
-        storageGeneration, storageSort, storageFavorites, storageShiny, storageDuplicatesOnly));
+    private StorageFilter CaptureStorageSearch() => StorageSearches.Normalize(StorageView.Filter);
 
     private void ApplyStorageSearch(string owner, string? id)
     {
@@ -47,13 +45,8 @@ public sealed partial class MainWindow
         var preferences = LocalStorageSearches();
         var saved = id is null ? null : preferences.Searches.FirstOrDefault(search => search.Id == id);
         if (id is not null && saved is null) return;
-        var filter = StorageSearches.Normalize(saved?.Filter);
-        storageSearch = filter.Search;
-        storageType = filter.Type is null ? 0 : Array.IndexOf(ChallengeTypes, filter.Type) + 1;
-        storageGeneration = filter.Generation; storageSort = filter.Sort;
-        storageFavorites = filter.Favorites; storageShiny = filter.Shiny; storageDuplicatesOnly = filter.Duplicates;
+        StorageView.SetFilter(StorageSearches.Normalize(saved?.Filter));
         activeStorageSearch = id ?? string.Empty;
-        ShowStorageOverview();
         SetStatus(saved is null ? "PC search and filters reset." : $"Loaded saved search: {saved.Name}.");
     }
 
@@ -130,7 +123,7 @@ public sealed partial class MainWindow
         ImGui.BeginDisabled(preferences.Searches.Count >= StorageSearches.MaximumSearches);
         if (DrawStorageToolbarButton("Save search...", CompanionAccent)) BeginStorageSearchEdit(null);
         ImGui.EndDisabled();
-        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip($"Save the current search, filters and sort order across all boxes. Up to {StorageSearches.MaximumSearches} saved searches per trainer on this PC.");
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip($"Save the current search and filters across all boxes. Up to {StorageSearches.MaximumSearches} saved searches per trainer on this PC.");
         StorageSameLine(right, ImGui.CalcTextSize("Manage...").X + ImGui.GetStyle().FramePadding.X * 2);
         ImGui.BeginDisabled(preferences.Searches.Count == 0);
         if (DrawStorageToolbarButton("Manage...", CompanionMuted)) { storageSearchLibraryOwner = trainer!.User.Id; requestStorageSearchLibrary = true; }

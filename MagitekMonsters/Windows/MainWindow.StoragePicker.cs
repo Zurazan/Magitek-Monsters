@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
@@ -10,25 +8,16 @@ namespace MagitekMonsters.Windows;
 
 public sealed partial class MainWindow
 {
-    private static readonly StorageFilter DefaultStoragePickerFilter = new("", 0, null, 0, 0, false, false, false);
-
     private enum StoragePickerMode { DirectTrade, WonderTrade, Raid }
 
-    private sealed class StoragePicker(StoragePickerMode mode, string? activityId, PokemonDto? pokemon, int box)
+    private sealed class StoragePicker(StoragePickerMode mode, string? activityId, PokemonStorageBrowser browser)
     {
         public StoragePickerMode Mode { get; } = mode;
         public string? ActivityId { get; } = activityId;
         public FriendDenInviteDto? RaidInvite { get; init; }
         public int MinimumLevel { get; init; }
-        public PokemonDto? Pokemon = pokemon;
-        public int Box = box;
-        public StorageFilter Filter = DefaultStoragePickerFilter;
+        public PokemonStorageBrowser Browser { get; } = browser;
         public bool OpenRequested = true;
-        public bool ScrollToTop = true;
-        public TrainerSnapshotDto? Source;
-        public StorageFilter? AppliedFilter;
-        public Dictionary<int, List<PokemonDto>> Groups = [];
-        public int[] Boxes = [];
     }
 
     private void OpenTradePicker(bool wonder)
@@ -40,27 +29,24 @@ public sealed partial class MainWindow
 
     private StoragePicker CreateStoragePicker(StoragePickerMode mode, string? activityId, PokemonDto? pokemon, FriendDenInviteDto? raidInvite = null, int minimumLevel = 0)
     {
-        var box = pokemon is { PartySlot: null, BoxNumber: > 0 } ? pokemon.BoxNumber : Math.Max(1, storageBox);
-        return new(mode, activityId, pokemon, box) { RaidInvite = raidInvite, MinimumLevel = minimumLevel };
+        ObserveStorageOwner();
+        var browser = new PokemonStorageBrowser(DrawPokemonIconAt, DrawStoragePokemonDetails, GetPokemonAlerts,
+            () => CollectionEditRestriction, compact: true)
+        {
+            Restriction = mode == StoragePickerMode.Raid
+                ? candidate => RaidPokemonRestriction(candidate, minimumLevel)
+                : TradeOfferRestriction,
+            SelectedId = pokemon?.Id
+        };
+        if (storageInventory is { } source) browser.Bind(source);
+        browser.OpenBox(pokemon is { PartySlot: null, BoxNumber: > 0 } ? pokemon.BoxNumber : Math.Max(1, StorageView.Box));
+        return new(mode, activityId, browser) { RaidInvite = raidInvite, MinimumLevel = minimumLevel };
     }
 
-    private void RefreshStoragePicker(StoragePicker picker, TrainerSnapshotDto owner)
+    private void RefreshStoragePicker(StoragePicker picker)
     {
         ObserveStorageOwner();
-        if (!ReferenceEquals(picker.Source, owner))
-        {
-            picker.Source = owner;
-            if (picker.Pokemon is { } selected)
-                picker.Pokemon = owner.Party.Concat(owner.Storage).FirstOrDefault(pokemon => pokemon.Id == selected.Id);
-            picker.AppliedFilter = null;
-        }
-        var filter = picker.Filter;
-        if (picker.AppliedFilter == filter) return;
-        picker.AppliedFilter = filter;
-        picker.Groups = filter == DefaultStoragePickerFilter ? storageBoxContents
-            : StorageBrowser.Filter(owner.Storage, storageDuplicates, filter)
-                .GroupBy(pokemon => pokemon.BoxNumber).ToDictionary(group => group.Key, group => group.ToList());
-        picker.Boxes = picker.Groups.Keys.Order().ToArray();
+        if (storageInventory is { } source) picker.Browser.Bind(source);
     }
 
     private void DrawStoragePicker(ref StoragePicker? state, string title)
@@ -72,7 +58,7 @@ public sealed partial class MainWindow
         ImGui.SetNextWindowSize(new Vector2(Math.Min(970 * scale, work.X * .94f), Math.Min(690 * scale, work.Y * .94f)), ImGuiCond.Always);
         var open = true;
         if (!BeginCenteredModal(title, ref open, FixedBattlePanel | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoResize)) return;
-        if (state is not { } picker || trainer is not { } owner)
+        if (state is not { } picker || trainer is null)
         {
             ImGui.CloseCurrentPopup();
             ImGui.EndPopup();
@@ -82,119 +68,29 @@ public sealed partial class MainWindow
         if (picker.Mode == StoragePickerMode.Raid)
             ImGui.TextWrapped(picker.MinimumLevel > 0 ? $"Choose a Pokémon at Lv. {picker.MinimumLevel} or higher."
                 : "Choose one Pokémon. Its level syncs to the den.");
-        var search = picker.Filter.Search;
-        var clearWidth = ImGui.CalcTextSize("Clear").X + 2 * ImGui.GetStyle().FramePadding.X;
-        ImGui.SetNextItemWidth(Math.Max(1, ImGui.GetContentRegionAvail().X - clearWidth - ImGui.GetStyle().ItemSpacing.X));
-        var searchChanged = ImGui.InputTextWithHint("##StoragePickerSearch", "Search PC Storage...", ref search, 80);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Search by species, nickname, move or ability.");
-        ImGui.SameLine();
-        ImGui.BeginDisabled(search.Length == 0);
-        if (DrawAccentSmallButton("Clear", CompanionMuted))
-        {
-            search = "";
-            searchChanged = true;
-        }
-        ImGui.EndDisabled();
-        if (searchChanged) SetStoragePickerFilter(picker, picker.Filter with { Search = search });
+        RefreshStoragePicker(picker);
+        var browser = picker.Browser;
+        browser.DrawSearch();
         var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
-        if (DrawAccentSmallButton("All boxes", CompanionAccent)) BrowseStorageBox(0, picker);
+        browser.DrawAllBoxes();
         if (picker.Mode is StoragePickerMode.WonderTrade or StoragePickerMode.Raid)
-        {
-            ImGui.SameLine();
-            DrawStoragePickerFilters(picker, work.X);
-        }
-        RefreshStoragePicker(picker, owner);
+            browser.DrawFilters(right, work.X);
         StorageSameLine(right, 180 * scale);
-        DrawStorageBoxJump(picker.Box, picker);
+        browser.DrawBoxJump();
 
         var footerHeight = 32 * scale + ImGui.GetTextLineHeightWithSpacing() + 3 * ImGui.GetStyle().ItemSpacing.Y + 4 * scale;
         var availableWidth = ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ScrollbarSize;
         var bodyFlags = StorageLayout.Measure(availableWidth, scale).SideBySide
             ? ImGuiWindowFlags.None : ImGuiWindowFlags.AlwaysVerticalScrollbar;
         if (ImGui.BeginChild("StoragePickerBody", new Vector2(0, -footerHeight), false, bodyFlags))
-            DrawStoragePickerBody(picker);
+            browser.DrawBody(afterDetails: DrawPickerHeldItem);
         ImGui.EndChild();
         DrawStoragePickerFooter(picker);
         ImGui.EndPopup();
     }
 
-    private void SetStoragePickerFilter(StoragePicker picker, StorageFilter filter)
-    {
-        picker.Filter = filter;
-        BrowseStorageBox(0, picker);
-    }
-
-    private void DrawStoragePickerFilters(StoragePicker picker, float workWidth)
-    {
-        var filter = picker.Filter;
-        var favorites = filter.Favorites;
-        var shiny = filter.Shiny;
-        var duplicates = filter.Duplicates;
-        var type = Array.IndexOf(ChallengeTypes, filter.Type) + 1;
-        var generation = filter.Generation;
-        var count = (favorites ? 1 : 0) + (shiny ? 1 : 0) + (duplicates ? 1 : 0)
-            + (type > 0 ? 1 : 0) + (generation > 0 ? 1 : 0);
-        if (DrawAccentSmallButton(count > 0 ? $"Filters ({count})" : "Filters", count > 0 ? CompanionAccent : CompanionMuted))
-            ImGui.OpenPopup("StoragePickerFilters");
-        ImGui.SetNextWindowSize(new Vector2(Math.Min(330 * CompanionScale, workWidth * .9f), 0), ImGuiCond.Appearing);
-        if (!ImGui.BeginPopup("StoragePickerFilters")) return;
-        if (DrawStorageFilterOptions(ref favorites, ref shiny, ref duplicates, ref type, ref generation))
-            SetStoragePickerFilter(picker, filter with { Favorites = favorites, Shiny = shiny, Duplicates = duplicates,
-                Type = type > 0 ? ChallengeTypes[type - 1] : null, Generation = generation });
-        if (DrawAccentSmallButton("Reset filters", CompanionMuted))
-            SetStoragePickerFilter(picker, DefaultStoragePickerFilter with { Search = filter.Search });
-        ImGui.EndPopup();
-    }
-
-    private void DrawStoragePickerBody(StoragePicker picker)
-    {
-        var scale = CompanionScale;
-        var layout = StorageLayout.Measure(ImGui.GetContentRegionAvail().X, scale);
-        if (picker.Box > 0 && picker.ScrollToTop) { ImGui.SetScrollY(0); picker.ScrollToTop = false; }
-        if (!layout.PartyRail) DrawStoragePartyTray(picker);
-        var cellHeight = Math.Min(layout.CellHeight, 62 * scale);
-        var overview = picker.Box == 0;
-        var height = overview ? Math.Max(150 * scale, ImGui.GetContentRegionAvail().Y - 6 * scale)
-            : StorageLayout.GridHeight(cellHeight, ImGui.GetTextLineHeight(), ImGui.GetStyle().ItemSpacing.Y, scale);
-        if (layout.PartyRail)
-        {
-            DrawStoragePartyRail(layout.PartyWidth, height, picker);
-            ImGui.SameLine(0, 10 * scale);
-        }
-        ImGui.BeginGroup();
-        if (overview)
-            DrawStorageThumbnails(picker.Groups, picker.Boxes, layout.BoxWidth, height, picker);
-        else
-        {
-            var matches = picker.Groups.GetValueOrDefault(picker.Box) ?? [];
-            DrawStorageBoxGrid(matches, layout.BoxWidth, height, cellHeight, picker);
-            DrawStorageBoxShortcuts(layout.BoxWidth, matches.Count == 0, picker);
-        }
-        ImGui.EndGroup();
-        if (layout.SideBySide) ImGui.SameLine(0, 10 * scale); else ImGui.Spacing();
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10 * scale));
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, CompanionSurface);
-        var previewHeight = picker.Pokemon is null ? height : Math.Max(height, 330 * scale);
-        if (ImGui.BeginChild("StoragePickerPreview", new Vector2(layout.DetailWidth, previewHeight), true))
-        {
-            if (picker.Pokemon is { } pokemon)
-            {
-                ImGui.TextWrapped(StoragePickerLocation(pokemon));
-                DrawStoragePokemonDetails(pokemon);
-                ImGui.TextWrapped($"Held item: {TradingItemName(pokemon.HeldItem)}");
-            }
-            else ImGui.TextWrapped("Select a Pokémon to preview it.");
-        }
-        ImGui.EndChild();
-        ImGui.PopStyleColor();
-        ImGui.PopStyleVar();
-    }
-
-    private string StoragePickerLocation(PokemonDto pokemon) => pokemon.PartySlot is int slot
-        ? $"Party slot {slot}" : $"{BoxLabel(pokemon.BoxNumber)} / Slot {pokemon.BoxSlot}";
-
-    private string? StoragePickerPokemonRestriction(StoragePicker picker, PokemonDto? pokemon) =>
-        picker.Mode == StoragePickerMode.Raid ? RaidPokemonRestriction(pokemon, picker.MinimumLevel) : TradeOfferRestriction(pokemon);
+    private void DrawPickerHeldItem(PokemonDto pokemon) =>
+        ImGui.TextWrapped($"Held item: {TradingItemName(pokemon.HeldItem)}");
 
     private string? StoragePickerRestriction(StoragePicker picker)
     {
@@ -211,13 +107,13 @@ public sealed partial class MainWindow
             if (invite.ExpiresAt <= DateTimeOffset.UtcNow) return "This den invitation expired.";
             if (CollectionEditRestriction is not null) return "Finish your current activity before joining.";
         }
-        return StoragePickerPokemonRestriction(picker, picker.Pokemon);
+        return picker.Browser.Restriction!(picker.Browser.Selected);
     }
 
     private void DrawStoragePickerFooter(StoragePicker picker)
     {
         var reason = StoragePickerRestriction(picker);
-        var pokemon = picker.Pokemon;
+        var pokemon = picker.Browser.Selected;
         var text = reason ?? (pokemon!.Nickname.Length > 0 ? pokemon.Nickname : pokemon.DisplaySpecies);
         DrawClippedText(text, ImGui.GetContentRegionAvail().X, reason is null ? CompanionAccent : pokemon is null ? CompanionMuted : PokemonOrange);
         var (label, accent) = picker.Mode switch
@@ -238,7 +134,9 @@ public sealed partial class MainWindow
 
     private bool ApplyStoragePickerChoice(StoragePicker picker)
     {
-        if (picker.Pokemon is not { } pokemon || StoragePickerRestriction(picker) is not null) return false;
+        if (trainer is null) return false;
+        RefreshStoragePicker(picker);
+        if (picker.Browser.Selected is not { } pokemon || StoragePickerRestriction(picker) is not null) return false;
         if (picker.RaidInvite is { } invite) JoinInvitedDen(invite, pokemon);
         else if (picker.Mode == StoragePickerMode.Raid) ChooseRaidPokemon(pokemon);
         else if (picker.Mode == StoragePickerMode.WonderTrade) wonderPokemonId = pokemon.Id;

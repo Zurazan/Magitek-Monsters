@@ -48,7 +48,9 @@ public sealed partial class MainWindow
         var width = ImGui.GetContentRegionAvail().X;
         var label = current.Kind == "wild" ? "WILD ENCOUNTER" : current.FrontierId is not null ? "BATTLE FRONTIER" : current.LeagueId is not null ? "LEAGUE RUN" : "TRAINER BATTLE";
         DrawClippedText($"{label} / RESULTS", width, CompanionAccent);
-        ImGui.TextColored(current.Status is "won" or "caught" ? PokemonGreen : current.Status == "lost" ? PokemonRed : PokemonOrange, BattleResultPresentation.Outcome(current.Status));
+        ImGui.TextColored(current.Status is "won" or "caught" ? PokemonGreen : current.Status == "lost" ? PokemonRed : PokemonOrange,
+            current.OpponentRetired ? "Battle cancelled" : BattleResultPresentation.Outcome(current.Status));
+        if (current.OpponentRetired && current.Error is not null) ImGui.TextWrapped(current.Error);
         if (current.Result?.FirstClear == true) { ImGui.SameLine(); ImGui.TextColored(PokemonGreen, "First clear"); }
         DrawClippedText($"{current.OpponentName} / {current.Turn} turns", width, CompanionMuted);
         ImGui.Spacing();

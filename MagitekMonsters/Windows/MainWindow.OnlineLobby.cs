@@ -90,12 +90,11 @@ public sealed partial class MainWindow
         if (format is not null)
         {
             var owned = OnlineOwnedPokemon();
-            var party = owned.Where(pokemon => pokemon.PartySlot is not null).ToList();
             SynchronizeOnlineRoster(ids, owned, format.MaxTeamSize);
             var initialized = onlineView == 2 ? friendlyTeamInitialized : onlineTeamInitialized;
             if (!initialized && owned.Count > 0)
             {
-                foreach (var pokemon in party.Take(format.MaxTeamSize)) ids.Add(pokemon.Id);
+                AddOnlineParty(owned, ids, format.MaxTeamSize);
                 if (onlineView == 2) friendlyTeamInitialized = true; else onlineTeamInitialized = true;
             }
             OnlineText($"REGISTERED TEAM / {ids.Count} of {format.MaxTeamSize}", CompanionAccent);
@@ -103,13 +102,13 @@ public sealed partial class MainWindow
             ImGui.BeginDisabled(CollectionLocked);
             if (DrawAccentSmallButton("Choose Pokémon", CompanionAccent)) OpenOnlineRosterPicker(format);
             SameLineIfFits("Use party", right);
-            if (DrawAccentSmallButton("Use party", CompanionAccent)) { ids.Clear(); foreach (var pokemon in party.Take(format.MaxTeamSize)) ids.Add(pokemon.Id); pvpTeamError = string.Empty; }
+            if (DrawAccentSmallButton("Use party", CompanionAccent)) { ids.Clear(); AddOnlineParty(owned, ids, format.MaxTeamSize); pvpTeamError = string.Empty; }
             SameLineIfFits("Clear", right);
             if (DrawAccentSmallButton("Clear", CompanionMuted)) { ids.Clear(); pvpTeamError = string.Empty; }
             var columns = Math.Clamp((int)(ImGui.GetContentRegionAvail().X / (220 * scale)), 1, 3);
             if (ImGui.BeginTable("OnlinePartyGrid", columns, ImGuiTableFlags.SizingStretchSame))
             {
-                foreach (var pokemon in PvpRoster.Selected(owned, ids))
+                foreach (var pokemon in SelectedOnlinePokemon(ids))
                 {
                     ImGui.TableNextColumn();
                     var selected = ids.Contains(pokemon.Id);
@@ -125,6 +124,12 @@ public sealed partial class MainWindow
         ImGui.Spacing();
         DrawOnlineLobbyFooter(format, ids, season);
         DrawOnlineRosterPicker();
+    }
+
+    private static void AddOnlineParty(List<PokemonDto> owned, HashSet<string> ids, int maximum)
+    {
+        for (var slot = 0; slot < Math.Min(owned.Count, maximum) && owned[slot].PartySlot is not null; slot++)
+            ids.Add(owned[slot].Id);
     }
 
     private bool DrawOnlinePartyCard(PokemonDto pokemon, PvpFormatDto format, bool selected, bool canPick)

@@ -1,10 +1,11 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
+using MagitekMonsters.Services;
 
 namespace MagitekMonsters.Windows;
 
@@ -13,7 +14,8 @@ public sealed partial class MainWindow
     private bool FrontierBusy => trainer?.FrontierRun?.Status is "active" or "between";
     private List<FrontierRentalDto> frontierRentals = [];
     private Dictionary<string, FrontierPayoutDto> frontierPayouts = [];
-    private readonly ConcurrentDictionary<string, string> frontierRequests = new();
+    private sealed record FrontierPurchase(string Owner, string RewardId, string Name, int Quantity, string RequestId);
+    private FrontierPurchase? pendingFrontierPurchase;
     private bool openFrontierRuns;
     private bool openBpExchange;
     private string? shownFrontierRunId;
@@ -37,10 +39,7 @@ public sealed partial class MainWindow
         factoryViewKey = string.Empty;
         factoryPicks.Clear();
         factorySwapOut = factorySwapIn = string.Empty;
-        frontierRewardGroup = FrontierRewardGroup.Exchange;
-        ResetFrontierRewardList();
-        frontierRewardSearch = paradoxSearch = string.Empty;
-        paradoxEra = 0;
+        ResetFrontierRewards();
     }
 
     private void DrawFrontier()
@@ -81,7 +80,6 @@ public sealed partial class MainWindow
             {
                 openBpExchange = false;
                 frontierRewardGroup = FrontierRewardGroup.Exchange;
-                ResetFrontierRewardList();
                 ImGui.SetScrollY(0);
             }
             DrawFrontierRewards(current);
@@ -110,48 +108,72 @@ public sealed partial class MainWindow
 
     private async Task EnterFrontier(string bracket, string mode, string rentalId, string[] ids)
     {
-        var refresh = true;
-        try { battle = await InSession(plugin.Api.StartFrontier(bracket, mode, rentalId, ids)); }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
+        ApplyCheckpointBattle(await InSession(plugin.Api.StartFrontier(bracket, mode, rentalId, ids)));
         SetStatus("Frontier run saved. Choose your action.");
     }
     private async Task ContinueFrontier()
     {
         var run = trainer!.FrontierRun!;
-        var refresh = true;
-        try { battle = await InSession(plugin.Api.NextFrontier(run.Id, run.Revision)); }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
+        ApplyCheckpointBattle(await InSession(plugin.Api.NextFrontier(run.Id, run.Revision)));
         SetStatus("Next Frontier fight ready. Your team has been fully healed.");
     }
     private async Task EndFrontier()
     {
         var run = trainer!.FrontierRun!;
-        var refresh = true;
-        try { await InSession(plugin.Api.AbandonFrontier(run.Id, run.Revision)); battle = null; }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
+        trainer!.FrontierRun = await InSession(plugin.Api.AbandonFrontier(run.Id, run.Revision));
+        trainer.ActiveTrainerBattle = battle = null;
+        refreshState.Trainer();
         SetStatus("Streak ended. Earned BP and permanent progress retained.");
     }
-    private async Task BuyFrontierReward(string rewardId)
+    private Task BuyFrontierReward(string rewardId, int quantity = 1)
     {
-        var owner = trainer!.User.Id; var key = $"{owner}:{rewardId}";
-        var requestId = frontierRequests.GetOrAdd(key, _ => Guid.NewGuid().ToString());
-        var result = await InSession(plugin.Api.RedeemFrontierReward(requestId, rewardId, 1));
-        frontierRequests.TryRemove(key, out _);
-        if (trainer?.User.Id != owner) return;
+        if (trainer is not { } current) return Task.CompletedTask;
+        if (pendingFrontierPurchase is not null)
+        {
+            SetStatus("Retry the pending purchase in Battle Frontier Rewards first.", true);
+            return Task.CompletedTask;
+        }
+        var name = current.Frontier.Rewards.FirstOrDefault(reward => reward.Id == rewardId)?.Name ?? rewardId;
+        return SendFrontierPurchase(new(current.User.Id, rewardId, name, quantity, Guid.NewGuid().ToString()));
+    }
+
+    private async Task SendFrontierPurchase(FrontierPurchase attempt)
+    {
+        if (trainer?.User.Id != attempt.Owner) return;
+        TrainerSnapshotDto result;
+        try { result = await InSession(plugin.Api.RedeemFrontierReward(attempt.RequestId, attempt.RewardId, attempt.Quantity)); }
+        catch (Exception error) when (error is UnconfirmedActionException or ApiException { StatusCode: >= 500 })
+        {
+            if (trainer?.User.Id == attempt.Owner) pendingFrontierPurchase = attempt;
+            throw;
+        }
+        catch (ApiException error) when (error.StatusCode is 400 or 403 or 404 or 409)
+        {
+            if (trainer?.User.Id == attempt.Owner) pendingFrontierPurchase = null;
+            throw;
+        }
+        if (trainer?.User.Id != attempt.Owner) return;
+        pendingFrontierPurchase = null;
         trainer = result;
         await InSession(LoadPokedexCatalog()); SetStatus("Frontier reward received. BP and purchase history saved.");
     }
+
+    private void DrawPendingFrontierPurchase()
+    {
+        if (pendingFrontierPurchase is not { } attempt || trainer?.User.Id != attempt.Owner) return;
+        ImGui.TextWrapped($"Purchase unconfirmed: {attempt.Quantity:N0} × {attempt.Name}.");
+        ImGui.BeginDisabled(busy);
+        if (DrawAccentSmallButton("Retry same purchase", CompanionAccent))
+            Run(() => SendFrontierPurchase(attempt), "Checking BP purchase...");
+        ImGui.EndDisabled();
+    }
     private async Task StartParadoxHunt(string permitId)
     {
-        EncounterDto encounter;
-        var refresh = true;
-        try { encounter = await InSession(plugin.Api.StartParadoxResearch(permitId)); }
-        catch (Exception exception) when (SkipActionRefresh(exception)) { refresh = false; throw; }
-        finally { if (refresh) trainer = await InSession(plugin.Api.GetMe()); }
-        await InSession(ResumeWildBattle(encounter.Id)); mainSection = 0;
+        var encounter = await InSession(plugin.Api.StartParadoxResearch(permitId));
+        trainer!.ActiveEncounter = encounter;
+        refreshState.Trainer();
+        mainSection = 0;
+        await InSession(ResumeWildBattle(encounter.Id));
         SetStatus(encounter.Pokemon.Shiny ? $"A shiny {encounter.Pokemon.Species} appeared!" : $"Research encounter: {encounter.Pokemon.Species}. Your permit remains permanent.");
     }
 }

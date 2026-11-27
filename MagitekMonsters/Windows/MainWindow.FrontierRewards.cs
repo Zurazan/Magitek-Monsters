@@ -1,30 +1,49 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using MagitekMonsters.Models;
+using MagitekMonsters.Services;
 
 namespace MagitekMonsters.Windows;
 
 public sealed partial class MainWindow
 {
     private enum FrontierRewardGroup { Exchange, Beasts, Research }
+    private sealed record FrontierItem(FrontierRewardDto Reward, ShopItemDto? Item, string Pocket)
+    {
+        public string Description => string.IsNullOrWhiteSpace(Reward.Description) ? Item?.Description ?? "" : Reward.Description;
+    }
 
-    private static readonly string[] ParadoxEras = ["Both eras", "Ancient", "Future"];
+    private static readonly (string Label, string Id)[] ParadoxEras = [("Both eras", ""), ("Ancient", "Ancient"), ("Future", "Future")];
     private FrontierRewardGroup frontierRewardGroup;
-    private int frontierRewardPage;
-    private string? expandedFrontierRewardId;
-    private string frontierRewardSearch = string.Empty;
-    private string paradoxSearch = string.Empty;
-    private int paradoxEra;
+    private ShopCatalogBrowser<FrontierItem>? frontierItems;
+    private ShopCatalogBrowser<FrontierRewardDto>? frontierBeasts, frontierResearch;
+    private List<FrontierRewardDto>? frontierRewardSource;
+    private List<ShopItemDto>? frontierItemSource;
+    private List<FrontierItem> frontierItemStock = [];
+    private List<FrontierRewardDto> frontierBeastStock = [], frontierResearchStock = [];
+    private (string Label, string Id)[] frontierItemCategories = [];
+
+    private ShopCatalogBrowser<FrontierItem> FrontierItems => frontierItems ??= new(offer => offer.Reward.Id, DrawCatalogArtwork);
+    private ShopCatalogBrowser<FrontierRewardDto> FrontierBeasts => frontierBeasts ??= new(reward => reward.Id, DrawCatalogArtwork);
+    private ShopCatalogBrowser<FrontierRewardDto> FrontierResearch => frontierResearch ??= new(reward => reward.Id, DrawCatalogArtwork);
 
     private int ParadoxWaitSeconds => DateTimeOffset.TryParse(trainer?.Frontier.NextParadoxAt, out var available)
         ? Math.Max(0, (int)Math.Ceiling((available - DateTimeOffset.UtcNow).TotalSeconds)) : 0;
 
-    private void ResetFrontierRewardList()
+    private void ResetFrontierRewards()
     {
-        frontierRewardPage = 0;
-        expandedFrontierRewardId = null;
+        frontierRewardGroup = FrontierRewardGroup.Exchange;
+        frontierItems = null;
+        frontierBeasts = frontierResearch = null;
+        frontierRewardSource = null;
+        frontierItemSource = null;
+        frontierItemStock = [];
+        frontierBeastStock = frontierResearchStock = [];
+        frontierItemCategories = [];
+        pendingFrontierPurchase = null;
     }
 
     private void DrawFrontierRewards(TrainerSnapshotDto current)
@@ -36,154 +55,142 @@ public sealed partial class MainWindow
         SameLineIfFits("Paradox Research", right);
         DrawFrontierRewardGroup("Paradox Research", FrontierRewardGroup.Research);
         ImGui.Separator();
-
+        DrawPendingFrontierPurchase();
+        UpdateFrontierStock(current.Frontier.Rewards);
         var research = frontierRewardGroup == FrontierRewardGroup.Research;
-        if (research) DrawFrontierResearchStatus(current);
-        ref var search = ref (research ? ref paradoxSearch : ref frontierRewardSearch);
-        if (frontierRewardGroup != FrontierRewardGroup.Beasts)
+        ImGui.PushID((int)frontierRewardGroup);
+        if (frontierRewardGroup == FrontierRewardGroup.Exchange) DrawFrontierItemCatalog(current.Frontier.Balance);
+        else
         {
-            var searchHint = research ? "Search Paradox Pokémon..." : "Search BP rewards...";
-            ImGui.SetNextItemWidth(Math.Min(230 * CompanionScale, ImGui.GetContentRegionAvail().X));
-            if (ImGui.InputTextWithHint("##FrontierRewardSearch", searchHint, ref search, 80)) ResetFrontierRewardList();
-            if (research)
-            {
-                var eraWidth = 125 * CompanionScale;
-                if (ImGui.GetItemRectMax().X + ImGui.GetStyle().ItemSpacing.X + eraWidth <= right) ImGui.SameLine();
-                ImGui.SetNextItemWidth(Math.Min(eraWidth, ImGui.GetContentRegionAvail().X));
-                if (ImGui.Combo("##FrontierEra", ref paradoxEra, ParadoxEras, ParadoxEras.Length)) ResetFrontierRewardList();
-            }
+            if (research) DrawFrontierResearchEncounter(current);
+            DrawFrontierPokemonCatalog(current.Frontier, research);
         }
-
-        var kind = frontierRewardGroup switch { FrontierRewardGroup.Beasts => "pokemon", FrontierRewardGroup.Research => "permit", _ => "item" };
-        var query = frontierRewardGroup == FrontierRewardGroup.Beasts ? string.Empty : search;
-        var rewards = current.Frontier.Rewards.Where(entry => entry.Kind == kind && entry.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
-            && (!research || paradoxEra == 0 || entry.Era == ParadoxEras[paradoxEra])).ToArray();
-        const int pageSize = 6;
-        if (rewards.Length > pageSize)
-        {
-            var oldPage = frontierRewardPage;
-            DrawPager("FrontierRewards", ref frontierRewardPage, rewards.Length, pageSize);
-            if (frontierRewardPage != oldPage) expandedFrontierRewardId = null;
-        }
-        else frontierRewardPage = 0;
-        if (rewards.Length == 0) DrawGoalText("No matching rewards.", CompanionMuted);
-        foreach (var reward in rewards.Skip(frontierRewardPage * pageSize).Take(pageSize)) DrawFrontierReward(current.Frontier, reward);
+        ImGui.PopID();
     }
 
     private void DrawFrontierRewardGroup(string label, FrontierRewardGroup group)
     {
-        if (!DrawAccentButton(label, Vector2.Zero, frontierRewardGroup == group ? CompanionAccent : CompanionMuted)
-            || frontierRewardGroup == group) return;
-        frontierRewardGroup = group;
-        ResetFrontierRewardList();
+        if (DrawAccentButton(label, Vector2.Zero, frontierRewardGroup == group ? CompanionAccent : CompanionMuted))
+            frontierRewardGroup = group;
     }
 
-    private void DrawFrontierResearchStatus(TrainerSnapshotDto current)
+    private void UpdateFrontierStock(List<FrontierRewardDto> rewards)
     {
-        var wait = ParadoxWaitSeconds;
-        DrawGoalText(wait == 0 ? "Research ready" : $"Research cooldown: {wait / 60}:{wait % 60:00}", wait == 0 ? PokemonGreen : PokemonYellow);
+        if (ReferenceEquals(frontierRewardSource, rewards) && ReferenceEquals(frontierItemSource, itemCatalog)) return;
+        var definitions = itemCatalog.ToLookup(item => item.Id, StringComparer.OrdinalIgnoreCase);
+        frontierItemStock = rewards.Where(reward => reward is { Kind: "item", ItemId: not null }).Select(reward =>
+        {
+            var item = definitions[reward.ItemId!].FirstOrDefault();
+            return new FrontierItem(reward, item, item is null ? "other" : BagInventory.Pocket(item));
+        }).ToList();
+        var pockets = frontierItemStock.Select(offer => offer.Pocket).ToHashSet();
+        frontierItemCategories = BagInventory.Pockets.Where(category => category.Id.Length == 0 || pockets.Contains(category.Id)).ToArray();
+        frontierBeastStock = rewards.Where(reward => reward.Kind == "pokemon").ToList();
+        frontierResearchStock = rewards.Where(reward => reward.Kind == "permit").ToList();
+        frontierRewardSource = rewards;
+        frontierItemSource = itemCatalog;
+    }
+
+    private void DrawFrontierItemCatalog(int balance)
+    {
+        var browser = FrontierItems;
+        if (frontierItemCategories.Length > 1) browser.DrawCategories(frontierItemCategories);
+        browser.DrawSearch("Search BP items, descriptions or moves...");
+        var stock = browser.Filter(frontierItemStock, static (offer, words, category) =>
+            (category.Length == 0 || category == offer.Pocket) && MartCatalog.Matches(words, offer.Reward.Name, offer.Description, offer.Item?.Move));
+        browser.Draw(stock, "items", Tile, Details, Buy, CatalogFooterHeight(quantities: true));
+
+        CatalogTile Tile(FrontierItem offer) => new(offer.Reward.Name, offer.Description, offer.Reward.ItemId, null,
+            CatalogPrice("BP", offer.Reward.CurrentPrice),
+            offer.Reward.Unlocked ? $"Bag {InventoryCount(offer.Reward.ItemId!):N0}" : "Locked", CompanionMuted);
+
+        static void Details(FrontierItem offer)
+        {
+            if (offer.Item is not { } item)
+            {
+                DrawGoalText(offer.Description, CompanionMuted);
+                return;
+            }
+            DrawItemCatalogDetails(item, offer.Description,
+                item is { BpOnly: false, Price: > 0, Currency: "yen" or "" } ? $"Also available for ¥ {item.Price:N0} in Poké Mart." : null);
+        }
+
+        void Buy(FrontierItem offer)
+        {
+            var reward = offer.Reward;
+            var cost = new CatalogCost(reward.CurrentPrice, offer.Item?.MaxOwned, InventoryCount(reward.ItemId!), balance, "BP");
+            if (DrawCatalogPurchase(cost, FrontierQuantities, ref browser.Quantity, busy || !reward.Unlocked || pendingFrontierPurchase is not null) is int quantity)
+                Run(() => BuyFrontierReward(reward.Id, quantity), $"Redeeming {reward.Name}...");
+        }
+    }
+
+    private void DrawFrontierPokemonCatalog(FrontierProgressDto progress, bool research)
+    {
+        var browser = research ? FrontierResearch : FrontierBeasts;
+        if (research) browser.DrawCategories(ParadoxEras);
+        browser.DrawSearch(research ? "Search Paradox Pokémon..." : "Search Ultra Beasts...");
+        var stock = browser.Filter(research ? frontierResearchStock : frontierBeastStock, static (reward, words, era) =>
+            (era.Length == 0 || reward.Era == era) && MartCatalog.Matches(words, reward.Name, reward.Description, reward.Species));
+        browser.Draw(stock, "rewards", Tile, Details, Actions, CatalogFooterHeight(quantities: false));
+
+        CatalogTile Tile(FrontierRewardDto reward)
+        {
+            var owned = research && reward.Purchased > 0;
+            var status = owned ? "Permit owned" : !reward.Unlocked ? "Locked" : reward.CurrentPrice > progress.Balance ? "Need more BP" : "Available";
+            return new(reward.Name, reward.Description, null, reward.Species,
+                owned ? "Free to hunt" : CatalogPrice("BP", reward.CurrentPrice), status,
+                owned ? PokemonGreen : !reward.Unlocked ? CompanionMuted : reward.CurrentPrice > progress.Balance ? PokemonYellow : CompanionAccent);
+        }
+
+        void Details(FrontierRewardDto reward)
+        {
+            if (research)
+            {
+                DrawGoalText($"{reward.Era} / {reward.Progress:N0}/{reward.LifetimeWins:N0} lifetime wins", CompanionAccent);
+                DrawGoalText("Buy once to open repeat level-50 hunts with your normal party. Hunts share a five-minute cooldown.", CompanionMuted);
+                return;
+            }
+            DrawGoalText($"Lifetime wins: {reward.Progress:N0}/{reward.LifetimeWins:N0}", CompanionAccent);
+            var achievement = progress.Achievements.FirstOrDefault(entry => entry.Id == reward.AchievementId);
+            if (achievement is not null)
+                DrawGoalText($"Or {achievement.Name}: {achievement.Progress:N0}/{achievement.Target:N0}", CompanionAccent);
+            DrawGoalText("Either route unlocks purchase permanently.", CompanionMuted);
+            if (!string.IsNullOrWhiteSpace(reward.Description)) DrawGoalText(reward.Description, CompanionMuted);
+            if (reward.Species == "Poipole") DrawGoalText("Poipole evolves when it knows Dragon Pulse.", CompanionMuted);
+        }
+
+        void Actions(FrontierRewardDto reward)
+        {
+            var width = ImGui.GetContentRegionAvail().X;
+            if (research && reward.Purchased > 0)
+            {
+                var wait = ParadoxWaitSeconds;
+                var blocked = CollectionEditRestriction is not null;
+                DrawClippedText(blocked ? "Finish your current activity first." : wait > 0 ? $"Ready in {wait / 60}:{wait % 60:00}" : "Permanent permit owned",
+                    width, blocked ? PokemonOrange : wait > 0 ? PokemonYellow : PokemonGreen);
+                ImGui.BeginDisabled(busy || blocked || wait > 0);
+                if (DrawAccentButton("Hunt", new Vector2(-1, CatalogActionHeight), CompanionAccent))
+                    Run(() => StartParadoxHunt(reward.Id), $"Locating {reward.Species}...");
+                ImGui.EndDisabled();
+                return;
+            }
+            var quote = MartCatalog.Quote(reward.CurrentPrice, null, 0, 1, progress.Balance, 1);
+            var restricted = !research && CollectionEditRestriction is not null;
+            DrawClippedText(CatalogPrice("BP", reward.CurrentPrice), width, PokemonYellow);
+            if (restricted || !reward.Unlocked)
+                DrawClippedText(restricted ? "Finish your current activity first." : "Complete the unlock requirement first.", width, PokemonOrange);
+            else DrawCatalogBalance("BP", quote, width);
+            var label = research ? "Buy permit" : reward.Purchased > 0 ? "Buy copy" : "Buy";
+            if (DrawCatalogBuyButton(label, quote, busy || restricted || !reward.Unlocked || pendingFrontierPurchase is not null))
+                Run(() => BuyFrontierReward(reward.Id), $"Redeeming {reward.Name}...");
+        }
+    }
+
+    private void DrawFrontierResearchEncounter(TrainerSnapshotDto current)
+    {
         if (current.ActiveEncounter is not { Status: "active" } encounter) return;
         DrawGoalText($"Saved wild encounter: {encounter.Pokemon.Species}", PokemonOrange);
         if (DrawAccentButton("Resume wild encounter", Vector2.Zero, CompanionAccent))
             Run(async () => { await InSession(ResumeWildBattle(encounter.Id)); mainSection = 0; }, "Restoring your wild battle...");
-    }
-
-    private void DrawFrontierReward(FrontierProgressDto progress, FrontierRewardDto reward)
-    {
-        var item = reward.ItemId is not null ? itemCatalog.FirstOrDefault(entry => entry.Id == reward.ItemId) : null;
-        var permit = reward.Kind == "permit";
-        var ownedPermit = permit && reward.Purchased > 0;
-        var atLimit = item?.MaxOwned is int limit && InventoryCount(item.Id) >= limit;
-        var shortfall = Math.Max(0, reward.CurrentPrice - progress.Balance);
-        var info = ownedPermit ? "Permanent permit owned" : !reward.Unlocked ? "Locked" : atLimit ? "Bag limit reached"
-            : shortfall > 0 ? $"Need {shortfall:N0} more BP" : reward.Kind == "pokemon" ? "Purchase unlocked" : "Available";
-        var accent = ownedPermit ? PokemonGreen : !reward.Unlocked || atLimit ? CompanionMuted : shortfall > 0 ? PokemonYellow : CompanionAccent;
-        ImGui.PushID(reward.Id);
-        var expanded = expandedFrontierRewardId == reward.Id;
-        if (DrawFrontierRewardRow(reward, info, ownedPermit ? "No repeat fee" : $"{reward.CurrentPrice:N0} BP", accent, expanded))
-            expandedFrontierRewardId = expanded ? null : reward.Id;
-        if (expandedFrontierRewardId == reward.Id) DrawFrontierRewardDetails(progress, reward, item, ownedPermit, atLimit, shortfall);
-        ImGui.PopID();
-    }
-
-    private bool DrawFrontierRewardRow(FrontierRewardDto reward, string status, string price, Vector4 accent, bool expanded)
-    {
-        var scale = CompanionScale;
-        var pad = 8 * scale;
-        var art = 36 * scale;
-        var textX = art + 2 * pad;
-        var width = ImGui.GetContentRegionAvail().X;
-        var line = ImGui.GetTextLineHeight();
-        var priceWidth = ImGui.CalcTextSize(price).X;
-        var inline = width - textX - priceWidth >= 135 * scale;
-        var textWidth = Math.Max(1, width - textX - pad * 3 - (inline ? priceWidth : 0));
-        var titleHeight = ImGui.CalcTextSize(reward.Name, false, textWidth).Y;
-        var statusHeight = ImGui.CalcTextSize(status, false, textWidth).Y;
-        var height = 2 * pad + Math.Max(art, titleHeight + statusHeight + (inline ? 0 : line + 3 * scale));
-        var clicked = DrawPveCardSurface("FrontierReward", height, expanded, out var min, out var max, out var after);
-        var draw = ImGui.GetWindowDrawList();
-        var artPosition = min + new Vector2(pad, (height - art) / 2);
-        if (reward.Species is not null) DrawPokemonIconAt(reward.Species, false, artPosition, new Vector2(art));
-        else
-        {
-            ImGui.SetCursorScreenPos(artPosition);
-            DrawItemImage(reward.ItemId ?? string.Empty, new Vector2(art));
-            ImGui.SetCursorScreenPos(after);
-        }
-        var origin = min + new Vector2(textX, pad);
-        draw.AddText(ImGui.GetFont(), ImGui.GetFontSize(), origin, ImGui.GetColorU32(expanded ? CompanionAccent : ImGui.GetStyle().Colors[(int)ImGuiCol.Text]), reward.Name, textWidth);
-        draw.AddText(ImGui.GetFont(), ImGui.GetFontSize(), origin + new Vector2(0, titleHeight), ImGui.GetColorU32(accent), status, textWidth);
-        if (inline) DrawGoalRightText(new Vector2(max.X - 3 * pad, min.Y + (height - line) / 2), price, PokemonYellow);
-        else draw.AddText(origin + new Vector2(0, titleHeight + statusHeight + 2 * scale), ImGui.GetColorU32(PokemonYellow), price);
-        var arrow = new Vector2(max.X - pad * 1.4f, min.Y + (height - line) / 2);
-        draw.AddText(arrow - new Vector2(3 * scale, 0), ImGui.GetColorU32(CompanionMuted), expanded ? "▾" : "›");
-        return clicked;
-    }
-
-    private void DrawFrontierRewardDetails(FrontierProgressDto progress, FrontierRewardDto reward, ShopItemDto? item, bool ownedPermit, bool atLimit, int shortfall)
-    {
-        ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(9, 7) * CompanionScale);
-        if (ImGui.BeginTable("FrontierRewardDetails", 1, ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.BordersOuter))
-        {
-            ImGui.TableNextColumn();
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(CompanionSurface));
-            if (reward.Kind == "permit")
-            {
-                DrawGoalText($"{reward.Era} / {reward.Progress:N0}/{reward.LifetimeWins:N0} lifetime wins", CompanionAccent);
-                DrawGoalText("Buy once to open repeat level-50 hunts with your normal party. Hunts share a five-minute cooldown.", CompanionMuted);
-            }
-            else if (reward.Kind == "pokemon")
-            {
-                var achievement = progress.Achievements.FirstOrDefault(entry => entry.Id == reward.AchievementId);
-                DrawGoalText($"Lifetime wins: {reward.Progress:N0}/{reward.LifetimeWins:N0}", CompanionAccent);
-                if (achievement is not null)
-                    DrawGoalText($"Or {achievement.Name}: {achievement.Progress:N0}/{achievement.Target:N0}", CompanionAccent);
-                DrawGoalText("Either route unlocks purchase permanently.", CompanionMuted);
-                if (reward.Species == "Poipole") DrawGoalText("Poipole evolves when it knows Dragon Pulse.", CompanionMuted);
-            }
-            if (reward.Kind != "permit") DrawGoalText(reward.Description, CompanionMuted);
-            if (item is not null && !string.IsNullOrWhiteSpace(item.AcquisitionNote)) DrawGoalText(item.AcquisitionNote, CompanionMuted);
-            if (item is { BpOnly: false, Price: > 0 }) DrawGoalText($"Also available for ¥ {item.Price:N0} in Poké Mart.", CompanionMuted);
-
-            if (ownedPermit)
-            {
-                var wait = ParadoxWaitSeconds;
-                ImGui.BeginDisabled(CollectionLocked || wait > 0);
-                if (DrawAccentButton("Hunt", Vector2.Zero, CompanionAccent)) Run(() => StartParadoxHunt(reward.Id), $"Locating {reward.Species}...");
-                ImGui.EndDisabled();
-                if (CollectionEditRestriction is not null) DrawGoalText("Finish your current activity before starting a hunt.", PokemonOrange);
-            }
-            else
-            {
-                var label = reward.Kind == "permit" ? "Buy permit" : reward.Kind == "pokemon" && reward.Purchased > 0 ? "Buy copy" : "Buy";
-                ImGui.BeginDisabled(busy || !reward.Unlocked || atLimit || shortfall > 0 || reward.Kind == "pokemon" && CollectionLocked);
-                if (DrawAccentButton($"{label} / {reward.CurrentPrice:N0} BP", Vector2.Zero, PokemonGreen)) Run(() => BuyFrontierReward(reward.Id), $"Redeeming {reward.Name}...");
-                ImGui.EndDisabled();
-                if (reward.Kind == "pokemon" && CollectionEditRestriction is not null)
-                    DrawGoalText("Finish your current activity before receiving a Pokémon.", PokemonOrange);
-            }
-            ImGui.EndTable();
-        }
-        ImGui.PopStyleVar();
     }
 }

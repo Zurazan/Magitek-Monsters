@@ -15,8 +15,10 @@ public sealed partial class MainWindow
     private readonly ConcurrentQueue<Action> backgroundResults = new();
     private CancellationTokenSource? backgroundCancellation;
     private bool backgroundRefreshing;
+    private bool backgroundDefersLiveUpdates;
     private DateTimeOffset backgroundRetryAfter = DateTimeOffset.MinValue;
     private long connectionSyncGeneration;
+    private bool pvpRecoveryPending;
 
     private void QueueConnectionSync()
     {
@@ -25,6 +27,7 @@ public sealed partial class MainWindow
         {
             if (plugin.Connection.Generation != generation || plugin.Connection.State != ServerConnectionState.Syncing) return;
             connectionSyncGeneration = generation;
+            pvpRecoveryPending = true;
             if (plugin.Api.Catalogs.Revision is null) catalogRefreshRequested = true;
             CancelBackgroundRefresh();
             backgroundRetryAfter = DateTimeOffset.MinValue;
@@ -49,21 +52,20 @@ public sealed partial class MainWindow
         if (trainer?.User.Id != recovered.Trainer.User.Id || plugin.Connection.Generation != generation
             || plugin.Connection.State != ServerConnectionState.Syncing) return;
         trainer = recovered.Trainer;
-        pvpStatus = recovered.Pvp;
-        trainer.PvpProfile = recovered.Pvp.Profile;
         if (recovered.Battle is { } current) ApplyBattleResponse(current);
         else if (recovered.BattleChecked) battle = null;
         raidBoard = null;
         if (recovered.Raid is { } room) ApplyRaid(room);
-        else
+        else ClearRaidView();
+        if (recovered.RaidMissing) refreshState.Trainer();
+        if (recovered.RefreshPokedex)
         {
-            raidRoom = null;
-            pendingRaidChoice = null; raidTargetMove = null; raidModifier = "";
-            raidCaptureRequest = null; raidCaptureBall = null;
+            pokedexRefreshRequested = true;
+            nextPokedexRefreshAt = DateTimeOffset.MinValue;
         }
-        if (recovered.Pokedex is { } dex) ApplyPokedex(dex);
         AcknowledgeBattleResultTrainer();
-        nextPvpPollAt = nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(2);
+        nextRaidPollAt = DateTimeOffset.UtcNow.AddSeconds(2);
+        nextPvpPollAt = DateTimeOffset.MinValue;
         if (plugin.Connection.CompleteSync(generation))
         {
             connectionSyncGeneration = 0;
@@ -77,10 +79,11 @@ public sealed partial class MainWindow
         try { backgroundCancellation?.Cancel(); } catch (ObjectDisposedException) { }
     }
 
-    private void RunBackground(Func<CancellationToken, Task<Action>> fetch, Action retry)
+    private void RunBackground(Func<CancellationToken, Task<Action>> fetch, Action retry, bool sharedBackoff = true, bool deferLiveUpdates = true)
     {
         if (busy || backgroundRefreshing || trainer is null) return;
         backgroundRefreshing = true;
+        backgroundDefersLiveUpdates = deferLiveUpdates;
         var generation = refreshState.Generation;
         var session = sessionResponses.Generation;
         var account = trainer.User.Id;
@@ -99,7 +102,7 @@ public sealed partial class MainWindow
             backgroundResults.Enqueue(() =>
             {
                 if (ReferenceEquals(backgroundCancellation, owner))
-                { backgroundCancellation = null; backgroundRefreshing = false; }
+                { backgroundCancellation = null; backgroundRefreshing = false; backgroundDefersLiveUpdates = false; }
                 if (!disposeCancellation.IsCancellationRequested && sessionResponses.IsCurrent(session) && trainer?.User.Id == account)
                 {
                     if (!refreshState.IsCurrent(generation) || cancelled) retry();
@@ -111,8 +114,11 @@ public sealed partial class MainWindow
                     {
                         Plugin.Log.Warning(failure, "Magitek Monsters background refresh failed");
                         retry();
-                        backgroundRetryAfter = DateTimeOffset.UtcNow.AddSeconds(2);
-                        nextBattlePollAt = nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(2);
+                        if (sharedBackoff)
+                        {
+                            backgroundRetryAfter = DateTimeOffset.UtcNow.AddSeconds(2);
+                            nextBattlePollAt = nextPvpPollAt = backgroundRetryAfter;
+                        }
                     }
                     else apply?.Invoke();
                 }
@@ -125,12 +131,11 @@ public sealed partial class MainWindow
         RunBackground(async token =>
         {
             var next = await plugin.Api.GetMe(token);
-            var dex = next.Pokedex.Caught != trainer?.Pokedex.Caught ? await plugin.Api.GetPokedexCatalog(token) : null;
             return () =>
             {
+                RequestPokedexIfChanged(trainer?.Pokedex, next.Pokedex);
                 trainer = next;
                 AcknowledgeBattleResultTrainer();
-                if (dex is not null) ApplyPokedex(dex);
                 if (battle is { } current) refreshState.Acknowledge(current.Id, current.Revision, true);
             };
         }, () => refreshState.Trainer());
@@ -154,7 +159,8 @@ public sealed partial class MainWindow
     }
 
     private bool ShouldRefreshPvp(DateTimeOffset now) =>
-        serverPvpRefreshRequested || pvpStatus is { } status && now >= nextPvpPollAt
+        pvpRecoveryPending ? now >= nextPvpPollAt
+        : serverPvpRefreshRequested || pvpStatus is { } status && now >= nextPvpPollAt
         && (status.State == "queued" || status.Challenges.Count > 0
             || status.State == "idle" && IsOpen && mainSection == 4
             || status.Battle is { Status: "active" } match
@@ -162,6 +168,7 @@ public sealed partial class MainWindow
 
     private void BackgroundPvp()
     {
+        var recovering = pvpRecoveryPending;
         RunBackground(async token =>
         {
             var next = await plugin.Api.GetPvpStatus(token);
@@ -169,11 +176,16 @@ public sealed partial class MainWindow
             {
                 if (next.Battle is { } match && LiveStateOrder.IsOlder(match, pvpStatus?.Battle)) next.Battle = pvpStatus!.Battle;
                 pvpStatus = next;
+                pvpRecoveryPending = false;
                 if (trainer is not null) trainer.PvpProfile = next.Profile;
                 nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(next.State == "idle" && next.Challenges.Count == 0 ? IdlePvpPollSeconds
                     : plugin.Connection.CanInvoke ? 10 : next.State == "queued" ? 2 : 1);
             };
-        }, () => serverPvpRefreshRequested = true);
+        }, () =>
+        {
+            if (recovering) nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(2);
+            else serverPvpRefreshRequested = true;
+        }, sharedBackoff: !recovering);
     }
 
     private void ApplyBattleResponse(BattleSnapshotDto next, string? choice = null)
@@ -189,16 +201,17 @@ public sealed partial class MainWindow
             foreach (var vital in next.PartyVitals)
                 if (trainer.Party.FirstOrDefault(pokemon => pokemon.Id == vital.PokemonId) is { } pokemon) pokemon.Vitals = vital;
         var parts = choice?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
-        if (parts.Length >= 2 && parts[0] is "item" or "ball")
-        {
-            var index = trainer.Inventory.FindIndex(item => item.ItemId == parts[1]);
-            if (index >= 0)
-            {
-                var item = trainer.Inventory[index];
-                trainer.Inventory = [.. trainer.Inventory];
-                trainer.Inventory[index] = new() { ItemId = item.ItemId, Quantity = Math.Max(0, item.Quantity - 1) };
-            }
-        }
+        if (parts.Length >= 2 && parts[0] is "item" or "ball") ConsumeLocalItem(parts[1]);
         if (next.Status != "active") refreshState.Trainer();
+    }
+
+    private void ConsumeLocalItem(string itemId)
+    {
+        if (trainer is not { } current) return;
+        var index = current.Inventory.FindIndex(item => item.ItemId == itemId);
+        if (index < 0) return;
+        var item = current.Inventory[index];
+        current.Inventory = [.. current.Inventory];
+        current.Inventory[index] = new() { ItemId = item.ItemId, Quantity = Math.Max(0, item.Quantity - 1) };
     }
 }

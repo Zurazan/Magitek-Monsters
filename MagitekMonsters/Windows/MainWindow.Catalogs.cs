@@ -13,6 +13,8 @@ public sealed partial class MainWindow
     private bool catalogCheckBusy;
     private DateTimeOffset nextCatalogCheckAt = DateTimeOffset.UtcNow.AddMinutes(1);
     private DateTimeOffset nextLegacyCatalogRefreshAt = DateTimeOffset.UtcNow.AddMinutes(5);
+    private DateTimeOffset nextPokedexRefreshAt;
+    private bool pokedexRefreshRequested;
 
     private void RetryCatalogs()
     {
@@ -51,7 +53,7 @@ public sealed partial class MainWindow
     private void BackgroundCatalogs()
     {
         catalogRefreshRequested = false;
-        RunBackground(token => FetchCatalogs(true, true, token), RetryCatalogs);
+        RunBackground(token => FetchCatalogs(true, true, token), RetryCatalogs, deferLiveUpdates: false);
     }
 
     private void ApplyHabitat(uint territory, MagitekMonsters.Models.HabitatDto next)
@@ -71,9 +73,31 @@ public sealed partial class MainWindow
         if (!plugin.Api.Catalogs.TryApply([next], () =>
         {
             pokedexCatalog = next.Pokemon;
+            pokedexRefreshRequested = false;
+            nextPokedexRefreshAt = DateTimeOffset.UtcNow.AddMinutes(2);
             if (selectedPokedexSpecies is not null && !next.Pokemon.Any(entry => entry.Registered
                 && entry.Species.Equals(selectedPokedexSpecies, StringComparison.OrdinalIgnoreCase))) selectedPokedexSpecies = null;
         })) RetryCatalogs();
+    }
+
+    private void RequestPokedexIfChanged(MagitekMonsters.Models.PokedexDto? previous, MagitekMonsters.Models.PokedexDto next)
+    {
+        if (previous is not null && previous.Caught == next.Caught && previous.CaughtSpecies.SequenceEqual(next.CaughtSpecies)) return;
+        pokedexRefreshRequested = true;
+        nextPokedexRefreshAt = DateTimeOffset.MinValue;
+    }
+
+    private bool ShouldRefreshPokedex(DateTimeOffset now) => now >= nextPokedexRefreshAt
+        && (pokedexRefreshRequested || IsOpen && mainSection == 6);
+
+    private void BackgroundPokedex()
+    {
+        nextPokedexRefreshAt = DateTimeOffset.UtcNow.AddSeconds(10);
+        RunBackground(async token =>
+        {
+            var next = await plugin.Api.GetPokedexCatalog(token);
+            return () => ApplyPokedex(next);
+        }, () => nextPokedexRefreshAt = DateTimeOffset.UtcNow.AddSeconds(10), sharedBackoff: false, deferLiveUpdates: false);
     }
 
     private async Task RefreshFriendlyFormats()

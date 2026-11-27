@@ -65,7 +65,7 @@ public sealed partial class MainWindow
             var request = read!.Value;
             var page = await InSession(plugin.Api.GetFriends(request.Key.Group, request.Key.Search, request.Key.Offset, selected, token));
             return () => { if (friendPages.Apply(request, page)) RefreshSelectedFriend(page, selected, selectedGroup); };
-        }, () => { if (read is { } request) friendPages.Retry(request); else friendsRefreshRequested = true; });
+        }, () => { if (read is { } request) friendPages.Retry(request); else friendsRefreshRequested = true; }, deferLiveUpdates: false);
     }
     private void RefreshSelectedFriend(FriendPageDto page, string? requested, string group)
     {

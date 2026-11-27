@@ -12,7 +12,7 @@ public sealed partial class MainWindow
     private void OnLiveState(long generation, LiveEvent update) => liveUpdates.Writer.TryWrite((generation, update));
     private void ApplyLiveUpdates()
     {
-        if (liveUpdates is null || busy || backgroundRefreshing) return;
+        if (liveUpdates is null || busy || backgroundDefersLiveUpdates) return;
         while (liveUpdates.Reader.TryRead(out var pending))
         {
             if (trainer is null || pending.Generation != plugin.Connection.Generation) continue;
@@ -27,6 +27,7 @@ public sealed partial class MainWindow
                 pvpStatus.Battle = next;
                 nextPvpPollAt = DateTimeOffset.UtcNow.AddSeconds(10);
                 if (next.Status != "active") { serverPvpRefreshRequested = true; refreshState.Trainer(); }
+                if (next.Status == "error" && !string.IsNullOrWhiteSpace(next.Error)) SetStatus(next.Error, isError: true);
             }
             else if (battle?.Id == next.Id && !LiveStateOrder.IsOlder(next, battle))
             { ApplyBattleResponse(next); nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(10); }

@@ -14,32 +14,29 @@ namespace MagitekMonsters.Windows;
 public sealed partial class MainWindow
 {
     private string boxName = string.Empty;
-    private int storageBox = 1;
-    private int storageType;
-    private int storageGeneration;
-    private int storageSort;
-    private bool storageFavorites;
-    private bool storageShiny;
     private string challengeTrainerId = string.Empty;
     private string? pendingClipboard;
     private BattleHelpDto? battleHelp;
     private readonly ConcurrentDictionary<string, MoveDetailsDto> battleMoveHelp = new(StringComparer.OrdinalIgnoreCase);
 
     private bool CollectionLocked => busy || CollectionEditRestriction is not null;
-    private string? CollectionEditRestriction
+    private bool CanReleaseDuringWild => (battle is { Kind: "wild", Status: "active" } || trainer?.ActiveEncounter is { Status: "active" })
+        && EditRestriction(allowWildRelease: true) is null;
+    private bool BoxedReleaseLocked => busy || EditRestriction(allowWildRelease: true) is not null;
+    private string? CollectionEditRestriction => EditRestriction();
+    private string? EditRestriction(bool allowWildRelease = false)
     {
-        get
-        {
-            if (battle?.Status == "active" || trainer?.ActiveTrainerBattle?.Status == "active" || pvpStatus?.Battle?.Status == "active")
-                return "Finish the active battle to evolve Pokémon or change moves.";
-            if (trainer?.ActiveEncounter is not null) return "Finish or flee your wild encounter before editing Pokémon.";
-            if (LeagueBusy) return "Finish or end your League run before editing Pokémon.";
-            if (FrontierBusy) return "Finish or end your Frontier run before editing Pokémon.";
-            if (trainer?.RaidLocked == true || raidRoom?.Status is "lobby" or "active") return "Finish the raid or leave its lobby before editing Pokémon.";
-            if (pvpStatus?.State == "queued") return "Leave matchmaking before editing Pokémon.";
-            if (HasOutgoingInvitation) return "Cancel your outgoing battle invitation before editing Pokémon.";
-            return null;
-        }
+        if ((battle?.Status == "active" && (!allowWildRelease || battle.Kind != "wild"))
+            || trainer?.ActiveTrainerBattle?.Status == "active" || pvpStatus?.Battle?.Status == "active")
+            return "Finish the active battle to evolve Pokémon or change moves.";
+        if (!allowWildRelease && trainer?.ActiveEncounter is not null) return "Finish or flee your wild encounter before editing Pokémon.";
+        if (LeagueBusy) return "Finish or end your League run before editing Pokémon.";
+        if (FrontierBusy) return "Finish or end your Frontier run before editing Pokémon.";
+        if (trainer?.RaidLocked == true || raidRoom?.Status is "lobby" or "active") return "Finish the raid or leave its lobby before editing Pokémon.";
+        if (pvpRecoveryPending) return "Checking online battle status before you can edit Pokémon.";
+        if (pvpStatus?.State == "queued") return "Leave matchmaking before editing Pokémon.";
+        if (HasOutgoingInvitation) return "Cancel your outgoing battle invitation before editing Pokémon.";
+        return null;
     }
 
     private void DrawCollectionEditNotice()
@@ -61,7 +58,9 @@ public sealed partial class MainWindow
     }
 
     private bool HasOutgoingInvitation => pvpStatus?.Challenges.Any(entry => entry.FromUserId == trainer?.User.Id) == true;
-    private string BoxLabel(int number) => trainer?.Collection.BoxNames.TryGetValue(number.ToString(), out var name) == true
+    private string BoxLabel(int number) => BoxLabel(trainer, number);
+
+    private static string BoxLabel(TrainerSnapshotDto? owner, int number) => owner?.Collection.BoxNames.TryGetValue(number.ToString(), out var name) == true
         ? $"Box {number}: {name}" : $"Box {number}";
 
     private async Task UpdateCollection(Task<TrainerSnapshotDto> request, string message)
@@ -84,49 +83,6 @@ public sealed partial class MainWindow
             Interlocked.Exchange(ref pendingClipboard, exported.Text);
             SetStatus("Team summary copied. Exports do not import or create Pokémon.");
         }, "Preparing team summary...");
-    }
-
-    private void DrawStorageFilters()
-    {
-        if (DrawStorageFilterOptions(ref storageFavorites, ref storageShiny, ref storageDuplicatesOnly, ref storageType, ref storageGeneration))
-            ShowStorageOverview();
-        var scale = CompanionScale;
-        ImGui.SetNextItemWidth(Math.Min(240 * scale, ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize("Sort").X - 8 * scale));
-        string[] sorts = ["Box order", "Species", "Level: highest first", "Newest first", "IV total: highest first", "Perfect IVs: most first"];
-        if (ImGui.Combo("Sort##StorageSort", ref storageSort, sorts, sorts.Length)) storageScrollToTop = true;
-    }
-
-    private static bool DrawStorageFilterOptions(ref bool favorites, ref bool shiny, ref bool duplicates, ref int type, ref int generation)
-    {
-        var scale = CompanionScale;
-        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
-        var changed = ImGui.Checkbox("Favourites", ref favorites);
-        StorageSameLine(right, ImGui.GetFrameHeight() + ImGui.GetStyle().ItemInnerSpacing.X + ImGui.CalcTextSize("Shiny only").X);
-        changed |= ImGui.Checkbox("Shiny only", ref shiny);
-        StorageSameLine(right, ImGui.GetFrameHeight() + ImGui.GetStyle().ItemInnerSpacing.X + ImGui.CalcTextSize("Duplicates only").X);
-        changed |= ImGui.Checkbox("Duplicates only", ref duplicates);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Same appearance and shiny variant, including copies in your party.");
-        StorageSameLine(right, 150 * scale);
-        ImGui.SetNextItemWidth(Math.Min(150 * scale, ImGui.GetContentRegionAvail().X));
-        var types = new[] { "Any type" }.Concat(ChallengeTypes).ToArray();
-        changed |= ImGui.Combo("##StorageType", ref type, types, types.Length);
-        StorageSameLine(right, 150 * scale);
-        ImGui.SetNextItemWidth(Math.Min(150 * scale, ImGui.GetContentRegionAvail().X));
-        string[] generations = ["Any generation", "Gen 1", "Gen 2", "Gen 3", "Gen 4", "Gen 5", "Gen 6", "Gen 7", "Gen 8", "Gen 9"];
-        return ImGui.Combo("##StorageGen", ref generation, generations, generations.Length) || changed;
-    }
-
-    private List<PokemonDto> FilterStorage()
-    {
-        var filter = new StorageFilter(storageSearch, storageBox, storageType == 0 ? null : ChallengeTypes[storageType - 1], storageGeneration,
-            storageSort, storageFavorites, storageShiny, storageDuplicatesOnly);
-        if (ReferenceEquals(storageFilteredTrainer, trainer) && filter == storageCachedFilter) return storageFilteredPokemon;
-        storageFilteredTrainer = trainer; storageCachedFilter = filter;
-        var started = System.Diagnostics.Stopwatch.GetTimestamp();
-        storageFilteredPokemon = StorageBrowser.Filter(trainer!.Storage, storageDuplicates, filter);
-        var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-        if (elapsed >= 4) Plugin.Log.Debug("PC filter: {PokemonCount} Pokemon in {ElapsedMs:F1} ms", trainer.Storage.Count, elapsed);
-        return storageFilteredPokemon;
     }
 
     private void TogglePokemonFavourite(PokemonDto pokemon) =>

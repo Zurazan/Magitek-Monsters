@@ -123,7 +123,7 @@ public sealed partial class MainWindow
         ImGui.TextWrapped($"Buy {pendingPurchaseQuantity} x {item.Name} for {currency} {price:N0}?");
         ImGui.TextDisabled($"Balance after purchase: {currency} {Math.Max(0, balance - price):N0}");
         if (DrawConfirmationActions("Confirm purchase", CompanionAccent,
-            busy || !quote.CanBuy || quote.Quantity != pendingPurchaseQuantity))
+            busy || pendingShopPurchase is not null || !quote.CanBuy || quote.Quantity != pendingPurchaseQuantity))
         {
             var quantity = pendingPurchaseQuantity;
             ImGui.CloseCurrentPopup();

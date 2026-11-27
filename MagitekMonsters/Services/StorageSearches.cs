@@ -20,9 +20,8 @@ public static class StorageSearches
 {
     public const int MaximumSearches = 20;
     public const int MaximumNameLength = 32;
-    public static readonly StorageFilter Empty = new("", 0, null, 0, 0, false, false, false);
+    public static readonly StorageFilter Empty = new("", 0, null, 0, false, false, false);
     private static readonly string[] Types = ["Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy"];
-    private static readonly string[] Sorts = ["Box order", "Species", "Level: highest first", "Newest first", "IV total: highest first", "Perfect IVs: most first"];
 
     private static bool ValidName(string? name) => !string.IsNullOrWhiteSpace(name) && !name.Any(char.IsControl)
         && name.Trim().EnumerateRunes().Count() <= MaximumNameLength;
@@ -32,7 +31,7 @@ public static class StorageSearches
         filter ??= Empty;
         return filter with { Search = new string((filter.Search ?? "").Where(character => !char.IsControl(character)).Take(80).ToArray()).Trim(),
             Box = 0, Type = Types.FirstOrDefault(type => type.Equals(filter.Type, StringComparison.OrdinalIgnoreCase)),
-            Generation = Math.Clamp(filter.Generation, 0, 9), Sort = Math.Clamp(filter.Sort, 0, Sorts.Length - 1) };
+            Generation = Math.Clamp(filter.Generation, 0, 9) };
     }
 
     public static StorageSearchPreferences Preferences(IDictionary<string, StorageSearchPreferences> all, string owner)
@@ -71,7 +70,6 @@ public static class StorageSearches
         if (filter.Shiny) parts.Add("Shiny only");
         if (filter.Duplicates) parts.Add("Duplicates only");
         if (parts.Count == 0) parts.Add("All Pokémon");
-        parts.Add(Sorts[filter.Sort]);
         return string.Join(" / ", parts);
     }
 }

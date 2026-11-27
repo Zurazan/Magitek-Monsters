@@ -21,9 +21,15 @@ public sealed record TrainerCardSaveRequest(TrainerCardPreferences Card, bool On
 public sealed record TrainerUidChoiceRequest(string? Uid, bool KeepGenerated, bool Confirmed) : IClientRequest;
 public sealed record TrainerVanityRequest([property: JsonRequired] string? Code) : IClientRequest;
 public sealed record SpeciesRequest(string Species) : IClientRequest;
+public sealed record PrizePurchaseRequest(string Species,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RequestId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? ExpectedPrice = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? ExpectedLevel = null) : IClientRequest;
 public sealed record PokemonRequest(string PokemonId) : IClientRequest;
 public sealed record ShopPurchaseRequest(string ItemId, int Quantity,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RequestId = null) : IClientRequest;
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RequestId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? ExpectedUnitPrice = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ExpectedCurrency = null) : IClientRequest;
 public sealed record RewardPurchaseRequest(string RequestId, string RewardId, int Quantity) : IClientRequest;
 public sealed record CollectionRewardRequest(string RequestId, string RewardId, string Mode) : IClientRequest;
 public sealed record LegendaryPermitRequest(string RequestId, string BossId) : IClientRequest;
@@ -42,10 +48,14 @@ public sealed record PokemonCollectionRequest(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Favorite = null) : IClientRequest;
 public sealed record SavedTeamRequest(string Id, string Name, IReadOnlyList<string> PokemonIds) : IClientRequest;
 public sealed record BoxNameRequest(string Name) : IClientRequest;
+public sealed record StorageSlotPlacement(int FromBox, int FromSlot, int ToBox, int ToSlot,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OccupantId = null);
 public sealed record StorageBatchRequest(string RequestId, string Action, IReadOnlyList<string> PokemonIds,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? BoxNumber = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Favorite = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Confirmed = null) : IClientRequest;
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Confirmed = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StorageSlotPlacement? Placement = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<int>? ExpectedSlots = null) : IClientRequest;
 public sealed record TeamExportRequest(List<string> PokemonIds) : IClientRequest;
 public sealed record PvpQueueRequest(string Mode, string FormatId, IReadOnlyList<string> PokemonIds) : IClientRequest;
 public sealed record ChallengeRequest(string TrainerId, IReadOnlyList<string> PokemonIds,

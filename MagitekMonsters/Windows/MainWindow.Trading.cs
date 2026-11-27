@@ -59,7 +59,7 @@ public sealed partial class MainWindow
         {
             var next = await InSession(plugin.Api.GetTrades(token));
             return () => ApplyTrading(next);
-        }, () => nextTradePollAt = DateTimeOffset.UtcNow.AddSeconds(60));
+        }, () => nextTradePollAt = DateTimeOffset.UtcNow.AddSeconds(60), deferLiveUpdates: false);
     }
     private async Task SaveTrade(Func<Task<TradingSnapshotDto>> action, bool refreshTrainer = true)
     {
@@ -110,12 +110,7 @@ public sealed partial class MainWindow
         if (pokemon is null) { SetStatus("This Pokémon is no longer in your collection."); return; }
         mainSection = pokemon.PartySlot.HasValue ? 1 : 2;
         if (mainSection == 1) selectedPartyPokemon = pokemon.Id;
-        else
-        {
-            ObserveStorageOwner(); selectedStoragePokemon = pokemon.Id;
-            storageSearch = ""; OpenStorageBox(pokemon.BoxNumber); storageType = storageGeneration = storageSort = 0;
-            storageFavorites = storageShiny = storageDuplicatesOnly = false;
-        }
+        else InspectStoredPokemon(pokemon);
         SetStatus("Traded Pokémon selected.");
     }
 }

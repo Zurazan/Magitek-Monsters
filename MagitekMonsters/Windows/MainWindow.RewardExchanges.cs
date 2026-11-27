@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using MagitekMonsters.Contracts;
 using MagitekMonsters.Models;
 using MagitekMonsters.Services;
 
@@ -16,6 +18,7 @@ public sealed partial class MainWindow
     private static readonly string[] RewardGenerations = ["All generations", "Gen 1", "Gen 2", "Gen 3", "Gen 4", "Gen 5", "Gen 6", "Gen 7", "Gen 8", "Gen 9"];
     private ExchangeBrowse? prizeExchange, collectionExchange;
     private ExchangePurchase? pendingExchangePurchase;
+    private PrizePurchaseAttempt? pendingPrizePurchase;
     private bool requestExchangePurchase;
 
     private sealed class ExchangeBrowse
@@ -32,6 +35,7 @@ public sealed partial class MainWindow
         public string FormatAmount(long amount) => UsesYen ? $"¥ {amount:N0}" : $"{amount:N0} CP";
     }
     private sealed record ExchangePurchase(string Owner, string Id, string? Mode, int Cost, bool UsesYen, string? Species, int Level);
+    private sealed record PrizePurchaseAttempt(string Owner, string Name, PrizePurchaseRequest Request);
 
     private void DrawPrizeExchange() => DrawRewardExchange(false, prizeExchange ??= new());
     private void DrawCollectionExchange() => DrawRewardExchange(true, collectionExchange ??= new());
@@ -51,6 +55,7 @@ public sealed partial class MainWindow
         else
         {
             ExchangeText("Buy prize Pokémon with ¥. Each purchase gives you one Pokémon.", CompanionMuted);
+            DrawPendingPrizePurchase();
         }
         ImGui.Spacing();
 
@@ -382,7 +387,7 @@ public sealed partial class MainWindow
         ExchangeText($"Cost: {offer.Price}", offer.UsesYen ? PokemonYellow : CompanionAccent);
         var reason = ExchangeRestriction(offer);
         if (!offer.Complete && reason is null && offer.Cost > 0)
-            ExchangeText($"Remaining balance: {offer.FormatAmount(ExchangeBalance(offer) - (long)offer.Cost)}", CompanionMuted);
+            ExchangeText($"Remaining balance: {offer.FormatAmount(ExchangeBalance(offer) - offer.Cost)}", CompanionMuted);
         if (reason is not null) ExchangeText(reason, PokemonRed);
         if (DrawConfirmationActions(offer.Action, offer.UsesYen ? PokemonYellow : PokemonGreen, offer.Complete || reason is not null,
             onCancel: () => pendingExchangePurchase = null))
@@ -392,7 +397,11 @@ public sealed partial class MainWindow
             if (offer.Mode is { } mode)
                 Run(() => RedeemCollectionReward(offer.Entry.Id, mode), $"Redeeming {offer.Entry.Name}...");
             else
-                Run(() => RedeemPrizePokemon(offer.Entry.Species!), $"Purchasing {offer.Entry.Name}...");
+            {
+                var attempt = new PrizePurchaseAttempt(trainer!.User.Id, offer.Entry.Name,
+                    new(offer.Entry.Species!, Guid.NewGuid().ToString(), offer.Cost, offer.Entry.Level));
+                Run(() => SendPrizePurchase(attempt), $"Purchasing {attempt.Name}...");
+            }
         }
         EndConfirmationModal();
     }
@@ -403,16 +412,51 @@ public sealed partial class MainWindow
         return prizePokemon.FirstOrDefault(prize => prize.Id == id) is { } prize ? PrizeOffer(prize) : null;
     }
 
-    private int ExchangeBalance(ExchangeOffer offer) => offer.UsesYen ? trainer!.Currency : trainer!.CollectionPoints.Balance;
+    private long ExchangeBalance(ExchangeOffer offer) => offer.UsesYen ? trainer!.Currency : trainer!.CollectionPoints.Balance;
 
     private string? ExchangeRestriction(ExchangeOffer offer)
     {
         if (offer.Complete) return offer.Status;
         if (offer.Requirement is not null) return offer.Requirement;
-        var shortfall = offer.Cost - (long)ExchangeBalance(offer);
+        if (offer.Mode is null && pendingPrizePurchase is not null) return "Confirm the pending prize purchase first.";
+        var shortfall = offer.Cost - ExchangeBalance(offer);
         if (shortfall > 0) return $"You need {offer.FormatAmount(shortfall)} more.";
         return offer.Mode is null ? busy ? "Wait for the current action to finish." : null
             : CollectionLocked ? "Finish your current battle, run or matchmaking first." : null;
+    }
+
+    private async Task SendPrizePurchase(PrizePurchaseAttempt attempt)
+    {
+        if (trainer?.User.Id != attempt.Owner) return;
+        try
+        {
+            var next = await InSession(plugin.Api.RedeemPrizePokemon(attempt.Request, disposeCancellation.Token));
+            RequestPokedexIfChanged(trainer?.Pokedex, next.Pokedex);
+            trainer = next;
+        }
+        catch (UnconfirmedActionException)
+        {
+            pendingPrizePurchase = attempt;
+            throw;
+        }
+        catch (ApiException error) when (error.StatusCode is 400 or 403 or 404 or 409)
+        {
+            pendingPrizePurchase = null;
+            if (error.Code == "prize_offer_changed") RetryCatalogs();
+            throw;
+        }
+        pendingPrizePurchase = null;
+        SetStatus($"{attempt.Name} purchased. Check your party or PC.");
+    }
+
+    private void DrawPendingPrizePurchase()
+    {
+        if (pendingPrizePurchase is not { } attempt || trainer?.User.Id != attempt.Owner) return;
+        ExchangeText($"Purchase unconfirmed / {attempt.Name} / ¥ {attempt.Request.ExpectedPrice:N0}", PokemonYellow);
+        ImGui.BeginDisabled(busy);
+        if (DrawAccentSmallButton("Retry same purchase", CompanionAccent))
+            Run(() => SendPrizePurchase(attempt), "Checking prize purchase...");
+        ImGui.EndDisabled();
     }
 
     private static Vector4 ExchangeStatusColor(ExchangeOffer offer) => offer.Complete || offer.Mode == "copy" || offer.Status == "Caught"

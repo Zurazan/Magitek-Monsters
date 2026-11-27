@@ -34,13 +34,13 @@ public sealed partial class MainWindow
     {
         if (trainer is null) return;
         var inbox = trainer.Gifts;
-        DrawSectionHeader("Mystery Gifts", "Already delivered to your collection. No claiming required.");
-        ImGui.TextColored(PokemonYellow, $"{inbox.Unread:N0} unread / {inbox.Total:N0} received");
+        DrawSectionHeader("Mystery Gifts", "Giveaways and Pokémon sent to you.");
+        ImGui.TextColored(PokemonYellow, $"{inbox.Unread:N0} unread / {inbox.Total:N0} gifts");
         ImGui.SameLine(); ImGui.BeginDisabled(busy);
         if (ImGui.SmallButton("Refresh##Gifts")) Run(RefreshGiftInbox, "Checking Mystery Gifts...");
         ImGui.EndDisabled();
         if (inbox.Entries.Count == 0) { ImGui.Spacing(); ImGui.TextWrapped("No Mystery Gifts yet. Giveaways appear here, even if you were offline when they were sent."); return; }
-        if (inbox.Total > inbox.Entries.Count) ImGui.TextDisabled("Showing up to 100 receipts, with unread gifts first.");
+        if (inbox.Total > inbox.Entries.Count) ImGui.TextDisabled("Showing up to 100 gifts, with pending gifts first.");
         DrawPager("GiftInbox", ref giftPage, inbox.Entries.Count, 8);
         foreach (var gift in inbox.Entries.Skip(giftPage * 8).Take(8)) DrawGiftReceipt(gift);
     }
@@ -58,17 +58,22 @@ public sealed partial class MainWindow
             ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.WidthFixed, 126 * scale);
             ImGui.TableNextColumn(); DrawPokemonImage(gift.Pokemon.Appearance, gift.Pokemon.Shiny, new Vector2(72 * scale));
             ImGui.TableNextColumn();
-            ImGui.TextColored(gift.SeenAt is null ? PokemonYellow : CompanionAccent, gift.SeenAt is null ? "NEW MYSTERY GIFT" : "MYSTERY GIFT / RECEIVED");
+            ImGui.TextColored(gift.Pending || gift.SeenAt is null ? PokemonYellow : CompanionAccent,
+                gift.Pending ? "AWAITING CLAIM" : gift.SeenAt is null ? "NEW MYSTERY GIFT" : "MYSTERY GIFT / RECEIVED");
             DrawClippedText(GiftPresentation.Name(gift), ImGui.GetContentRegionAvail().X, Vector4.One);
             DrawClippedText($"{gift.Pokemon.Nature} / {gift.Pokemon.Ability}", ImGui.GetContentRegionAvail().X, CompanionMuted);
             DrawClippedText(GiftPresentation.Location(gift), ImGui.GetContentRegionAvail().X, CompanionMuted);
             if (gift.Kind == "giveaway") DrawClippedText($"Event: {gift.Reference}", ImGui.GetContentRegionAvail().X, CompanionMuted);
             if (DateTimeOffset.TryParse(gift.CreatedAt, out var received)) ImGui.TextDisabled(received.ToLocalTime().ToString("g"));
             ImGui.TableNextColumn();
-            ImGui.BeginDisabled(busy || gift.PokemonId is null);
-            if (DrawAccentButton("View Pokémon", new Vector2(-1, 0), CompanionAccent)) Run(() => ViewGiftPokemon(gift), "Opening gifted Pokémon...");
+            ImGui.BeginDisabled(busy || !gift.Pending && gift.PokemonId is null);
+            if (gift.Pending)
+            {
+                if (DrawAccentButton("Claim gift", new Vector2(-1, 0), PokemonYellow)) Run(() => ClaimGift(gift.Id), "Claiming gift...");
+            }
+            else if (DrawAccentButton("View Pokémon", new Vector2(-1, 0), CompanionAccent)) Run(() => ViewGiftPokemon(gift), "Opening gifted Pokémon...");
             ImGui.EndDisabled();
-            if (gift.SeenAt is null)
+            if (gift.SeenAt is null && !gift.Pending)
             {
                 ImGui.BeginDisabled(busy);
                 if (DrawAccentButton("Mark as read", new Vector2(-1, 0), PokemonYellow)) Run(() => MarkGiftRead(gift.Id), "Marking gift as read...");
@@ -93,7 +98,7 @@ public sealed partial class MainWindow
         {
             var inbox = await InSession(plugin.Api.GetGifts(token));
             return () => { if (trainer is not null) trainer.Gifts = inbox; };
-        }, () => nextGiftRefreshAt = DateTimeOffset.UtcNow.AddSeconds(60));
+        }, () => nextGiftRefreshAt = DateTimeOffset.UtcNow.AddSeconds(60), deferLiveUpdates: false);
     }
     private async Task MarkGiftRead(string id)
     {
@@ -101,6 +106,16 @@ public sealed partial class MainWindow
         var owner = trainer.User.Id;
         var inbox = await InSession(plugin.Api.ReadGift(id, disposeCancellation.Token));
         if (trainer?.User.Id == owner) { trainer.Gifts = inbox; SetStatus("Gift marked as read. Your Pokémon was already delivered."); }
+    }
+    private async Task ClaimGift(string id)
+    {
+        if (trainer is null) return;
+        var owner = trainer.User.Id;
+        var next = await InSession(plugin.Api.ClaimGift(id, disposeCancellation.Token));
+        if (trainer?.User.Id != owner) return;
+        RequestPokedexIfChanged(trainer.Pokedex, next.Pokedex);
+        trainer = next;
+        SetStatus("Mystery Gift claimed.");
     }
     private async Task ViewGiftPokemon(GiftReceiptDto gift)
     {
@@ -113,12 +128,7 @@ public sealed partial class MainWindow
         if (pokemon is null) { SetStatus("This Pokémon is no longer in your collection."); return; }
         mainSection = pokemon.PartySlot.HasValue ? 1 : 2;
         if (mainSection == 1) selectedPartyPokemon = pokemon.Id;
-        else
-        {
-            ObserveStorageOwner(); selectedStoragePokemon = pokemon.Id;
-            storageSearch = ""; OpenStorageBox(pokemon.BoxNumber); storageType = storageGeneration = storageSort = 0;
-            storageFavorites = storageShiny = storageDuplicatesOnly = false;
-        }
+        else InspectStoredPokemon(pokemon);
         SetStatus("Gifted Pokémon selected.");
     }
 }

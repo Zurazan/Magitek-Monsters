@@ -79,6 +79,12 @@ public sealed class GameNotificationFeed(TimeProvider? time = null)
         tradingInput = trading;
         friendsInput = friends;
         if (!changed && idleBatch is not null && now >= observedAt && now < refreshAt) return idleBatch;
+        return Rebuild(owner, session, gifts, pvp, raid, connection, requiredUpdate, trading, friends, now);
+    }
+
+    private GameNoticeBatch Rebuild(string owner, long session, GiftInboxDto? gifts, PvpStatusDto? pvp, RaidRoomDto? raid,
+        ServerConnectionState connection, string? requiredUpdate, TradingSnapshotDto? trading, FriendInboxDto? friends, DateTimeOffset now)
+    {
         observedAt = now; refreshAt = DateTimeOffset.MaxValue;
         var reset = ownerScope != owner || sessionScope != session;
         if (reset)

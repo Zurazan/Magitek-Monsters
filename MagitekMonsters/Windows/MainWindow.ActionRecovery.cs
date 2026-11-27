@@ -1,13 +1,18 @@
 using System;
 using System.Threading.Tasks;
+using MagitekMonsters.Models;
 using MagitekMonsters.Services;
 
 namespace MagitekMonsters.Windows;
 
 public sealed partial class MainWindow
 {
-    private static bool SkipActionRefresh(Exception exception) => exception is StaleSessionException or UnconfirmedActionException
-        or ApiException { Code: "mutation_committed" };
+    private void ApplyCheckpointBattle(BattleSnapshotDto next)
+    {
+        ApplyBattleResponse(next);
+        nextBattlePollAt = DateTimeOffset.UtcNow.AddSeconds(1);
+        refreshState.Trainer();
+    }
 
     private async Task<bool> RecoverAction(bool saved)
     {
