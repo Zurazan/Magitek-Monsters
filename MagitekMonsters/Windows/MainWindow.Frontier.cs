@@ -12,6 +12,7 @@ public sealed partial class MainWindow
 {
     private bool FrontierBusy => trainer?.FrontierRun?.Status is "active" or "between";
     private List<FrontierRentalDto> frontierRentals = [];
+    private Dictionary<string, FrontierPayoutDto> frontierPayouts = [];
     private readonly ConcurrentDictionary<string, string> frontierRequests = new();
     private bool openFrontierRuns;
     private bool openBpExchange;

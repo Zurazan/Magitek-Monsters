@@ -193,13 +193,15 @@ public sealed partial class MainWindow
         ImGui.BeginDisabled(!standardUnlocked);
         if (DrawAccentButton("Standard", Vector2.Zero, frontierBracket == 1 ? CompanionAccent : CompanionMuted)) frontierBracket = 1;
         ImGui.EndDisabled();
-        DrawGoalText(frontierBracket == 0 ? "Forgiving opponents / 1-3 base BP per win" : "Expert opponents / 3-7 base BP per win", CompanionMuted);
+        var description = frontierBracket == 0 ? "Forgiving opponents" : "Expert opponents";
+        var payout = frontierPayouts?.GetValueOrDefault(frontierBracket == 0 ? "accessible" : "standard");
+        DrawGoalText(payout is null ? description : $"{description} / {payout.Minimum}-{payout.Maximum} base BP per win", CompanionMuted);
         if (!standardUnlocked) DrawGoalText("Defeat a Champion to unlock Standard.", PokemonYellow);
         if (ImGui.TreeNode("Run rules"))
         {
             ImGui.TextWrapped("Level 50 singles. Each team brings three distinct species and held items cannot repeat. Restricted Legendaries and Mythicals are excluded.");
             ImGui.TextWrapped("Held items and Mega Evolution are allowed. Bag items are disabled. Your team heals between fights, and a loss or draw ends the streak.");
-            ImGui.TextWrapped($"A boss every seventh fight awards +{(frontierBracket == 0 ? 3 : 8)} BP. There are no ¥ or EXP rewards.");
+            ImGui.TextWrapped(payout is null ? "A boss every seventh fight awards bonus BP." : $"A boss every seventh fight awards +{payout.CaptainBonus} BP.");
             ImGui.TreePop();
         }
     }

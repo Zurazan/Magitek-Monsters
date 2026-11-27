@@ -117,6 +117,7 @@ public sealed partial class MainWindow
                 ApplyShopCatalog(shopTask.Result);
                 collectionRewards = collectionTask.Result.Rewards;
                 frontierRentals = frontierTask.Result.Rentals;
+                frontierPayouts = frontierTask.Result.Payouts;
                 legendaryBosses = legendaryTask.Result.Bosses;
                 legendaryRequiredIds = legendaryTask.Result.RequiredBossIds;
                 if (pendingLegendaryPermit is { } permit) pendingLegendaryPermit = legendaryBosses.FirstOrDefault(boss => boss.Id == permit.Id);

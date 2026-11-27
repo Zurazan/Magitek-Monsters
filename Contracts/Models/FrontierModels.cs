@@ -68,7 +68,10 @@ public sealed class FrontierRewardDto
 public sealed class FrontierCatalogDto
 {
     public List<FrontierRentalDto> Rentals { get; set; } = [];
+    public Dictionary<string, FrontierPayoutDto> Payouts { get; set; } = [];
 }
+public sealed record FrontierPayoutDto(int Minimum, int Maximum, int CaptainBonus);
+
 public sealed class FrontierRentalDto
 {
     public string Id { get; set; } = string.Empty;
