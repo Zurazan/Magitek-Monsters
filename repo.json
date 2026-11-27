@@ -3,7 +3,7 @@
     "Author": "Zura",
     "Name": "Magitek Monsters",
     "InternalName": "MagitekMonsters",
-    "AssemblyVersion": "0.9.0.6",
+    "AssemblyVersion": "0.9.0.7",
     "Description": "Pokemon",
     "ApplicableVersion": "any",
     "Tags": [
@@ -18,11 +18,11 @@
     "AcceptsFeedback": false,
     "RepoUrl": "https://github.com/Zurazan/Magitek-Monsters",
     "IconUrl": "https://raw.githubusercontent.com/Zurazan/Magitek-Monsters/main/icon.png",
-    "DownloadLinkInstall": "https://github.com/Zurazan/Magitek-Monsters/releases/download/v0.9.0.6/Magitek.Monsters.v0.9.0.6.zip",
-    "DownloadLinkUpdate": "https://github.com/Zurazan/Magitek-Monsters/releases/download/v0.9.0.6/Magitek.Monsters.v0.9.0.6.zip",
-    "DownloadLinkTesting": "https://github.com/Zurazan/Magitek-Monsters/releases/download/v0.9.0.6/Magitek.Monsters.v0.9.0.6.zip",
+    "DownloadLinkInstall": "https://github.com/Zurazan/Magitek-Monsters/releases/download/v0.9.0.7/Magitek.Monsters.v0.9.0.7.zip",
+    "DownloadLinkUpdate": "https://github.com/Zurazan/Magitek-Monsters/releases/download/v0.9.0.7/Magitek.Monsters.v0.9.0.7.zip",
+    "DownloadLinkTesting": "https://github.com/Zurazan/Magitek-Monsters/releases/download/v0.9.0.7/Magitek.Monsters.v0.9.0.7.zip",
     "IsHide": false,
     "IsTestingExclusive": false,
-    "LastUpdate": 1795784023
+    "LastUpdate": 1795806592
   }
 ]
