@@ -159,7 +159,7 @@ public sealed partial class MainWindow
             {
                 1 => offer.Entry.Reward!.Kind == "starter",
                 2 => offer.Entry.Reward!.Kind != "starter",
-                3 => offer.Mode == "copy",
+                3 => offer.Entry.Reward!.Kind == "starter" && offer.Mode == "copy",
                 _ => true
             }))
             .OrderBy(offer => offer.Entry.Reward!.Kind switch { "item" => 0, "pokemon" => 1, _ => 2 }).ToList();
@@ -176,25 +176,25 @@ public sealed partial class MainWindow
     {
         var progress = trainer!.CollectionPoints;
         var starter = reward.Kind == "starter";
-        var copy = starter && reward.Species is not null && progress.UnlockedStarters.Contains(reward.Species);
         var claimed = reward.Kind == "pokemon" && progress.ClaimedFormRewards.Contains(reward.Id);
+        var copy = reward.CopyPrice.HasValue && (claimed || starter && reward.Species is not null && progress.UnlockedStarters.Contains(reward.Species));
         var owned = reward.Kind == "item" && InventoryCount(reward.Id) > 0;
         var forms = reward.RequiredForms.Count;
         var found = reward.RequiredForms.Count(IsFormRegistered);
-        var unmet = progress.RegisteredSpecies < reward.RequiredSpecies
+        var unmet = copy ? null : progress.RegisteredSpecies < reward.RequiredSpecies
             ? $"Register {reward.RequiredSpecies - progress.RegisteredSpecies:N0} more genuine species."
             : found < forms ? "Register the remaining forms first." : null;
-        var status = claimed ? "Claimed" : owned ? "Owned / Active" : copy ? "Permanently unlocked"
+        var status = owned ? "Owned / Active" : copy ? "Permanently unlocked" : claimed ? "Claimed"
             : forms > 0 ? $"{found}/{forms} forms registered"
             : reward.RequiredSpecies > 0 ? $"{Math.Min(progress.RegisteredSpecies, reward.RequiredSpecies):N0}/{reward.RequiredSpecies:N0} species"
             : starter ? "Starter unlock" : "Available";
-        var action = claimed ? "Claimed" : owned ? "Owned / Active" : copy ? "Buy copy"
+        var action = owned ? "Owned / Active" : copy ? "Buy copy" : claimed ? "Claimed"
             : reward.Kind == "pokemon" ? "Claim reward" : "Unlock";
         var types = reward.Species is { } species ? SpeciesDisplayCatalog.Get(species)?.Types ?? [] : [];
         if (types.Length == 0 && reward.Type is { Length: > 0 } type) types = [type];
         var entry = new ExchangeEntry(reward.Id, reward.Name, reward.Species, 5, reward.Description, types, "", reward);
         return new(entry, copy ? reward.CopyPrice.GetValueOrDefault() : reward.Points, copy, action,
-            copy ? "copy" : "unlock", owned || claimed, unmet, status);
+            copy ? "copy" : "unlock", owned || claimed && !copy, unmet, status);
     }
 
     private ExchangeOffer? DrawExchangeGrid(List<ExchangeOffer> offers, ExchangeBrowse browse, int pageSize, int columns)
